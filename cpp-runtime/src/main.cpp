@@ -1,4 +1,5 @@
 #include "Config.hpp"
+#include "Scheduler.hpp"
 #include "Task.hpp"
 
 #include <exception>
@@ -62,6 +63,9 @@ int main(int argc, char* argv[]) {
                       << " deadline_miss_count=" << task.deadlineMissCount()
                       << std::endl;
         }
+
+        Scheduler scheduler(config.scheduler_mode, config.duration_seconds, std::move(tasks));
+        scheduler.run();
 
         return 0;
     } catch (const std::exception& error) {
