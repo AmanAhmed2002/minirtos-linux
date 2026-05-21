@@ -1,0 +1,21 @@
+# Build outputs
+build/
+cpp-runtime/build/
+*.o
+*.out
+*.log
+*.jsonl
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+
+# Generated reports
+reports/generated/
+
+# OS/editor files
+.DS_Store
+.vscode/
+.idea/
