@@ -6,6 +6,10 @@ cpp-runtime/build/
 *.log
 *.jsonl
 
+# Runtime logs
+logs/
+*.jsonl
+
 # Python
 .venv/
 __pycache__/
@@ -19,3 +23,10 @@ reports/generated/
 .DS_Store
 .vscode/
 .idea/
+
+
+
+# Environment files
+.env
+.venv/
+venv/

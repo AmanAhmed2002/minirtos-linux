@@ -1,4 +1,5 @@
 #include "Config.hpp"
+#include "Logger.hpp"
 #include "Scheduler.hpp"
 #include "Task.hpp"
 
@@ -35,11 +36,21 @@ int main(int argc, char* argv[]) {
     try {
         RuntimeConfig config = loadConfigFromFile(config_path);
 
+        Logger logger("logs/runtime_logs.jsonl");
+
+        logger.logRuntimeStarted(
+            config.simulation_name,
+            config.duration_seconds,
+            config.scheduler_mode,
+            static_cast<int>(config.tasks.size())
+        );
+
         std::cout << "[INFO] Runtime config loaded" << std::endl;
         std::cout << "[INFO] simulation_name=" << config.simulation_name << std::endl;
         std::cout << "[INFO] duration_seconds=" << config.duration_seconds << std::endl;
         std::cout << "[INFO] scheduler_mode=" << config.scheduler_mode << std::endl;
         std::cout << "[INFO] tasks_loaded=" << config.tasks.size() << std::endl;
+        std::cout << "[INFO] log_file=logs/runtime_logs.jsonl" << std::endl;
 
         const Task::TimePoint start_time = Task::Clock::now();
         std::vector<Task> tasks;
@@ -64,8 +75,16 @@ int main(int argc, char* argv[]) {
                       << std::endl;
         }
 
-        Scheduler scheduler(config.scheduler_mode, config.duration_seconds, std::move(tasks));
+        Scheduler scheduler(
+            config.scheduler_mode,
+            config.duration_seconds,
+            std::move(tasks),
+            logger
+        );
+
         scheduler.run();
+
+        logger.logRuntimeFinished();
 
         return 0;
     } catch (const std::exception& error) {

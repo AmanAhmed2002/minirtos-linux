@@ -6,10 +6,16 @@
 #include <thread>
 #include <utility>
 
-Scheduler::Scheduler(std::string mode, int duration_seconds, std::vector<Task> tasks)
+Scheduler::Scheduler(
+    std::string mode,
+    int duration_seconds,
+    std::vector<Task> tasks,
+    Logger& logger
+)
     : mode_(std::move(mode)),
       duration_seconds_(duration_seconds),
-      tasks_(std::move(tasks)) {
+      tasks_(std::move(tasks)),
+      logger_(logger) {
 }
 
 void Scheduler::run() {
@@ -25,6 +31,8 @@ void Scheduler::run() {
               << " duration_seconds=" << duration_seconds_
               << std::endl;
 
+    logger_.logSchedulerStarted(mode_, duration_seconds_);
+
     if (mode_ == "round_robin") {
         runRoundRobin();
     } else {
@@ -32,6 +40,9 @@ void Scheduler::run() {
     }
 
     std::cout << "[INFO] Scheduler finished" << std::endl;
+
+    logger_.logSchedulerFinished();
+
     printSummary();
 }
 
@@ -52,8 +63,17 @@ void Scheduler::runRoundRobin() {
             if (task.shouldRun(now)) {
                 std::cout << "[INFO] Running task=" << task.name() << std::endl;
 
+                logger_.logTaskStarted(
+                    task.name(),
+                    task.periodMs(),
+                    task.deadlineMs(),
+                    task.priority()
+                );
+
                 const Task::TimePoint before_run = Task::Clock::now();
+
                 task.run(now);
+
                 const Task::TimePoint after_run = Task::Clock::now();
 
                 const auto observed_duration_ms =
@@ -66,6 +86,15 @@ void Scheduler::runRoundRobin() {
                           << " run_count=" << task.runCount()
                           << " deadline_miss_count=" << task.deadlineMissCount()
                           << std::endl;
+
+                logger_.logTaskCompleted(
+                    task.name(),
+                    observed_duration_ms,
+                    task.executionTimeMs(),
+                    task.deadlineMs(),
+                    task.runCount(),
+                    task.deadlineMissCount()
+                );
 
                 ran_task_this_cycle = true;
             }
@@ -85,5 +114,11 @@ void Scheduler::printSummary() const {
                   << " run_count=" << task.runCount()
                   << " deadline_miss_count=" << task.deadlineMissCount()
                   << std::endl;
+
+        logger_.logRuntimeSummary(
+            task.name(),
+            task.runCount(),
+            task.deadlineMissCount()
+        );
     }
 }

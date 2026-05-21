@@ -13,6 +13,7 @@ add_executable(minirtos_runtime
     src/Config.cpp
     src/Task.cpp
     src/Scheduler.cpp
+    src/Logger.cpp
 )
 
 target_include_directories(minirtos_runtime PRIVATE

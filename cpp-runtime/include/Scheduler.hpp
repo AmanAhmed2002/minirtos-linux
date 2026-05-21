@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Logger.hpp"
 #include "Task.hpp"
 
 #include <string>
@@ -7,7 +8,12 @@
 
 class Scheduler {
 public:
-    Scheduler(std::string mode, int duration_seconds, std::vector<Task> tasks);
+    Scheduler(
+        std::string mode,
+        int duration_seconds,
+        std::vector<Task> tasks,
+        Logger& logger
+    );
 
     void run();
 
@@ -18,4 +24,5 @@ private:
     std::string mode_;
     int duration_seconds_;
     std::vector<Task> tasks_;
+    Logger& logger_;
 };
