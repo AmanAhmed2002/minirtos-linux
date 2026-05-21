@@ -1,8 +1,10 @@
 #include "Config.hpp"
+#include "Task.hpp"
 
 #include <exception>
 #include <iostream>
 #include <string>
+#include <vector>
 
 int main(int argc, char* argv[]) {
     std::string config_path;
@@ -38,15 +40,26 @@ int main(int argc, char* argv[]) {
         std::cout << "[INFO] scheduler_mode=" << config.scheduler_mode << std::endl;
         std::cout << "[INFO] tasks_loaded=" << config.tasks.size() << std::endl;
 
-        std::cout << "[INFO] Task details:" << std::endl;
+        const Task::TimePoint start_time = Task::Clock::now();
+        std::vector<Task> tasks;
 
-        for (const auto& task : config.tasks) {
-            std::cout << "[INFO] - name=" << task.name
-                      << ", period_ms=" << task.period_ms
-                      << ", deadline_ms=" << task.deadline_ms
-                      << ", priority=" << task.priority
-                      << ", execution_time_ms=" << task.execution_time_ms
-                      << ", queue_limit=" << task.queue_limit
+        tasks.reserve(config.tasks.size());
+
+        for (const auto& task_config : config.tasks) {
+            tasks.emplace_back(task_config, start_time);
+        }
+
+        std::cout << "[INFO] Runtime tasks constructed" << std::endl;
+
+        for (const auto& task : tasks) {
+            std::cout << "[INFO] - " << task.name()
+                      << " period_ms=" << task.periodMs()
+                      << " deadline_ms=" << task.deadlineMs()
+                      << " priority=" << task.priority()
+                      << " execution_time_ms=" << task.executionTimeMs()
+                      << " queue_limit=" << task.queueLimit()
+                      << " run_count=" << task.runCount()
+                      << " deadline_miss_count=" << task.deadlineMissCount()
                       << std::endl;
         }
 

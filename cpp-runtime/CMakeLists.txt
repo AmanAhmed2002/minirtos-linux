@@ -11,6 +11,7 @@ find_package(nlohmann_json 3.2.0 REQUIRED)
 add_executable(minirtos_runtime
     src/main.cpp
     src/Config.cpp
+    src/Task.cpp
 )
 
 target_include_directories(minirtos_runtime PRIVATE
