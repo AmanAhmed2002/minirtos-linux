@@ -15,3 +15,12 @@ Phase 1 scaffold is complete:
 
 ```bash
 ./scripts/build_cpp.sh
+
+## Docker Demo
+
+MiniRTOS-Linux can run inside Docker so the runtime, fault scenarios, watchdog behavior, and Python analyzer can be demonstrated without manually setting up a local C++/Python environment.
+
+### Build Docker Images
+
+```bash
+docker compose build

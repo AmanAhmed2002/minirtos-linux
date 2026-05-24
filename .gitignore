@@ -10,6 +10,8 @@ cpp-runtime/build/
 logs/
 *.jsonl
 
+logs/*
+!logs/.gitkeep
 # Python
 .venv/
 __pycache__/

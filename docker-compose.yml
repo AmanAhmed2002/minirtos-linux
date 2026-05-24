@@ -1,0 +1,54 @@
+services:
+  demo:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.runtime
+    container_name: minirtos-demo
+    command: ./scripts/run_docker_demo.sh
+    volumes:
+      - ./logs:/app/logs
+
+  runtime-normal:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.runtime
+    container_name: minirtos-runtime-normal
+    command: ./scripts/run_normal.sh
+    volumes:
+      - ./logs:/app/logs
+
+  runtime-slow-task:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.runtime
+    container_name: minirtos-runtime-slow-task
+    command: ./scripts/run_fault.sh configs/slow_task.json
+    volumes:
+      - ./logs:/app/logs
+
+  runtime-dropped-messages:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.runtime
+    container_name: minirtos-runtime-dropped-messages
+    command: ./scripts/run_fault.sh configs/dropped_messages.json
+    volumes:
+      - ./logs:/app/logs
+
+  runtime-watchdog:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.runtime
+    container_name: minirtos-runtime-watchdog
+    command: ./scripts/run_watchdog.sh
+    volumes:
+      - ./logs:/app/logs
+
+  analyzer:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.analyzer
+    container_name: minirtos-analyzer
+    command: ./scripts/run_analyzer.sh logs/runtime_logs.jsonl 5000
+    volumes:
+      - ./logs:/app/logs
