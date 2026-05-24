@@ -8,7 +8,7 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
-
+from anomaly_detector import analyze_anomaly_windows, print_anomaly_report
 
 Event = dict[str, Any]
 
@@ -22,6 +22,13 @@ def parse_args() -> argparse.Namespace:
         "--log",
         default="logs/runtime_logs.jsonl",
         help="Path to the JSONL runtime log file. Default: logs/runtime_logs.jsonl",
+    )
+    
+    parser.add_argument(
+        "--window-ms",
+        type=int,
+        default=5000,
+        help="Anomaly detection window size in milliseconds. Default: 5000",
     )
 
     return parser.parse_args()
@@ -409,6 +416,8 @@ def main() -> int:
         events = load_events(log_path)
         report = analyze(events)
         print_report(log_path, events, report)
+        anomaly_report = analyze_anomaly_windows(events, args.window_ms)
+        print_anomaly_report(anomaly_report)
     except (FileNotFoundError, ValueError) as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
         return 1
