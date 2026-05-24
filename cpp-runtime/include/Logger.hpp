@@ -40,6 +40,33 @@ public:
         int deadline_miss_count
     );
 
+    void logMessageSent(
+        const std::string& source_task,
+        const std::string& target_task,
+        const std::string& message_type,
+        int sequence_id,
+        int target_queue_depth,
+        int target_queue_limit
+    );
+
+    void logMessageReceived(
+        const std::string& source_task,
+        const std::string& target_task,
+        const std::string& message_type,
+        int sequence_id,
+        int remaining_queue_depth
+    );
+
+    void logMessageDropped(
+        const std::string& source_task,
+        const std::string& target_task,
+        const std::string& message_type,
+        int sequence_id,
+        int target_queue_depth,
+        int target_queue_limit,
+        const std::string& reason
+    );
+
     void logSchedulerFinished();
 
     void logRuntimeSummary(

@@ -108,6 +108,81 @@ void Logger::logTaskCompleted(
     writeLine(line.str());
 }
 
+void Logger::logMessageSent(
+    const std::string& source_task,
+    const std::string& target_task,
+    const std::string& message_type,
+    int sequence_id,
+    int target_queue_depth,
+    int target_queue_limit
+) {
+    std::ostringstream line;
+
+    line << "{"
+         << "\"timestamp_ms\":" << timestampMs() << ","
+         << "\"event_type\":\"message_sent\","
+         << "\"severity\":\"info\","
+         << "\"source_task\":\"" << escapeJsonString(source_task) << "\","
+         << "\"target_task\":\"" << escapeJsonString(target_task) << "\","
+         << "\"message_type\":\"" << escapeJsonString(message_type) << "\","
+         << "\"sequence_id\":" << sequence_id << ","
+         << "\"target_queue_depth\":" << target_queue_depth << ","
+         << "\"target_queue_limit\":" << target_queue_limit
+         << "}";
+
+    writeLine(line.str());
+}
+
+void Logger::logMessageReceived(
+    const std::string& source_task,
+    const std::string& target_task,
+    const std::string& message_type,
+    int sequence_id,
+    int remaining_queue_depth
+) {
+    std::ostringstream line;
+
+    line << "{"
+         << "\"timestamp_ms\":" << timestampMs() << ","
+         << "\"event_type\":\"message_received\","
+         << "\"severity\":\"info\","
+         << "\"source_task\":\"" << escapeJsonString(source_task) << "\","
+         << "\"target_task\":\"" << escapeJsonString(target_task) << "\","
+         << "\"message_type\":\"" << escapeJsonString(message_type) << "\","
+         << "\"sequence_id\":" << sequence_id << ","
+         << "\"remaining_queue_depth\":" << remaining_queue_depth
+         << "}";
+
+    writeLine(line.str());
+}
+
+void Logger::logMessageDropped(
+    const std::string& source_task,
+    const std::string& target_task,
+    const std::string& message_type,
+    int sequence_id,
+    int target_queue_depth,
+    int target_queue_limit,
+    const std::string& reason
+) {
+    std::ostringstream line;
+
+    line << "{"
+         << "\"timestamp_ms\":" << timestampMs() << ","
+         << "\"event_type\":\"message_dropped\","
+         << "\"severity\":\"warning\","
+         << "\"source_task\":\"" << escapeJsonString(source_task) << "\","
+         << "\"target_task\":\"" << escapeJsonString(target_task) << "\","
+         << "\"message_type\":\"" << escapeJsonString(message_type) << "\","
+         << "\"sequence_id\":" << sequence_id << ","
+         << "\"target_queue_depth\":" << target_queue_depth << ","
+         << "\"target_queue_limit\":" << target_queue_limit << ","
+         << "\"reason\":\"" << escapeJsonString(reason) << "\""
+         << "}";
+
+    writeLine(line.str());
+}
+
 void Logger::logSchedulerFinished() {
     std::ostringstream line;
 

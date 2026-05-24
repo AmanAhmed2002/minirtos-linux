@@ -1,5 +1,7 @@
 #include "Scheduler.hpp"
 
+#include "Message.hpp"
+
 #include <chrono>
 #include <iostream>
 #include <stdexcept>
@@ -15,7 +17,9 @@ Scheduler::Scheduler(
     : mode_(std::move(mode)),
       duration_seconds_(duration_seconds),
       tasks_(std::move(tasks)),
-      logger_(logger) {
+      logger_(logger),
+      message_bus_(),
+      next_message_sequence_id_(1) {
 }
 
 void Scheduler::run() {
@@ -26,6 +30,8 @@ void Scheduler::run() {
     if (tasks_.empty()) {
         throw std::runtime_error("scheduler cannot run with zero tasks");
     }
+
+    initializeMessageQueues();
 
     std::cout << "[INFO] Scheduler starting mode=" << mode_
               << " duration_seconds=" << duration_seconds_
@@ -44,6 +50,12 @@ void Scheduler::run() {
     logger_.logSchedulerFinished();
 
     printSummary();
+}
+
+void Scheduler::initializeMessageQueues() {
+    for (const auto& task : tasks_) {
+        message_bus_.registerTaskQueue(task.name(), task.queueLimit());
+    }
 }
 
 void Scheduler::runRoundRobin() {
@@ -96,6 +108,8 @@ void Scheduler::runRoundRobin() {
                     task.deadlineMissCount()
                 );
 
+                handleTaskMessaging(task);
+
                 ran_task_this_cycle = true;
             }
         }
@@ -104,6 +118,107 @@ void Scheduler::runRoundRobin() {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
+}
+
+void Scheduler::handleTaskMessaging(const Task& task) {
+    if (task.name() == "ControlTask") {
+        sendMessageToLoggerTask(
+            task.name(),
+            "control_status",
+            "control task completed one execution cycle"
+        );
+    } else if (task.name() == "NetworkTask") {
+        sendMessageToLoggerTask(
+            task.name(),
+            "network_packet",
+            "network task processed one packet"
+        );
+    } else if (task.name() == "LoggerTask") {
+        receiveMessageForTask(task.name());
+    }
+}
+
+void Scheduler::sendMessageToLoggerTask(
+    const std::string& source_task,
+    const std::string& message_type,
+    const std::string& payload
+) {
+    const Message message{
+        source_task,
+        "LoggerTask",
+        message_type,
+        payload,
+        next_message_sequence_id_
+    };
+
+    ++next_message_sequence_id_;
+
+    const bool sent = message_bus_.send(message);
+    const int target_queue_depth = message_bus_.queueDepth(message.target_task);
+    const int target_queue_limit = message_bus_.queueLimit(message.target_task);
+
+    if (sent) {
+        std::cout << "[INFO] Message sent source_task=" << message.source_task
+                  << " target_task=" << message.target_task
+                  << " message_type=" << message.type
+                  << " sequence_id=" << message.sequence_id
+                  << " target_queue_depth=" << target_queue_depth
+                  << " target_queue_limit=" << target_queue_limit
+                  << std::endl;
+
+        logger_.logMessageSent(
+            message.source_task,
+            message.target_task,
+            message.type,
+            message.sequence_id,
+            target_queue_depth,
+            target_queue_limit
+        );
+    } else {
+        std::cout << "[WARN] Message dropped source_task=" << message.source_task
+                  << " target_task=" << message.target_task
+                  << " message_type=" << message.type
+                  << " sequence_id=" << message.sequence_id
+                  << " target_queue_depth=" << target_queue_depth
+                  << " target_queue_limit=" << target_queue_limit
+                  << " reason=queue_full"
+                  << std::endl;
+
+        logger_.logMessageDropped(
+            message.source_task,
+            message.target_task,
+            message.type,
+            message.sequence_id,
+            target_queue_depth,
+            target_queue_limit,
+            "queue_full"
+        );
+    }
+}
+
+void Scheduler::receiveMessageForTask(const std::string& task_name) {
+    const std::optional<Message> received_message = message_bus_.receive(task_name);
+
+    if (!received_message.has_value()) {
+        return;
+    }
+
+    const int remaining_queue_depth = message_bus_.queueDepth(task_name);
+
+    std::cout << "[INFO] Message received source_task=" << received_message->source_task
+              << " target_task=" << received_message->target_task
+              << " message_type=" << received_message->type
+              << " sequence_id=" << received_message->sequence_id
+              << " remaining_queue_depth=" << remaining_queue_depth
+              << std::endl;
+
+    logger_.logMessageReceived(
+        received_message->source_task,
+        received_message->target_task,
+        received_message->type,
+        received_message->sequence_id,
+        remaining_queue_depth
+    );
 }
 
 void Scheduler::printSummary() const {
