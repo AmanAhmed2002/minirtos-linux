@@ -67,6 +67,19 @@ public:
         const std::string& reason
     );
 
+    void logFaultInjectedSlowTask(
+        const std::string& target_task,
+        int extra_execution_time_ms
+    );
+
+    void logFaultInjectedDroppedMessage(
+        const std::string& source_task,
+        const std::string& target_task,
+        const std::string& message_type,
+        int sequence_id,
+        const std::string& reason
+    );
+
     void logSchedulerFinished();
 
     void logRuntimeSummary(

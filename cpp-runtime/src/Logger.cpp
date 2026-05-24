@@ -183,6 +183,48 @@ void Logger::logMessageDropped(
     writeLine(line.str());
 }
 
+void Logger::logFaultInjectedSlowTask(
+    const std::string& target_task,
+    int extra_execution_time_ms
+) {
+    std::ostringstream line;
+
+    line << "{"
+         << "\"timestamp_ms\":" << timestampMs() << ","
+         << "\"event_type\":\"fault_injected\","
+         << "\"severity\":\"warning\","
+         << "\"fault_type\":\"slow_task\","
+         << "\"target_task\":\"" << escapeJsonString(target_task) << "\","
+         << "\"extra_execution_time_ms\":" << extra_execution_time_ms
+         << "}";
+
+    writeLine(line.str());
+}
+
+void Logger::logFaultInjectedDroppedMessage(
+    const std::string& source_task,
+    const std::string& target_task,
+    const std::string& message_type,
+    int sequence_id,
+    const std::string& reason
+) {
+    std::ostringstream line;
+
+    line << "{"
+         << "\"timestamp_ms\":" << timestampMs() << ","
+         << "\"event_type\":\"fault_injected\","
+         << "\"severity\":\"warning\","
+         << "\"fault_type\":\"dropped_messages\","
+         << "\"source_task\":\"" << escapeJsonString(source_task) << "\","
+         << "\"target_task\":\"" << escapeJsonString(target_task) << "\","
+         << "\"message_type\":\"" << escapeJsonString(message_type) << "\","
+         << "\"sequence_id\":" << sequence_id << ","
+         << "\"reason\":\"" << escapeJsonString(reason) << "\""
+         << "}";
+
+    writeLine(line.str());
+}
+
 void Logger::logSchedulerFinished() {
     std::ostringstream line;
 

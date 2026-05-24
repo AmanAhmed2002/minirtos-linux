@@ -12,10 +12,20 @@ struct TaskConfig {
     int queue_limit;
 };
 
+struct FaultConfig {
+    bool enabled = false;
+    std::string type;
+    std::string target_task;
+    int start_after_ms = 0;
+    int extra_execution_time_ms = 0;
+    int drop_probability_percent = 0;
+};
+
 struct RuntimeConfig {
     std::string simulation_name;
     int duration_seconds;
     std::string scheduler_mode;
+    FaultConfig faults;
     std::vector<TaskConfig> tasks;
 };
 

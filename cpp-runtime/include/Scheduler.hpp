@@ -1,5 +1,6 @@
 #pragma once
 
+#include "FaultInjector.hpp"
 #include "Logger.hpp"
 #include "MessageBus.hpp"
 #include "Task.hpp"
@@ -13,7 +14,8 @@ public:
         std::string mode,
         int duration_seconds,
         std::vector<Task> tasks,
-        Logger& logger
+        Logger& logger,
+        const FaultConfig& fault_config
     );
 
     void run();
@@ -21,13 +23,19 @@ public:
 private:
     void initializeMessageQueues();
     void runRoundRobin();
+
     void handleTaskMessaging(const Task& task);
+
     void sendMessageToLoggerTask(
         const std::string& source_task,
         const std::string& message_type,
         const std::string& payload
     );
+
     void receiveMessageForTask(const std::string& task_name);
+
+    long elapsedMs(Task::TimePoint start_time) const;
+
     void printSummary() const;
 
     std::string mode_;
@@ -35,5 +43,7 @@ private:
     std::vector<Task> tasks_;
     Logger& logger_;
     MessageBus message_bus_;
+    FaultInjector fault_injector_;
+    Task::TimePoint scheduler_start_time_;
     int next_message_sequence_id_;
 };

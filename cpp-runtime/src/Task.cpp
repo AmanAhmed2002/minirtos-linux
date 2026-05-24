@@ -19,18 +19,25 @@ bool Task::shouldRun(TimePoint now) const {
     return now >= next_run_time_;
 }
 
-void Task::run(TimePoint now) {
+void Task::run(TimePoint now, int extra_execution_time_ms) {
     const auto lateness_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         now - next_run_time_
     ).count();
 
-    if (lateness_ms > deadline_ms_) {
+    const int total_execution_time_ms = execution_time_ms_ + extra_execution_time_ms;
+
+    const bool missed_deadline =
+        lateness_ms > deadline_ms_ ||
+        total_execution_time_ms > deadline_ms_;
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(total_execution_time_ms));
+
+    ++run_count_;
+
+    if (missed_deadline) {
         ++deadline_miss_count_;
     }
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(execution_time_ms_));
-
-    ++run_count_;
     next_run_time_ = now + std::chrono::milliseconds(period_ms_);
 }
 

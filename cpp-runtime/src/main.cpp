@@ -50,6 +50,14 @@ int main(int argc, char* argv[]) {
         std::cout << "[INFO] duration_seconds=" << config.duration_seconds << std::endl;
         std::cout << "[INFO] scheduler_mode=" << config.scheduler_mode << std::endl;
         std::cout << "[INFO] tasks_loaded=" << config.tasks.size() << std::endl;
+        std::cout << "[INFO] fault_enabled=" << (config.faults.enabled ? "true" : "false") << std::endl;
+
+        if (config.faults.enabled) {
+            std::cout << "[INFO] fault_type=" << config.faults.type << std::endl;
+            std::cout << "[INFO] fault_target_task=" << config.faults.target_task << std::endl;
+            std::cout << "[INFO] fault_start_after_ms=" << config.faults.start_after_ms << std::endl;
+        }
+
         std::cout << "[INFO] log_file=logs/runtime_logs.jsonl" << std::endl;
 
         const Task::TimePoint start_time = Task::Clock::now();
@@ -79,7 +87,8 @@ int main(int argc, char* argv[]) {
             config.scheduler_mode,
             config.duration_seconds,
             std::move(tasks),
-            logger
+            logger,
+            config.faults
         );
 
         scheduler.run();
