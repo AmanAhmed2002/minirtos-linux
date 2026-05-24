@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <thread>
 #include <utility>
@@ -13,7 +14,8 @@ Scheduler::Scheduler(
     int duration_seconds,
     std::vector<Task> tasks,
     Logger& logger,
-    const FaultConfig& fault_config
+    const FaultConfig& fault_config,
+    const WatchdogConfig& watchdog_config
 )
     : mode_(std::move(mode)),
       duration_seconds_(duration_seconds),
@@ -21,6 +23,7 @@ Scheduler::Scheduler(
       logger_(logger),
       message_bus_(),
       fault_injector_(fault_config),
+      watchdog_(watchdog_config),
       scheduler_start_time_(Task::Clock::now()),
       next_message_sequence_id_(1) {
 }
@@ -38,6 +41,7 @@ void Scheduler::run() {
 
     std::cout << "[INFO] Scheduler starting mode=" << mode_
               << " duration_seconds=" << duration_seconds_
+              << " watchdog_enabled=" << (watchdog_.isEnabled() ? "true" : "false")
               << std::endl;
 
     logger_.logSchedulerStarted(mode_, duration_seconds_);
@@ -131,6 +135,10 @@ void Scheduler::runRoundRobin() {
                     task.runCount(),
                     task.deadlineMissCount()
                 );
+
+                const long after_task_timestamp_ms = elapsedMs(scheduler_start_time_);
+
+                inspectWatchdogForTask(task, after_task_timestamp_ms);
 
                 handleTaskMessaging(task);
 
@@ -280,6 +288,44 @@ void Scheduler::receiveMessageForTask(const std::string& task_name) {
         received_message->sequence_id,
         remaining_queue_depth
     );
+}
+
+void Scheduler::inspectWatchdogForTask(
+    const Task& task,
+    long timestamp_ms
+) {
+    const std::optional<WatchdogAlert> alert =
+        watchdog_.inspectTask(task, timestamp_ms);
+
+    if (!alert.has_value()) {
+        return;
+    }
+
+    std::cout << "[ERROR] Watchdog timeout"
+              << " task=" << alert->task_name
+              << " deadline_miss_count=" << alert->deadline_miss_count
+              << " consecutive_miss_count=" << alert->consecutive_miss_count
+              << " reason=" << alert->reason
+              << std::endl;
+
+    logger_.logWatchdogTimeout(
+        alert->task_name,
+        alert->deadline_miss_count,
+        alert->consecutive_miss_count,
+        alert->reason
+    );
+
+    if (alert->recovery_performed) {
+        std::cout << "[WARN] Task recovered"
+                  << " task=" << alert->task_name
+                  << " recovery_action=simulated_task_reset"
+                  << std::endl;
+
+        logger_.logTaskRecovered(
+            alert->task_name,
+            "simulated_task_reset"
+        );
+    }
 }
 
 long Scheduler::elapsedMs(Task::TimePoint start_time) const {

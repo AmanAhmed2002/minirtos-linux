@@ -71,6 +71,50 @@ void validateFaultConfig(const FaultConfig& faults) {
         );
     }
 }
+
+void validateWatchdogConfig(const WatchdogConfig& watchdog) {
+    if (!watchdog.enabled) {
+        return;
+    }
+
+    if (watchdog.check_interval_ms <= 0) {
+        throw std::runtime_error("watchdog check_interval_ms must be greater than 0");
+    }
+
+    if (watchdog.max_consecutive_deadline_misses <= 0) {
+        throw std::runtime_error(
+            "watchdog max_consecutive_deadline_misses must be greater than 0"
+        );
+    }
+
+    if (watchdog.recovery_cooldown_ms < 0) {
+        throw std::runtime_error("watchdog recovery_cooldown_ms cannot be negative");
+    }
+}
+
+void validateTaskConfig(const TaskConfig& task) {
+    if (task.name.empty()) {
+        throw std::runtime_error("Task name cannot be empty");
+    }
+
+    if (task.period_ms <= 0) {
+        throw std::runtime_error("Task period_ms must be greater than 0 for task: " + task.name);
+    }
+
+    if (task.deadline_ms <= 0) {
+        throw std::runtime_error("Task deadline_ms must be greater than 0 for task: " + task.name);
+    }
+
+    if (task.execution_time_ms <= 0) {
+        throw std::runtime_error(
+            "Task execution_time_ms must be greater than 0 for task: " + task.name
+        );
+    }
+
+    if (task.queue_limit <= 0) {
+        throw std::runtime_error("Task queue_limit must be greater than 0 for task: " + task.name);
+    }
+}
 }
 
 RuntimeConfig loadConfigFromFile(const std::string& config_path) {
@@ -107,7 +151,34 @@ RuntimeConfig loadConfigFromFile(const std::string& config_path) {
         );
     }
 
+    if (parsed_config.contains("watchdog") && !parsed_config.at("watchdog").is_null()) {
+        const json& watchdog_json = parsed_config.at("watchdog");
+
+        config.watchdog.enabled = readOptionalBool(watchdog_json, "enabled", false);
+        config.watchdog.check_interval_ms = readOptionalInt(
+            watchdog_json,
+            "check_interval_ms",
+            100
+        );
+        config.watchdog.max_consecutive_deadline_misses = readOptionalInt(
+            watchdog_json,
+            "max_consecutive_deadline_misses",
+            3
+        );
+        config.watchdog.recovery_enabled = readOptionalBool(
+            watchdog_json,
+            "recovery_enabled",
+            true
+        );
+        config.watchdog.recovery_cooldown_ms = readOptionalInt(
+            watchdog_json,
+            "recovery_cooldown_ms",
+            1000
+        );
+    }
+
     validateFaultConfig(config.faults);
+    validateWatchdogConfig(config.watchdog);
 
     for (const auto& task_json : parsed_config.at("tasks")) {
         TaskConfig task;
@@ -117,6 +188,8 @@ RuntimeConfig loadConfigFromFile(const std::string& config_path) {
         task.priority = task_json.at("priority").get<int>();
         task.execution_time_ms = task_json.at("execution_time_ms").get<int>();
         task.queue_limit = task_json.at("queue_limit").get<int>();
+
+        validateTaskConfig(task);
 
         config.tasks.push_back(task);
     }

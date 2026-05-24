@@ -16,6 +16,7 @@ add_executable(minirtos_runtime
     src/Logger.cpp
     src/MessageBus.cpp
     src/FaultInjector.cpp
+    src/Watchdog.cpp
 )
 
 target_include_directories(minirtos_runtime PRIVATE

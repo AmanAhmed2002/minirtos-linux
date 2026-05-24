@@ -8,7 +8,6 @@
 class Logger {
 public:
     using Clock = std::chrono::steady_clock;
-    using TimePoint = Clock::time_point;
 
     explicit Logger(const std::string& output_path);
 
@@ -80,6 +79,18 @@ public:
         const std::string& reason
     );
 
+    void logWatchdogTimeout(
+        const std::string& task_name,
+        int deadline_miss_count,
+        int consecutive_miss_count,
+        const std::string& reason
+    );
+
+    void logTaskRecovered(
+        const std::string& task_name,
+        const std::string& recovery_action
+    );
+
     void logSchedulerFinished();
 
     void logRuntimeSummary(
@@ -97,7 +108,7 @@ private:
 
     static std::string escapeJsonString(const std::string& value);
 
-    TimePoint start_time_;
+    Clock::time_point start_time_;
     std::ofstream output_file_;
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
 };

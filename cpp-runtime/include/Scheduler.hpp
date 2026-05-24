@@ -1,9 +1,11 @@
 #pragma once
 
+#include "Config.hpp"
 #include "FaultInjector.hpp"
 #include "Logger.hpp"
 #include "MessageBus.hpp"
 #include "Task.hpp"
+#include "Watchdog.hpp"
 
 #include <string>
 #include <vector>
@@ -15,13 +17,15 @@ public:
         int duration_seconds,
         std::vector<Task> tasks,
         Logger& logger,
-        const FaultConfig& fault_config
+        const FaultConfig& fault_config,
+        const WatchdogConfig& watchdog_config
     );
 
     void run();
 
 private:
     void initializeMessageQueues();
+
     void runRoundRobin();
 
     void handleTaskMessaging(const Task& task);
@@ -34,6 +38,11 @@ private:
 
     void receiveMessageForTask(const std::string& task_name);
 
+    void inspectWatchdogForTask(
+        const Task& task,
+        long timestamp_ms
+    );
+
     long elapsedMs(Task::TimePoint start_time) const;
 
     void printSummary() const;
@@ -44,6 +53,7 @@ private:
     Logger& logger_;
     MessageBus message_bus_;
     FaultInjector fault_injector_;
+    Watchdog watchdog_;
     Task::TimePoint scheduler_start_time_;
     int next_message_sequence_id_;
 };

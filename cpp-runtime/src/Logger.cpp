@@ -225,6 +225,45 @@ void Logger::logFaultInjectedDroppedMessage(
     writeLine(line.str());
 }
 
+void Logger::logWatchdogTimeout(
+    const std::string& task_name,
+    int deadline_miss_count,
+    int consecutive_miss_count,
+    const std::string& reason
+) {
+    std::ostringstream line;
+
+    line << "{"
+         << "\"timestamp_ms\":" << timestampMs() << ","
+         << "\"event_type\":\"watchdog_timeout\","
+         << "\"severity\":\"error\","
+         << "\"task\":\"" << escapeJsonString(task_name) << "\","
+         << "\"deadline_miss_count\":" << deadline_miss_count << ","
+         << "\"consecutive_miss_count\":" << consecutive_miss_count << ","
+         << "\"reason\":\"" << escapeJsonString(reason) << "\""
+         << "}";
+
+    writeLine(line.str());
+}
+
+void Logger::logTaskRecovered(
+    const std::string& task_name,
+    const std::string& recovery_action
+) {
+    std::ostringstream line;
+
+    line << "{"
+         << "\"timestamp_ms\":" << timestampMs() << ","
+         << "\"event_type\":\"task_recovered\","
+         << "\"severity\":\"warning\","
+         << "\"task\":\"" << escapeJsonString(task_name) << "\","
+         << "\"recovery_action\":\"" << escapeJsonString(recovery_action) << "\""
+         << "}";
+
+    writeLine(line.str());
+}
+
+
 void Logger::logSchedulerFinished() {
     std::ostringstream line;
 

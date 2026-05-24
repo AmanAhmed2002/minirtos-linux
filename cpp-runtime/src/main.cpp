@@ -52,6 +52,22 @@ int main(int argc, char* argv[]) {
         std::cout << "[INFO] tasks_loaded=" << config.tasks.size() << std::endl;
         std::cout << "[INFO] fault_enabled=" << (config.faults.enabled ? "true" : "false") << std::endl;
 
+        std::cout << "[INFO] watchdog_enabled=" << (config.watchdog.enabled ? "true" : "false") << std::endl;
+
+        if (config.watchdog.enabled) {
+          std::cout << "[INFO] watchdog_check_interval_ms="
+                    << config.watchdog.check_interval_ms
+                    << std::endl;
+          std::cout << "[INFO] watchdog_max_consecutive_deadline_misses="
+                    << config.watchdog.max_consecutive_deadline_misses
+                    << std::endl;
+          std::cout << "[INFO] watchdog_recovery_enabled="
+                    << (config.watchdog.recovery_enabled ? "true" : "false")
+                    << std::endl;
+          std::cout << "[INFO] watchdog_recovery_cooldown_ms="
+                    << config.watchdog.recovery_cooldown_ms
+                    << std::endl;
+}
         if (config.faults.enabled) {
             std::cout << "[INFO] fault_type=" << config.faults.type << std::endl;
             std::cout << "[INFO] fault_target_task=" << config.faults.target_task << std::endl;
@@ -88,7 +104,8 @@ int main(int argc, char* argv[]) {
             config.duration_seconds,
             std::move(tasks),
             logger,
-            config.faults
+            config.faults,
+            config.watchdog
         );
 
         scheduler.run();
