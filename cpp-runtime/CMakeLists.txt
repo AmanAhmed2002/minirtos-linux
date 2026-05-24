@@ -1,12 +1,22 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(minirtos_runtime VERSION 0.1.0 LANGUAGES CXX)
+project(minirtos_runtime LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(nlohmann_json 3.2.0 REQUIRED)
+include(FetchContent)
+
+find_package(nlohmann_json CONFIG QUIET)
+
+if(NOT nlohmann_json_FOUND)
+    FetchContent_Declare(
+        nlohmann_json
+        URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+    )
+    FetchContent_MakeAvailable(nlohmann_json)
+endif()
 
 add_executable(minirtos_runtime
     src/main.cpp
@@ -19,10 +29,47 @@ add_executable(minirtos_runtime
     src/Watchdog.cpp
 )
 
-target_include_directories(minirtos_runtime PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+target_include_directories(minirtos_runtime
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(minirtos_runtime PRIVATE
-    nlohmann_json::nlohmann_json
+target_link_libraries(minirtos_runtime
+    PRIVATE
+        nlohmann_json::nlohmann_json
 )
+
+enable_testing()
+
+FetchContent_Declare(
+    googletest
+    URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
+)
+
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(googletest)
+
+add_executable(minirtos_cpp_tests
+    tests/test_message_bus.cpp
+    tests/test_fault_injector.cpp
+    tests/test_watchdog.cpp
+    src/MessageBus.cpp
+    src/FaultInjector.cpp
+    src/Watchdog.cpp
+    src/Task.cpp
+)
+
+target_include_directories(minirtos_cpp_tests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(minirtos_cpp_tests
+    PRIVATE
+        GTest::gtest_main
+)
+
+include(GoogleTest)
+
+gtest_discover_tests(minirtos_cpp_tests)
