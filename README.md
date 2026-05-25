@@ -1,6 +1,7 @@
 # MiniRTOS-Linux
 
 **Embedded Runtime Simulator with AI-Based Fault Detection**
+![CI](https://github.com/AmanAhmed2002/minirtos-linux/actions/workflows/ci.yml/badge.svg)
 
 MiniRTOS-Linux is a software-only C++20 embedded runtime simulator that models periodic tasks, bounded message queues, configurable fault injection, watchdog monitoring, structured JSONL telemetry, Python-based runtime analysis, AI-style anomaly detection, automated tests, Dockerized demos, and benchmark reporting.
 
