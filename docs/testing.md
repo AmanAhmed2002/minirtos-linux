@@ -1,0 +1,322 @@
+# MiniRTOS-Linux Testing Guide
+
+## 1. Purpose
+
+This document explains the automated testing setup for MiniRTOS-Linux.
+
+The project uses:
+
+- GoogleTest for C++ runtime component tests
+- CTest through CMake for running C++ tests
+- pytest for Python analyzer and anomaly-detector tests
+- `scripts/run_tests.sh` as the one-command test workflow
+
+The goal is to prove that core runtime components and analyzer logic continue working as the project grows.
+
+---
+
+## 2. Run All Tests
+
+From the repository root:
+
+```bash
+./scripts/run_tests.sh
+```
+
+This script performs the full test workflow:
+
+1. Configure C++ build with CMake and Ninja.
+2. Build the C++ runtime and C++ test targets.
+3. Run C++ tests through CTest.
+4. Check that pytest is installed.
+5. Run Python tests.
+
+Expected verified Phase 11 output included:
+
+```text
+100% tests passed, 0 tests failed out of 19
+13 passed
+[INFO] All tests passed
+```
+
+---
+
+## 3. Test Script
+
+Current intended `scripts/run_tests.sh`:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "[INFO] Configuring C++ build"
+cmake -S cpp-runtime -B cpp-runtime/build -G Ninja
+
+echo "[INFO] Building C++ runtime and tests"
+cmake --build cpp-runtime/build
+
+echo "[INFO] Running C++ tests"
+ctest --test-dir cpp-runtime/build --output-on-failure
+
+echo "[INFO] Checking Python test dependency"
+python3 - <<'PY'
+try:
+    import pytest  # noqa: F401
+except ModuleNotFoundError:
+    raise SystemExit(
+        "[ERROR] pytest is not installed. Install it with: python3 -m pip install pytest"
+    )
+PY
+
+echo "[INFO] Running Python tests"
+python3 -m pytest ai-analyzer/tests -q
+
+echo "[INFO] All tests passed"
+```
+
+Make sure the script is executable:
+
+```bash
+chmod +x scripts/run_tests.sh
+```
+
+---
+
+## 4. C++ Test Coverage
+
+C++ tests are located in:
+
+```text
+cpp-runtime/tests/
+```
+
+Current C++ test files:
+
+```text
+cpp-runtime/tests/test_message_bus.cpp
+cpp-runtime/tests/test_fault_injector.cpp
+cpp-runtime/tests/test_watchdog.cpp
+```
+
+### 4.1 Message Bus Tests
+
+File:
+
+```text
+cpp-runtime/tests/test_message_bus.cpp
+```
+
+Expected coverage:
+
+| Behavior | Purpose |
+|---|---|
+| Queue registration | Confirms task queues can be created. |
+| FIFO send/receive | Confirms messages are received in send order. |
+| Full queue rejection | Confirms bounded queues reject messages when full. |
+| Empty receive | Confirms receiving from an empty queue is handled safely. |
+| Unknown target rejection | Confirms messages to unregistered queues are rejected. |
+| Invalid queue limit | Confirms invalid queue configuration is rejected. |
+| Empty task name | Confirms invalid task names are rejected. |
+
+### 4.2 Fault Injector Tests
+
+File:
+
+```text
+cpp-runtime/tests/test_fault_injector.cpp
+```
+
+Expected coverage:
+
+| Behavior | Purpose |
+|---|---|
+| Disabled faults | Confirms inactive faults do not affect runtime behavior. |
+| Slow-task timing | Confirms slow-task faults activate only after configured start time. |
+| Target matching | Confirms slow-task faults apply only to matching target tasks. |
+| Dropped-message 100% drop | Confirms configured message drops can always occur. |
+| Source/target matching | Confirms message drop faults apply to matching messages only. |
+| Zero-percent drop | Confirms 0% probability does not drop messages. |
+
+### 4.3 Watchdog Tests
+
+File:
+
+```text
+cpp-runtime/tests/test_watchdog.cpp
+```
+
+Expected coverage:
+
+| Behavior | Purpose |
+|---|---|
+| Disabled watchdog | Confirms disabled watchdog does not alert. |
+| Threshold alert | Confirms repeated deadline misses trigger watchdog timeout. |
+| Recovery disabled | Confirms timeout can occur without recovery event. |
+| Recovery cooldown | Confirms cooldown limits repeated recovery events. |
+
+---
+
+## 5. Python Test Coverage
+
+Python tests are located in:
+
+```text
+ai-analyzer/tests/
+```
+
+Current Python test files:
+
+```text
+ai-analyzer/tests/test_analyzer.py
+ai-analyzer/tests/test_anomaly_detector.py
+```
+
+### 5.1 Analyzer Tests
+
+File:
+
+```text
+ai-analyzer/tests/test_analyzer.py
+```
+
+Expected coverage:
+
+| Behavior | Purpose |
+|---|---|
+| Valid JSONL loading | Confirms normal log files can be parsed. |
+| Missing log handling | Confirms missing files are handled correctly. |
+| Invalid JSONL handling | Confirms malformed logs are handled safely. |
+| Normal health classification | Confirms clean logs classify correctly. |
+| Watchdog unstable classification | Confirms watchdog events classify as unstable. |
+| Message drop reason counting | Confirms queue-full and fault-injected drops are counted separately. |
+
+### 5.2 Anomaly Detector Tests
+
+File:
+
+```text
+ai-analyzer/tests/test_anomaly_detector.py
+```
+
+Expected coverage:
+
+| Behavior | Purpose |
+|---|---|
+| Window splitting | Confirms event streams are split into time windows. |
+| Invalid window size | Confirms invalid settings are rejected. |
+| Feature extraction | Confirms event windows become feature dictionaries. |
+| Clean-window classification | Confirms normal windows classify as normal. |
+| Watchdog unstable classification | Confirms watchdog events classify as unstable. |
+| Deadline-miss unstable classification | Confirms repeated deadline misses classify as unstable. |
+| Overall anomaly report | Confirms summary report generation works. |
+
+---
+
+## 6. Run C++ Tests Manually
+
+Configure and build:
+
+```bash
+cmake -S cpp-runtime -B cpp-runtime/build -G Ninja
+cmake --build cpp-runtime/build
+```
+
+Run all C++ tests:
+
+```bash
+ctest --test-dir cpp-runtime/build --output-on-failure
+```
+
+Run with verbose output:
+
+```bash
+ctest --test-dir cpp-runtime/build --output-on-failure --verbose
+```
+
+---
+
+## 7. Run Python Tests Manually
+
+Run all Python tests:
+
+```bash
+python3 -m pytest ai-analyzer/tests -q
+```
+
+Run with verbose output:
+
+```bash
+python3 -m pytest ai-analyzer/tests -v
+```
+
+Run one file:
+
+```bash
+python3 -m pytest ai-analyzer/tests/test_analyzer.py -q
+python3 -m pytest ai-analyzer/tests/test_anomaly_detector.py -q
+```
+
+---
+
+## 8. What Passing Tests Prove
+
+Passing tests show that:
+
+- The bounded message bus respects queue limits.
+- FIFO message behavior is stable.
+- Invalid message-bus inputs are rejected.
+- Fault injection activates only under intended conditions.
+- Slow-task and dropped-message fault logic behaves predictably.
+- Watchdog threshold and cooldown behavior works.
+- Analyzer log parsing handles normal and bad inputs.
+- Health classification detects unstable watchdog scenarios.
+- Message drop reasons are counted correctly.
+- Anomaly detector windowing, feature extraction, and classification are stable.
+
+---
+
+## 9. What Tests Do Not Prove Yet
+
+Current tests do not fully prove:
+
+- Real hardware timing correctness.
+- Hard real-time scheduling guarantees.
+- Priority scheduler behavior.
+- Deadline-aware scheduler behavior.
+- CPU spike fault behavior.
+- Crash recovery behavior.
+- Performance under very large logs.
+- Accuracy of a trained ML model.
+
+Those areas are future enhancement opportunities.
+
+---
+
+## 10. Recommended CI Step
+
+The next recommended phase is GitHub Actions CI.
+
+Target file:
+
+```text
+.github/workflows/ci.yml
+```
+
+Expected CI tasks:
+
+1. Checkout repository.
+2. Install Linux C++ build dependencies.
+3. Install Python and pytest.
+4. Configure CMake with Ninja.
+5. Build runtime and tests.
+6. Run C++ tests.
+7. Run Python tests.
+8. Optionally build Docker images.
+
+Recommended commit after CI is added:
+
+```bash
+git add .github/workflows/ci.yml
+git commit -m "Add CI for runtime and analyzer tests"
+git push
+```

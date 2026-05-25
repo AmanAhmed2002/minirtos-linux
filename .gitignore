@@ -1,34 +1,49 @@
 # Build outputs
 build/
 cpp-runtime/build/
+**/build/
 *.o
+*.obj
 *.out
+*.exe
+*.a
+*.so
+*.dylib
+
+# Runtime logs and generated telemetry
+logs/*
+!logs/.gitkeep
 *.log
 *.jsonl
 
-# Runtime logs
-logs/
-*.jsonl
+# Generated reports
+reports/generated/
 
-logs/*
-!logs/.gitkeep
 # Python
 .venv/
+venv/
 __pycache__/
 .pytest_cache/
 *.pyc
+*.pyo
+*.pyd
 
-# Generated reports
-reports/generated/
+# CMake/Ninja generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+.ninja_deps
+.ninja_log
+
+# Docker/local overrides
+docker-compose.override.yml
+
+# Environment files
+.env
+.env.*
 
 # OS/editor files
 .DS_Store
 .vscode/
 .idea/
-
-
-
-# Environment files
-.env
-.venv/
-venv/
