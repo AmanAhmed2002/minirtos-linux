@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    name: Build and Test Runtime + Analyzer
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            python3 \
+            python3-pip \
+            python3-pytest \
+            git
+
+      - name: Configure C++ project
+        run: cmake -S cpp-runtime -B cpp-runtime/build -G Ninja
+
+      - name: Build C++ runtime and tests
+        run: cmake --build cpp-runtime/build
+
+      - name: Run C++ tests
+        run: ctest --test-dir cpp-runtime/build --output-on-failure
+
+      - name: Run Python tests
+        run: python3 -m pytest ai-analyzer/tests -q
