@@ -19,6 +19,10 @@ bool Task::shouldRun(TimePoint now) const {
     return now >= next_run_time_;
 }
 
+Task::TimePoint Task::absoluteDeadline() const {
+    return next_run_time_ + std::chrono::milliseconds(deadline_ms_);
+}
+
 void Task::run(TimePoint now, int extra_execution_time_ms) {
     const auto lateness_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         now - next_run_time_

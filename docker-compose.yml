@@ -17,6 +17,33 @@ services:
     volumes:
       - ./logs:/app/logs
 
+  runtime-priority:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.runtime
+    container_name: minirtos-runtime-priority
+    command: ./cpp-runtime/build/minirtos_runtime --config configs/priority_scheduler.json
+    volumes:
+      - ./logs:/app/logs
+
+  runtime-deadline:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.runtime
+    container_name: minirtos-runtime-deadline
+    command: ./cpp-runtime/build/minirtos_runtime --config configs/deadline_scheduler.json
+    volumes:
+      - ./logs:/app/logs
+
+  runtime-queue-overflow:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.runtime
+    container_name: minirtos-runtime-queue-overflow
+    command: ./cpp-runtime/build/minirtos_runtime --config configs/queue_overflow.json
+    volumes:
+      - ./logs:/app/logs
+
   runtime-slow-task:
     build:
       context: .

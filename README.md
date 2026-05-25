@@ -11,7 +11,7 @@ The project is designed as a recruiter-ready systems/embedded portfolio project.
 
 ## Project Status
 
-Phases 1-16 are complete.
+Phases 1-17 are complete.
 
 Completed capabilities include:
 
@@ -21,6 +21,7 @@ Completed capabilities include:
 - Periodic task model
 - Round-robin scheduler
 - Priority scheduler mode
+- Earliest-deadline-first scheduler mode
 - Structured JSONL runtime logger
 - Bounded message bus
 - Configurable fault injection
@@ -32,11 +33,12 @@ Completed capabilities include:
 - Performance and fault benchmark report
 - GitHub Actions CI
 - Priority scheduler configuration and tests
+- Earliest-deadline-first scheduler configuration and tests
 
 Current phase:
 
 ```text
-Phase 16 - Priority Scheduler Mode Complete
+Phase 18 - Dedicated Queue Overflow Scenario and Benchmark Complete
 ```
 
 Next recommended phase:
@@ -72,7 +74,7 @@ This project is useful for demonstrating:
 | Runtime | C++20 CLI simulator |
 | Configuration | JSON configs for tasks, scheduler, faults, and watchdog settings |
 | Tasks | Simulated periodic tasks with period, deadline, priority, execution time, queue limit, run counters, and deadline-miss counters |
-| Scheduler | Round-robin and priority scheduler modes |
+| Scheduler | Round-robin, priority, and earliest-deadline-first scheduler modes |
 | Logging | Structured JSONL logs for runtime, scheduler, task, message, fault, watchdog, and recovery events |
 | Message Bus | Bounded FIFO queues with queue-depth telemetry and queue-full drops |
 | Fault Injection | `slow_task` and `dropped_messages` scenarios |
@@ -181,6 +183,7 @@ minirtos-linux/
 ├── configs/
 │   ├── normal.json
 │   ├── priority_scheduler.json
+│   ├── deadline_scheduler.json
 │   ├── slow_task.json
 │   ├── dropped_messages.json
 │   └── watchdog_slow_task.json
@@ -256,6 +259,12 @@ Run the priority scheduler scenario:
 ./cpp-runtime/build/minirtos_runtime --config configs/priority_scheduler.json
 ```
 
+Run the earliest-deadline-first scheduler scenario:
+
+```bash
+./cpp-runtime/build/minirtos_runtime --config configs/deadline_scheduler.json
+```
+
 Analyze the generated runtime log:
 
 ```bash
@@ -318,6 +327,16 @@ Equivalent command:
 ```
 
 This scenario uses `scheduler_mode: "priority"`. Lower numeric priority values run first, so `priority: 1` runs before `priority: 2`. The config intentionally lists tasks out of priority order so the runtime behavior can show priority-based ordering.
+
+
+
+### Earliest-Deadline-First Scheduler Scenario
+
+```bash
+./cpp-runtime/build/minirtos_runtime --config configs/deadline_scheduler.json
+```
+
+This scenario uses `scheduler_mode: "earliest_deadline_first"`. When multiple tasks are due at the same time, the scheduler runs the task with the nearest absolute deadline first. If deadlines are tied, priority is used as the next tie-breaker, and stable config order is preserved when both deadline and priority are tied.
 
 ### Slow Task Fault Scenario
 
@@ -430,10 +449,10 @@ This script:
 4. Checks for pytest.
 5. Runs Python tests.
 
-Expected result after Phase 16:
+Expected result after Phase 17:
 
 ```text
-100% tests passed, 0 tests failed out of 22
+100% tests passed, 0 tests failed out of 25
 13 passed
 [INFO] All tests passed
 ```
@@ -480,11 +499,28 @@ docker compose run --rm analyzer
 
 The `analyzer` service analyzes the latest `logs/runtime_logs.jsonl`.
 
+
+### Docker Note After Phase 17
+
+No Dockerfile changes are required for Phase 17 because the runtime image already builds the C++ executable and copies the repository configs/scripts. The recommended Docker update is to add scheduler scenarios to `docker-compose.yml` and `scripts/run_docker_demo.sh` so the full demo also runs:
+
+```text
+configs/priority_scheduler.json
+configs/deadline_scheduler.json
+```
+
+That update should create scheduler-specific logs such as:
+
+```text
+logs/priority_scheduler_runtime_logs.jsonl
+logs/deadline_scheduler_runtime_logs.jsonl
+```
+
 ---
 
 ## Benchmark Results
 
-The benchmark report currently compares the normal, slow-task, dropped-message, and watchdog scenarios. Phase 16 also adds a priority scheduler scenario for runtime validation; the benchmark report should be refreshed with measured priority-scheduler results during the final documentation/benchmark refresh phase.
+The benchmark report currently compares the normal, slow-task, dropped-message, and watchdog scenarios. Phase 16 added a priority scheduler scenario, and Phase 17 added an earliest-deadline-first scheduler scenario for runtime validation. The benchmark report should be refreshed with measured scheduler-mode results during the final documentation/benchmark refresh phase.
 
 Report:
 
@@ -521,7 +557,7 @@ See [`docs/performance-results.md`](docs/performance-results.md) for the full be
 ## Resume Highlights
 
 - Built a C++20 embedded-runtime simulator that models periodic tasks, deadlines, bounded message queues, configurable fault injection, watchdog monitoring, JSONL telemetry, Python analysis, Dockerized demos, and benchmark reporting on Linux.
-- Implemented round-robin and priority scheduling with structured telemetry for task latency, message drops, queue depth, deadline misses, injected faults, watchdog timeouts, and simulated recovery.
+- Implemented round-robin, priority, and earliest-deadline-first scheduling with structured telemetry for task latency, message drops, queue depth, deadline misses, injected faults, watchdog timeouts, and simulated recovery.
 - Developed a Python analyzer that parses runtime logs, computes task/message/fault/watchdog metrics, classifies system health, reports likely root causes, and performs AI-style time-windowed anomaly detection.
 - Added automated C++ and Python test coverage with GoogleTest, CTest, pytest, GitHub Actions CI, and a one-command local test workflow.
 - Dockerized the runtime and analyzer with Docker Compose services for normal, fault, watchdog, and full-demo scenarios.
@@ -550,10 +586,10 @@ Completed:
 - Phase 14: Documentation and GitHub polish
 - Phase 15: GitHub Actions CI
 - Phase 16: Priority scheduler mode
+- Phase 17: Deadline-aware / earliest-deadline-first scheduler mode
 
 Recommended next phases:
 
-- Phase 17: Deadline-aware / earliest-deadline-first scheduler mode
 - Phase 18: Dedicated queue overflow scenario and benchmark
 - Phase 19: CPU spike fault injection
 - Phase 20: Task crash simulation
@@ -562,7 +598,6 @@ Recommended next phases:
 
 Optional future features:
 
-- Deadline-aware scheduler mode
 - Dedicated queue overflow scenario
 - CPU spike fault injection
 - Task crash simulation

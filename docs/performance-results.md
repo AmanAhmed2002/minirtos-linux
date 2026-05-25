@@ -4,12 +4,13 @@
 
 This benchmark report summarizes the observed behavior of MiniRTOS-Linux across normal and fault-injected runtime scenarios.
 
-MiniRTOS-Linux is a software-only C++20 embedded runtime simulator that models periodic tasks, round-robin and priority scheduling, bounded message queues, structured JSONL telemetry, configurable fault injection, watchdog monitoring, simulated recovery behavior, and Python-based runtime analysis.
+MiniRTOS-Linux is a software-only C++20 embedded runtime simulator that models periodic tasks, round-robin, priority, and earliest-deadline-first scheduling, bounded message queues, structured JSONL telemetry, configurable fault injection, watchdog monitoring, simulated recovery behavior, and Python-based runtime analysis.
 
 The goal of this benchmark phase is to demonstrate that the runtime can:
 
 - Execute periodic simulated tasks under round-robin scheduling.
 - Validate priority scheduling as an advanced scheduler mode added in Phase 16.
+- Validate earliest-deadline-first scheduling as an advanced scheduler mode added in Phase 17.
 - Produce structured JSONL logs for task, message, fault, watchdog, and recovery events.
 - Detect queue pressure through bounded message queue telemetry.
 - Detect slow-task behavior through deadline miss metrics.
@@ -56,6 +57,7 @@ The benchmark assumes the default anomaly-analysis window size:
 | Dropped messages fault | `configs/dropped_messages.json` | `logs/dropped_messages_runtime_logs.jsonl` | Simulates injected message loss. |
 | Watchdog slow task | `configs/watchdog_slow_task.json` | `logs/watchdog_runtime_logs.jsonl` | Simulates slow-task behavior with watchdog timeout and recovery enabled. |
 | Priority scheduler | `configs/priority_scheduler.json` | `logs/runtime_logs.jsonl` when run manually | Validates that due tasks can be ordered by priority instead of config order. |
+| Earliest-deadline-first scheduler | `configs/deadline_scheduler.json` | `logs/runtime_logs.jsonl` when run manually | Validates that due tasks can be ordered by nearest absolute deadline instead of config order. |
 
 ## 4. High-Level Results
 
@@ -285,10 +287,33 @@ LoggerTask
 
 This scenario was added as a runtime validation scenario. The measured benchmark tables above still reflect the Phase 13 Docker benchmark logs. A future Phase 22 benchmark refresh should regenerate and record measured priority-scheduler metrics alongside the existing normal, slow-task, dropped-message, and watchdog scenarios.
 
+
+
+## 9.6 Earliest-Deadline-First Scheduler Scenario
+
+Phase 17 added an earliest-deadline-first scheduler mode using this config value:
+
+```json
+"scheduler_mode": "earliest_deadline_first"
+```
+
+This mode keeps the same task execution, logging, fault-injection, watchdog, and message-bus behavior as the existing scheduler modes. The key difference is how due tasks are ordered. When multiple tasks are due, the scheduler runs the task with the nearest absolute deadline first.
+
+Tie-breakers:
+
+```text
+1. Earliest absolute deadline
+2. Ascending numeric priority if deadlines are tied
+3. Stable config/task order if both deadline and priority are tied
+```
+
+This scenario was added as a runtime validation scenario. The measured benchmark tables above still reflect the earlier Docker benchmark logs. A future benchmark refresh should regenerate and record priority-scheduler and earliest-deadline-first metrics alongside the normal, slow-task, dropped-message, and watchdog scenarios.
+
 ## 10. Key Observations
 
 1. The baseline runtime is schedulable from a task-deadline perspective because the normal scenario produced zero deadline misses.
 2. The priority scheduler can run due tasks by priority while preserving the same logging and analyzer schema.
+3. The earliest-deadline-first scheduler can run due tasks by nearest deadline while preserving the same logging and analyzer schema.
 3. The bounded message bus correctly rejects messages when the target queue is full.
 4. The default message production and consumption rates create queue pressure because `ControlTask` and `NetworkTask` send messages faster than `LoggerTask` consumes them.
 5. Slow-task fault injection creates clear deadline-miss telemetry.
@@ -303,7 +328,6 @@ This benchmark is intentionally simulation-based and does not measure real embed
 Current limitations:
 
 - Timing is simulated through Linux process execution and sleep behavior rather than hard real-time scheduling.
-- The scheduler currently supports round-robin and priority modes, but not earliest-deadline-first yet.
 - Queue pressure appears even in the normal scenario because the current default message generation rate exceeds logger consumption rate.
 - The anomaly detector is AI-style and feature-based rather than a trained machine learning model.
 - Recovery behavior is simulated through logs rather than actual process or thread restart.
@@ -315,7 +339,6 @@ Future phases can improve the benchmark by adding:
 
 - A tuned normal configuration with no queue drops.
 - A dedicated `queue_overflow.json` scenario.
-- Deadline-aware / earliest-deadline-first scheduler mode.
 - CPU spike fault injection.
 - Task crash fault simulation.
 - Trained anomaly model using generated scenario data.
@@ -324,7 +347,7 @@ Future phases can improve the benchmark by adding:
 
 ## 13. Resume and Interview Talking Points
 
-- Built a C++20 embedded-runtime simulator that models periodic tasks, round-robin and priority scheduling, deadlines, bounded queues, fault injection, watchdog monitoring, and structured telemetry.
+- Built a C++20 embedded-runtime simulator that models periodic tasks, round-robin, priority, and earliest-deadline-first scheduling, deadlines, bounded queues, fault injection, watchdog monitoring, and structured telemetry.
 - Implemented JSONL runtime logging for task execution, queue depth, message drops, deadline misses, injected faults, watchdog timeouts, and simulated recovery.
 - Created reproducible fault scenarios for slow tasks and dropped messages.
 - Demonstrated that slow-task injection caused 174 deadline misses in `ControlTask`, while watchdog monitoring detected the unhealthy behavior and emitted 22 timeout and 22 recovery events.

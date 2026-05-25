@@ -11,6 +11,7 @@ The architecture is intentionally modular so each system concept is represented 
 - Scheduler
   - Round-robin mode
   - Priority mode
+  - Earliest-deadline-first mode
 - Message bus
 - Fault injector
 - Watchdog
@@ -187,6 +188,7 @@ Current scheduler modes:
 ```text
 round_robin
 priority
+earliest_deadline_first
 ```
 
 Core behavior:
@@ -204,12 +206,13 @@ Core behavior:
 
 ### 3.4.1 Scheduler Modes
 
-MiniRTOS-Linux currently supports two scheduler modes.
+MiniRTOS-Linux currently supports three scheduler modes.
 
 | Mode | Config Value | Behavior |
 |---|---|---|
 | Round robin | `round_robin` | Runs due tasks in the order they appear in the runtime task list. |
 | Priority | `priority` | Runs due tasks by ascending priority number. Lower number means higher priority. |
+| Earliest deadline first | `earliest_deadline_first` | Runs due tasks by nearest absolute deadline first, then priority, then stable config order. |
 
 The priority scheduler reuses the same execution path as round robin: task start/completion logging, fault injection, watchdog inspection, and message bus handling remain consistent across scheduler modes.
 
@@ -229,6 +232,25 @@ Example priority config:
 ```
 
 Although the config lists `LoggerTask` first, priority mode should run due tasks in priority order, with `ControlTask` before `NetworkTask` before `LoggerTask` when all are due.
+
+
+
+Example earliest-deadline-first config:
+
+```json
+{
+  "simulation_name": "deadline_scheduler",
+  "duration_seconds": 30,
+  "scheduler_mode": "earliest_deadline_first",
+  "tasks": [
+    { "name": "LoggerTask", "period_ms": 500, "deadline_ms": 400, "priority": 3, "execution_time_ms": 15, "queue_limit": 20 },
+    { "name": "NetworkTask", "period_ms": 250, "deadline_ms": 200, "priority": 2, "execution_time_ms": 20, "queue_limit": 10 },
+    { "name": "ControlTask", "period_ms": 100, "deadline_ms": 80, "priority": 1, "execution_time_ms": 10, "queue_limit": 10 }
+  ]
+}
+```
+
+When several tasks are due at the same time, `earliest_deadline_first` runs the task with the nearest deadline first. If two due tasks have the same deadline, the scheduler uses ascending numeric priority as the next tie-breaker. If both deadline and priority match, the original task/config order is preserved.
 
 Important scheduler events:
 
@@ -557,6 +579,8 @@ Docker Compose services:
 | `runtime-slow-task` | Runs the slow-task fault scenario. |
 | `runtime-dropped-messages` | Runs the dropped-message fault scenario. |
 | `runtime-watchdog` | Runs the watchdog scenario. |
+| `runtime-priority-scheduler` | Optional service for the priority scheduler scenario. |
+| `runtime-deadline-scheduler` | Optional service for the earliest-deadline-first scheduler scenario. |
 | `analyzer` | Runs the analyzer against `logs/runtime_logs.jsonl`. |
 
 The local `logs/` folder is mounted into the container:
@@ -591,6 +615,8 @@ docs/performance-results.md
 The benchmark report compares:
 
 - Normal runtime behavior
+- Priority scheduler behavior
+- Earliest-deadline-first scheduler behavior
 - Slow-task fault behavior
 - Dropped-message fault behavior
 - Watchdog timeout and recovery behavior
@@ -623,7 +649,6 @@ Docker makes the project easier to review. A recruiter or engineer can run the d
 
 ## 10. Current Limitations
 
-- The scheduler currently supports round-robin and priority modes, but not earliest-deadline-first yet.
 - Timing is simulated on Linux rather than hard real-time hardware.
 - Recovery is simulated through logs rather than real thread/process restart.
 - The anomaly detector is feature/rule-based rather than a trained ML model.
@@ -635,13 +660,12 @@ Docker makes the project easier to review. A recruiter or engineer can run the d
 
 Potential next improvements:
 
-1. Deadline-aware / earliest-deadline-first scheduler mode.
-2. Dedicated queue-overflow config.
-3. CPU-spike fault injection.
-4. Task-crash simulation.
-5. Corrupted-message simulation.
-6. FastAPI analyzer endpoint.
-7. React dashboard.
-8. Synthetic training-data generator.
-9. Trained anomaly detection model.
-10. Final documentation and CI refresh after advanced features.
+1. Dedicated queue-overflow config.
+2. CPU-spike fault injection.
+3. Task-crash simulation.
+4. Corrupted-message simulation.
+5. FastAPI analyzer endpoint.
+6. React dashboard.
+7. Synthetic training-data generator.
+8. Trained anomaly detection model.
+9. Final documentation and CI refresh after advanced features.

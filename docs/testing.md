@@ -32,10 +32,10 @@ This script performs the full test workflow:
 4. Check that pytest is installed.
 5. Run Python tests.
 
-Expected output after Phase 16 includes the scheduler tests:
+Expected output after Phase 17 includes the expanded scheduler tests:
 
 ```text
-100% tests passed, 0 tests failed out of 22
+100% tests passed, 0 tests failed out of 25
 13 passed
 [INFO] All tests passed
 ```
@@ -153,6 +153,9 @@ Expected coverage:
 |---|---|
 | Round-robin ordering | Confirms due tasks run in config/vector order under `round_robin`. |
 | Priority ordering | Confirms due tasks run by ascending priority number under `priority`. |
+| Earliest-deadline-first ordering | Confirms due tasks run by nearest absolute deadline under `earliest_deadline_first`. |
+| Earliest-deadline-first priority tie-break | Confirms priority breaks ties when due tasks have the same deadline. |
+| Earliest-deadline-first stable-order tie-break | Confirms original task order is preserved when deadline and priority are tied. |
 | Invalid scheduler mode | Confirms unsupported scheduler modes still raise an error. |
 
 ### 4.4 Watchdog Tests
@@ -286,6 +289,7 @@ Passing tests show that:
 - Fault injection activates only under intended conditions.
 - Round-robin scheduling preserves task-list order for due tasks.
 - Priority scheduling runs higher-priority due tasks first, where lower numeric priority means higher priority.
+- Earliest-deadline-first scheduling runs due tasks by nearest absolute deadline, then priority, then stable task order.
 - Slow-task and dropped-message fault logic behaves predictably.
 - Watchdog threshold and cooldown behavior works.
 - Analyzer log parsing handles normal and bad inputs.
@@ -301,7 +305,6 @@ Current tests do not fully prove:
 
 - Real hardware timing correctness.
 - Hard real-time scheduling guarantees.
-- Deadline-aware scheduler behavior.
 - CPU spike fault behavior.
 - Crash recovery behavior.
 - Performance under very large logs.
@@ -331,6 +334,6 @@ Current CI tasks:
 6. Run C++ tests with CTest.
 7. Run Python tests with pytest.
 
-The existing CI workflow should continue to work after Phase 16 because it builds the CMake test target and runs all discovered C++ tests automatically.
+The existing CI workflow should continue to work after Phase 17 because it builds the CMake test target and runs all discovered C++ tests automatically.
 
 Future CI improvements can optionally add Docker image builds, analyzer smoke tests on sample logs, and script permission checks.

@@ -12,12 +12,14 @@
 namespace {
 TaskConfig makeTaskConfig(
     const std::string& name,
-    int priority
+    int priority,
+    int deadline_ms = 100,
+    int period_ms = 1000
 ) {
     TaskConfig config;
     config.name = name;
-    config.period_ms = 1000;
-    config.deadline_ms = 100;
+    config.period_ms = period_ms;
+    config.deadline_ms = deadline_ms;
     config.priority = priority;
     config.execution_time_ms = 1;
     config.queue_limit = 5;
@@ -167,6 +169,117 @@ TEST(SchedulerTest, PriorityModeRunsDueTasksByAscendingPriorityNumber) {
     EXPECT_EQ(task_order[0], "HighPriorityTask");
     EXPECT_EQ(task_order[1], "MediumPriorityTask");
     EXPECT_EQ(task_order[2], "LowPriorityTask");
+}
+
+TEST(SchedulerTest, EarliestDeadlineFirstModeRunsDueTasksByNearestDeadline) {
+    const std::string log_path = "logs/test_scheduler_edf_deadline_order.jsonl";
+    std::filesystem::remove(log_path);
+
+    FaultConfig fault_config;
+    WatchdogConfig watchdog_config;
+
+    std::vector<TaskConfig> configs{
+        makeTaskConfig("LongDeadlineTask", 2, 300),
+        makeTaskConfig("ShortDeadlineTask", 2, 100),
+        makeTaskConfig("MediumDeadlineTask", 2, 200)
+    };
+
+    {
+        Logger logger(log_path);
+
+        Scheduler scheduler(
+            "earliest_deadline_first",
+            1,
+            makeTasks(configs),
+            logger,
+            fault_config,
+            watchdog_config
+        );
+
+        scheduler.run();
+    }
+
+    const std::vector<std::string> task_order =
+        extractStartedTaskOrder(readFile(log_path));
+
+    ASSERT_GE(task_order.size(), 3U);
+    EXPECT_EQ(task_order[0], "ShortDeadlineTask");
+    EXPECT_EQ(task_order[1], "MediumDeadlineTask");
+    EXPECT_EQ(task_order[2], "LongDeadlineTask");
+}
+
+TEST(SchedulerTest, EarliestDeadlineFirstModeUsesPriorityAsTieBreaker) {
+    const std::string log_path = "logs/test_scheduler_edf_priority_tie.jsonl";
+    std::filesystem::remove(log_path);
+
+    FaultConfig fault_config;
+    WatchdogConfig watchdog_config;
+
+    std::vector<TaskConfig> configs{
+        makeTaskConfig("LowPriorityTask", 3, 100),
+        makeTaskConfig("HighPriorityTask", 1, 100),
+        makeTaskConfig("MediumPriorityTask", 2, 100)
+    };
+
+    {
+        Logger logger(log_path);
+
+        Scheduler scheduler(
+            "earliest_deadline_first",
+            1,
+            makeTasks(configs),
+            logger,
+            fault_config,
+            watchdog_config
+        );
+
+        scheduler.run();
+    }
+
+    const std::vector<std::string> task_order =
+        extractStartedTaskOrder(readFile(log_path));
+
+    ASSERT_GE(task_order.size(), 3U);
+    EXPECT_EQ(task_order[0], "HighPriorityTask");
+    EXPECT_EQ(task_order[1], "MediumPriorityTask");
+    EXPECT_EQ(task_order[2], "LowPriorityTask");
+}
+
+TEST(SchedulerTest, EarliestDeadlineFirstModePreservesConfigOrderWhenDeadlineAndPriorityTie) {
+    const std::string log_path = "logs/test_scheduler_edf_stable_tie.jsonl";
+    std::filesystem::remove(log_path);
+
+    FaultConfig fault_config;
+    WatchdogConfig watchdog_config;
+
+    std::vector<TaskConfig> configs{
+        makeTaskConfig("FirstTask", 1, 100),
+        makeTaskConfig("SecondTask", 1, 100),
+        makeTaskConfig("ThirdTask", 1, 100)
+    };
+
+    {
+        Logger logger(log_path);
+
+        Scheduler scheduler(
+            "earliest_deadline_first",
+            1,
+            makeTasks(configs),
+            logger,
+            fault_config,
+            watchdog_config
+        );
+
+        scheduler.run();
+    }
+
+    const std::vector<std::string> task_order =
+        extractStartedTaskOrder(readFile(log_path));
+
+    ASSERT_GE(task_order.size(), 3U);
+    EXPECT_EQ(task_order[0], "FirstTask");
+    EXPECT_EQ(task_order[1], "SecondTask");
+    EXPECT_EQ(task_order[2], "ThirdTask");
 }
 
 TEST(SchedulerTest, InvalidSchedulerModeThrowsRuntimeError) {

@@ -30,6 +30,8 @@ private:
 
     void runPriority();
 
+    void runEarliestDeadlineFirst();
+
     void executeTask(Task& task, Task::TimePoint now);
 
     void handleTaskMessaging(const Task& task);

@@ -22,7 +22,7 @@ Embedded Systems Fault Detection and Runtime Telemetry Simulator
 ## 2. One-Line Project Summary
 
 ```text
-Built a C++20 embedded-runtime simulator with periodic task scheduling, priority scheduling, bounded message queues, configurable fault injection, watchdog recovery telemetry, Python log analysis, AI-style anomaly detection, automated tests, Dockerized demos, and benchmark reporting on Linux.
+Built a C++20 embedded-runtime simulator with periodic task scheduling, priority and earliest-deadline-first scheduling, bounded message queues, configurable fault injection, watchdog recovery telemetry, Python log analysis, AI-style anomaly detection, automated tests, Dockerized demos, and benchmark reporting on Linux.
 ```
 
 ---
@@ -30,7 +30,7 @@ Built a C++20 embedded-runtime simulator with periodic task scheduling, priority
 ## 3. Short Resume Summary Version
 
 ```text
-MiniRTOS-Linux is a C++20 embedded-runtime simulator that models periodic tasks, deadlines, priority scheduling, bounded queues, fault injection, watchdog monitoring, structured telemetry, Python-based runtime analysis, AI-style anomaly detection, Dockerized demos, and automated tests.
+MiniRTOS-Linux is a C++20 embedded-runtime simulator that models periodic tasks, deadlines, priority and earliest-deadline-first scheduling, bounded queues, fault injection, watchdog monitoring, structured telemetry, Python-based runtime analysis, AI-style anomaly detection, Dockerized demos, and automated tests.
 ```
 
 ---
@@ -41,8 +41,8 @@ Use 2-4 bullets depending on how much room you have.
 
 ### Full Technical Bullet Set
 
-- Built a software-only embedded runtime simulator in C++20 that models real-time tasks, round-robin and priority scheduling, bounded message queues, configurable fault injection, watchdog monitoring, Python log analysis, Dockerized demo workflows, benchmark reporting, and deadline tracking on Linux.
-- Implemented round-robin and priority scheduling with structured JSONL telemetry for task latency, queue depth, message drops, fault injection, deadline misses, watchdog timeouts, and simulated recovery events.
+- Built a software-only embedded runtime simulator in C++20 that models real-time tasks, round-robin and priority and earliest-deadline-first scheduling, bounded message queues, configurable fault injection, watchdog monitoring, Python log analysis, Dockerized demo workflows, benchmark reporting, and deadline tracking on Linux.
+- Implemented round-robin and priority and earliest-deadline-first scheduling with structured JSONL telemetry for task latency, queue depth, message drops, fault injection, deadline misses, watchdog timeouts, and simulated recovery events.
 - Developed reproducible fault-injection scenarios for slow tasks and dropped messages, enabling deterministic validation of runtime resilience and anomaly detection workflows.
 - Designed watchdog logic to detect repeated task deadline misses and log simulated task recovery actions for embedded-style fault response.
 - Built a Python telemetry analyzer that parses JSONL runtime logs, computes task/message/fault/watchdog metrics, classifies system health, and reports likely root causes.
@@ -58,7 +58,7 @@ Use 2-4 bullets depending on how much room you have.
 Use this if your resume has limited space.
 
 ```text
-- Built a C++20 embedded-runtime simulator on Linux with periodic task scheduling, priority scheduling, bounded message queues, structured JSONL telemetry, configurable fault injection, watchdog monitoring, and simulated recovery events.
+- Built a C++20 embedded-runtime simulator on Linux with periodic task scheduling, priority and earliest-deadline-first scheduling, bounded message queues, structured JSONL telemetry, configurable fault injection, watchdog monitoring, and simulated recovery events.
 - Developed a Python runtime analyzer with AI-style time-windowed anomaly detection to classify normal, warning, and unstable system states from task, message, fault, and watchdog telemetry.
 - Added GoogleTest/pytest coverage, GitHub Actions CI, Docker Compose demo workflows, and benchmark documentation comparing normal, slow-task, dropped-message, and watchdog fault scenarios.
 ```
@@ -70,7 +70,7 @@ Use this if your resume has limited space.
 Use this if the project is one of several listed under a Projects section.
 
 ```text
-- Built a C++20 Linux-based embedded-runtime simulator with periodic tasks, round-robin and priority scheduling, bounded queues, fault injection, watchdog telemetry, JSONL logging, automated tests, Dockerized demos, and benchmark reporting.
+- Built a C++20 Linux-based embedded-runtime simulator with periodic tasks, round-robin and priority and earliest-deadline-first scheduling, bounded queues, fault injection, watchdog telemetry, JSONL logging, automated tests, Dockerized demos, and benchmark reporting.
 - Created a Python analyzer with AI-style anomaly detection that extracts time-windowed telemetry features, classifies runtime health, and reports root causes for slow-task, dropped-message, queue-pressure, and watchdog scenarios.
 ```
 
@@ -79,7 +79,7 @@ Use this if the project is one of several listed under a Projects section.
 ## 7. One-Bullet Compact Version
 
 ```text
-- Built MiniRTOS-Linux, a C++20 embedded-runtime simulator with periodic scheduling, priority scheduling, bounded message queues, fault injection, watchdog recovery telemetry, Python AI-style anomaly detection, automated tests, Dockerized demos, and benchmark reporting.
+- Built MiniRTOS-Linux, a C++20 embedded-runtime simulator with periodic scheduling, priority and earliest-deadline-first scheduling, bounded message queues, fault injection, watchdog recovery telemetry, Python AI-style anomaly detection, automated tests, Dockerized demos, and benchmark reporting.
 ```
 
 ---
@@ -168,7 +168,7 @@ Emphasize:
 Best bullet:
 
 ```text
-- Built a C++20 embedded-runtime simulator that models periodic tasks, round-robin and priority scheduling, deadline tracking, bounded message queues, configurable fault injection, watchdog monitoring, and simulated recovery telemetry on Linux.
+- Built a C++20 embedded-runtime simulator that models periodic tasks, round-robin and priority and earliest-deadline-first scheduling, deadline tracking, bounded message queues, configurable fault injection, watchdog monitoring, and simulated recovery telemetry on Linux.
 ```
 
 ### Systems Developer Roles
@@ -184,7 +184,7 @@ Emphasize:
 Best bullet:
 
 ```text
-- Designed a modular C++20 runtime simulator with structured JSONL observability, task scheduling, priority scheduling, bounded queues, fault injection, watchdog health monitoring, GoogleTest coverage, and Dockerized demo workflows.
+- Designed a modular C++20 runtime simulator with structured JSONL observability, task scheduling, priority and earliest-deadline-first scheduling, bounded queues, fault injection, watchdog health monitoring, GoogleTest coverage, and Dockerized demo workflows.
 ```
 
 ### Python / Tooling Roles
@@ -244,7 +244,7 @@ I implemented the runtime in C++20 with JSON configs, periodic tasks, round-robi
 ### Result
 
 ```text
-The current system can run normal, priority-scheduler, and fault scenarios, generate structured logs, detect queue pressure, identify slow-task deadline misses, distinguish fault-injected message drops, log watchdog timeout and recovery events, and produce a benchmark report comparing all scenarios.
+The current system can run normal, priority-scheduler, earliest-deadline-first, and fault scenarios, generate structured logs, detect queue pressure, identify slow-task deadline misses, distinguish fault-injected message drops, log watchdog timeout and recovery events, and produce a benchmark report comparing all scenarios.
 ```
 
 ---
@@ -277,6 +277,12 @@ Priority scheduler scenario:
 - Added in Phase 16
 - Validates that due tasks can run by ascending priority number
 - Preserves existing JSONL event schema and analyzer compatibility
+
+Earliest-deadline-first scheduler scenario:
+- Added in Phase 17
+- Validates that due tasks can run by nearest absolute deadline
+- Uses priority as a tie-breaker when deadlines match
+- Preserves existing JSONL event schema and analyzer compatibility
 ```
 
 Use these carefully in interviews to show the system was benchmarked with measured logs.
@@ -286,5 +292,5 @@ Use these carefully in interviews to show the system was benchmarked with measur
 ## 15. Final Project Pitch
 
 ```text
-MiniRTOS-Linux is a C++20 and Python systems project that simulates embedded runtime behavior on Linux. It models periodic tasks, round-robin and priority scheduling, deadlines, bounded queues, configurable faults, watchdog monitoring, structured telemetry, and anomaly detection. The project is Dockerized, tested with GoogleTest and pytest, and documented with benchmark results, making it easy to clone, run, analyze, and discuss in technical interviews.
+MiniRTOS-Linux is a C++20 and Python systems project that simulates embedded runtime behavior on Linux. It models periodic tasks, round-robin and priority and earliest-deadline-first scheduling, deadlines, bounded queues, configurable faults, watchdog monitoring, structured telemetry, and anomaly detection. The project is Dockerized, tested with GoogleTest and pytest, and documented with benchmark results, making it easy to clone, run, analyze, and discuss in technical interviews.
 ```

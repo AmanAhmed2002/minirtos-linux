@@ -51,10 +51,12 @@ void Scheduler::run() {
         runRoundRobin();
     } else if (mode_ == "priority") {
         runPriority();
+    } else if (mode_ == "earliest_deadline_first") {
+        runEarliestDeadlineFirst();
     } else {
         throw std::runtime_error(
             "Unsupported scheduler mode: " + mode_ +
-            ". Supported modes are round orbin and priority."
+            ". Supported modes are round orbin and priority, and earliest_deadline_first."
         );
     }
 
@@ -123,6 +125,53 @@ void Scheduler::runPriority() {
             due_tasks.begin(),
             due_tasks.end(),
             [](const Task* left, const Task* right) {
+                return left->priority() < right->priority();
+            }
+        );
+
+        for (Task* task : due_tasks) {
+            const Task::TimePoint current_time = Task::Clock::now();
+
+            if (current_time >= end_time) {
+                break;
+            }
+
+            if (task->shouldRun(current_time)) {
+                executeTask(*task, current_time);
+            }
+        }
+    }
+}
+
+void Scheduler::runEarliestDeadlineFirst() {
+    scheduler_start_time_ = Task::Clock::now();
+    const Task::TimePoint end_time =
+        scheduler_start_time_ + std::chrono::seconds(duration_seconds_);
+
+    while (Task::Clock::now() < end_time) {
+        const Task::TimePoint now = Task::Clock::now();
+
+        std::vector<Task*> due_tasks;
+
+        for (auto& task : tasks_) {
+            if (task.shouldRun(now)) {
+                due_tasks.push_back(&task);
+            }
+        }
+
+        if (due_tasks.empty()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue;
+        }
+
+        std::stable_sort(
+            due_tasks.begin(),
+            due_tasks.end(),
+            [](const Task* left, const Task* right) {
+                if (left->absoluteDeadline() != right->absoluteDeadline()) {
+                    return left->absoluteDeadline() < right->absoluteDeadline();
+                }
+
                 return left->priority() < right->priority();
             }
         );

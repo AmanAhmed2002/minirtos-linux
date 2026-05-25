@@ -13,6 +13,7 @@ public:
     explicit Task(const TaskConfig& config, TimePoint start_time);
 
     bool shouldRun(TimePoint now) const;
+    TimePoint absoluteDeadline() const;
     void run(TimePoint now, int extra_execution_time_ms = 0);
 
     const std::string& name() const;
