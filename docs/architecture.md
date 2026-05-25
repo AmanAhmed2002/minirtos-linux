@@ -30,6 +30,9 @@ The architecture is intentionally modular so each system concept is represented 
 |--------------------------|
 | demo                     |
 | runtime-normal           |
+| runtime-priority         |
+| runtime-deadline         |
+| runtime-queue-overflow   |
 | runtime-slow-task        |
 | runtime-dropped-messages |
 | runtime-watchdog         |
@@ -353,6 +356,10 @@ Current simulated communication:
 
 `LoggerTask` receives at most one message each time it runs.
 
+
+
+Phase 18 adds a dedicated queue-overflow scenario through `configs/queue_overflow.json`. This scenario intentionally makes producer tasks run faster than `LoggerTask` can consume messages and lowers the `LoggerTask` queue limit. The result is repeatable `queue_full` telemetry without using the `dropped_messages` fault injector.
+
 Important message events:
 
 ```text
@@ -576,6 +583,9 @@ Docker Compose services:
 |---|---|
 | `demo` | Runs all scenarios and analyzes each scenario log. |
 | `runtime-normal` | Runs the normal scenario. |
+| `runtime-priority` | Runs the priority scheduler scenario. |
+| `runtime-deadline` | Runs the earliest-deadline-first scheduler scenario. |
+| `runtime-queue-overflow` | Runs the dedicated queue-overflow scenario using `configs/queue_overflow.json`. |
 | `runtime-slow-task` | Runs the slow-task fault scenario. |
 | `runtime-dropped-messages` | Runs the dropped-message fault scenario. |
 | `runtime-watchdog` | Runs the watchdog scenario. |
@@ -601,6 +611,9 @@ docker compose up --build demo
   |
   v
 logs/normal_runtime_logs.jsonl
+logs/priority_scheduler_runtime_logs.jsonl
+logs/deadline_scheduler_runtime_logs.jsonl
+logs/queue_overflow_runtime_logs.jsonl
 logs/slow_task_runtime_logs.jsonl
 logs/dropped_messages_runtime_logs.jsonl
 logs/watchdog_runtime_logs.jsonl
@@ -617,6 +630,7 @@ The benchmark report compares:
 - Normal runtime behavior
 - Priority scheduler behavior
 - Earliest-deadline-first scheduler behavior
+- Queue-overflow behavior
 - Slow-task fault behavior
 - Dropped-message fault behavior
 - Watchdog timeout and recovery behavior
@@ -652,7 +666,7 @@ Docker makes the project easier to review. A recruiter or engineer can run the d
 - Timing is simulated on Linux rather than hard real-time hardware.
 - Recovery is simulated through logs rather than real thread/process restart.
 - The anomaly detector is feature/rule-based rather than a trained ML model.
-- Normal runtime still produces queue-full drops because message production exceeds logger consumption.
+- Normal runtime and the dedicated queue-overflow scenario can produce queue-full drops when message production exceeds logger consumption.
 
 ---
 
@@ -660,12 +674,11 @@ Docker makes the project easier to review. A recruiter or engineer can run the d
 
 Potential next improvements:
 
-1. Dedicated queue-overflow config.
-2. CPU-spike fault injection.
-3. Task-crash simulation.
-4. Corrupted-message simulation.
-5. FastAPI analyzer endpoint.
-6. React dashboard.
-7. Synthetic training-data generator.
-8. Trained anomaly detection model.
-9. Final documentation and CI refresh after advanced features.
+1. CPU-spike fault injection.
+2. Task-crash simulation.
+3. Corrupted-message simulation.
+4. FastAPI analyzer endpoint.
+5. React dashboard.
+6. Synthetic training-data generator.
+7. Trained anomaly detection model.
+8. Final documentation and CI refresh after advanced features.

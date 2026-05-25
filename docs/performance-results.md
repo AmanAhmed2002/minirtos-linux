@@ -35,6 +35,9 @@ ls -lh logs
 
 ```text
 logs/normal_runtime_logs.jsonl
+logs/priority_scheduler_runtime_logs.jsonl
+logs/deadline_scheduler_runtime_logs.jsonl
+logs/queue_overflow_runtime_logs.jsonl
 logs/slow_task_runtime_logs.jsonl
 logs/dropped_messages_runtime_logs.jsonl
 logs/watchdog_runtime_logs.jsonl
@@ -53,17 +56,19 @@ The benchmark assumes the default anomaly-analysis window size:
 | Scenario | Config File | Log File | Purpose |
 |---|---|---|---|
 | Normal runtime | `configs/normal.json` | `logs/normal_runtime_logs.jsonl` | Baseline system behavior without explicit fault injection. |
+| Priority scheduler | `configs/priority_scheduler.json` | `logs/priority_scheduler_runtime_logs.jsonl` | Validates that due tasks can be ordered by priority instead of config order. |
+| Earliest-deadline-first scheduler | `configs/deadline_scheduler.json` | `logs/deadline_scheduler_runtime_logs.jsonl` | Validates that due tasks can be ordered by nearest absolute deadline instead of config order. |
+| Queue overflow | `configs/queue_overflow.json` | `logs/queue_overflow_runtime_logs.jsonl` | Intentionally stresses `LoggerTask` bounded queue capacity. |
 | Slow task fault | `configs/slow_task.json` | `logs/slow_task_runtime_logs.jsonl` | Simulates a task taking longer than its deadline. |
 | Dropped messages fault | `configs/dropped_messages.json` | `logs/dropped_messages_runtime_logs.jsonl` | Simulates injected message loss. |
 | Watchdog slow task | `configs/watchdog_slow_task.json` | `logs/watchdog_runtime_logs.jsonl` | Simulates slow-task behavior with watchdog timeout and recovery enabled. |
-| Priority scheduler | `configs/priority_scheduler.json` | `logs/runtime_logs.jsonl` when run manually | Validates that due tasks can be ordered by priority instead of config order. |
-| Earliest-deadline-first scheduler | `configs/deadline_scheduler.json` | `logs/runtime_logs.jsonl` when run manually | Validates that due tasks can be ordered by nearest absolute deadline instead of config order. |
 
 ## 4. High-Level Results
 
 | Scenario | Total Events | Info Events | Warning Events | Error Events | Deterministic Status | AI-Style Classification | Key Finding |
 |---|---:|---:|---:|---:|---|---|---|
 | Normal runtime | 1,444 | 1,105 | 339 | 0 | WARNING | WARNING | No deadline misses or injected faults, but bounded queue pressure caused queue-full message drops. |
+| Queue overflow | 3,070 | 2,112 | 958 | 0 | WARNING | WARNING | Dedicated queue-pressure scenario produced 958 queue-full drops with no deadline misses or fault-injected drops. |
 | Slow task fault | 1,336 | 731 | 605 | 0 | UNSTABLE | UNSTABLE | `ControlTask` repeatedly exceeded its deadline after slow-task fault injection. |
 | Dropped messages fault | 1,617 | 1,103 | 514 | 0 | WARNING | WARNING | Fault injection caused message drops without causing deadline misses. |
 | Watchdog slow task | 1,380 | 731 | 627 | 22 | UNSTABLE | UNSTABLE | Watchdog detected repeated deadline misses and logged simulated recovery events. |
@@ -72,7 +77,7 @@ The benchmark assumes the default anomaly-analysis window size:
 
 | Event Type | Normal | Slow Task Fault | Dropped Messages Fault | Watchdog Slow Task |
 |---|---:|---:|---:|---:|
-| `runtime_started` | 1 | 1 | 1 | 1 |
+| `runtime_started` | 1 | 1 | 1 | 1 | 1 |
 | `scheduler_started` | 1 | 1 | 1 | 1 |
 | `task_started` | 479 | 385 | 478 | 385 |
 | `task_completed` | 479 | 385 | 478 | 385 |
@@ -97,6 +102,18 @@ The benchmark assumes the default anomaly-analysis window size:
 | `LoggerTask` | 60 | 0 | 15 ms | 15 ms |
 
 The normal runtime completed without task deadline misses. However, it still produced queue-full message drops because `ControlTask` and `NetworkTask` generated messages faster than `LoggerTask` consumed them.
+
+
+### 6.1.1 Queue Overflow Runtime
+
+| Task | Runs | Deadline Misses | Average Duration | Max Duration |
+|---|---:|---:|---:|---:|
+| `ControlTask` | 594 | 0 | 5 ms | 5 ms |
+| `NetworkTask` | 397 | 0 | 8 ms | 8 ms |
+| `LoggerTask` | 30 | 0 | 15 ms | 15 ms |
+
+The queue-overflow scenario completed without task deadline misses. The warning state came from bounded queue pressure only. The analyzer reported 958 `queue_full` message drops, 0 fault-injected drops, 0 watchdog timeouts, and 0 task recovery events.
+
 
 ### 6.2 Slow Task Fault
 
@@ -133,6 +150,7 @@ The watchdog scenario used the same slow-task behavior as the slow task fault sc
 | Scenario | Messages Sent | Messages Received | Messages Dropped | Queue-Full Drops | Fault-Injected Drops |
 |---|---:|---:|---:|---:|---:|
 | Normal runtime | 80 | 60 | 339 | 339 | 0 |
+| Queue overflow | 33 | 30 | 958 | 958 | 0 |
 | Slow task fault | 74 | 54 | 257 | 257 | 0 |
 | Dropped messages fault | 80 | 60 | 338 | 162 | 176 |
 | Watchdog slow task | 74 | 54 | 257 | 257 | 0 |
@@ -142,6 +160,7 @@ The watchdog scenario used the same slow-task behavior as the slow task fault sc
 | Scenario | Fault Type | Fault Events | Watchdog Timeouts | Recovery Events |
 |---|---|---:|---:|---:|
 | Normal runtime | None | 0 | 0 | 0 |
+| Queue overflow | None | 0 | 0 | 0 |
 | Slow task fault | `slow_task` | 174 | 0 | 0 |
 | Dropped messages fault | `dropped_messages` | 176 | 0 | 0 |
 | Watchdog slow task | `slow_task` | 174 | 22 | 22 |
@@ -172,7 +191,43 @@ Reason:
 Queue-full drops occurred even though no explicit fault was injected.
 ```
 
-### 9.2 Slow Task Fault Scenario
+
+### 9.2 Queue Overflow Scenario
+
+Phase 18 added a dedicated queue-overflow benchmark scenario using:
+
+```text
+configs/queue_overflow.json
+```
+
+This scenario intentionally creates bounded-queue pressure by making `ControlTask` and `NetworkTask` run more frequently while making `LoggerTask` consume messages less frequently with a smaller queue limit.
+
+Observed analyzer result:
+
+```text
+Runtime status: WARNING
+queue_full_drops: 958
+fault_injected_drops: 0
+deadline_misses: 0
+watchdog_timeouts: 0
+task_recoveries: 0
+```
+
+Classification:
+
+```text
+WARNING
+```
+
+Reason:
+
+```text
+The runtime remained schedulable, but bounded queue capacity was exceeded.
+```
+
+This validates that queue pressure can be reproduced as a standalone benchmark scenario instead of only appearing incidentally in the normal runtime.
+
+### 9.3 Slow Task Fault Scenario
 
 The slow task scenario injected 174 `slow_task` faults into `ControlTask`.
 
@@ -196,7 +251,7 @@ Primary root cause:
 ControlTask slow_task fault injection
 ```
 
-### 9.3 Dropped Messages Fault Scenario
+### 9.4 Dropped Messages Fault Scenario
 
 The dropped messages scenario injected 176 `dropped_messages` faults.
 
@@ -227,7 +282,7 @@ Primary root cause:
 Dropped message fault injection
 ```
 
-### 9.4 Watchdog Slow Task Scenario
+### 9.5 Watchdog Slow Task Scenario
 
 The watchdog scenario injected the same type of slow-task behavior as the slow task fault scenario, but watchdog monitoring was enabled.
 
@@ -259,7 +314,7 @@ ControlTask slow_task fault injection caused repeated deadline misses, which tri
 ```
 
 
-## 9.5 Priority Scheduler Scenario
+## 9.6 Priority Scheduler Scenario
 
 Phase 16 added a priority scheduler mode using this config value:
 
@@ -289,7 +344,7 @@ This scenario was added as a runtime validation scenario. The measured benchmark
 
 
 
-## 9.6 Earliest-Deadline-First Scheduler Scenario
+## 9.7 Earliest-Deadline-First Scheduler Scenario
 
 Phase 17 added an earliest-deadline-first scheduler mode using this config value:
 
@@ -314,7 +369,8 @@ This scenario was added as a runtime validation scenario. The measured benchmark
 1. The baseline runtime is schedulable from a task-deadline perspective because the normal scenario produced zero deadline misses.
 2. The priority scheduler can run due tasks by priority while preserving the same logging and analyzer schema.
 3. The earliest-deadline-first scheduler can run due tasks by nearest deadline while preserving the same logging and analyzer schema.
-3. The bounded message bus correctly rejects messages when the target queue is full.
+4. The dedicated queue-overflow scenario reproduces bounded-queue pressure with 958 queue-full drops and no deadline misses.
+5. The bounded message bus correctly rejects messages when the target queue is full.
 4. The default message production and consumption rates create queue pressure because `ControlTask` and `NetworkTask` send messages faster than `LoggerTask` consumes them.
 5. Slow-task fault injection creates clear deadline-miss telemetry.
 6. Dropped-message fault injection affects message reliability without affecting task timing.
@@ -338,7 +394,6 @@ Current limitations:
 Future phases can improve the benchmark by adding:
 
 - A tuned normal configuration with no queue drops.
-- A dedicated `queue_overflow.json` scenario.
 - CPU spike fault injection.
 - Task crash fault simulation.
 - Trained anomaly model using generated scenario data.
@@ -349,7 +404,7 @@ Future phases can improve the benchmark by adding:
 
 - Built a C++20 embedded-runtime simulator that models periodic tasks, round-robin, priority, and earliest-deadline-first scheduling, deadlines, bounded queues, fault injection, watchdog monitoring, and structured telemetry.
 - Implemented JSONL runtime logging for task execution, queue depth, message drops, deadline misses, injected faults, watchdog timeouts, and simulated recovery.
-- Created reproducible fault scenarios for slow tasks and dropped messages.
+- Created reproducible scenarios for queue overflow, slow tasks, and dropped messages.
 - Demonstrated that slow-task injection caused 174 deadline misses in `ControlTask`, while watchdog monitoring detected the unhealthy behavior and emitted 22 timeout and 22 recovery events.
 - Built a Python analyzer that summarizes runtime health, identifies root causes, and supports AI-style anomaly classification using time-windowed telemetry.
 - Dockerized the runtime and analyzer so the full scenario suite can be reproduced with Docker Compose.

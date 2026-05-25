@@ -22,7 +22,7 @@ Embedded Systems Fault Detection and Runtime Telemetry Simulator
 ## 2. One-Line Project Summary
 
 ```text
-Built a C++20 embedded-runtime simulator with periodic task scheduling, priority and earliest-deadline-first scheduling, bounded message queues, configurable fault injection, watchdog recovery telemetry, Python log analysis, AI-style anomaly detection, automated tests, Dockerized demos, and benchmark reporting on Linux.
+Built a C++20 embedded-runtime simulator with periodic task scheduling, priority and earliest-deadline-first scheduling, bounded message queues, queue-overflow benchmarking, configurable fault injection, watchdog recovery telemetry, Python log analysis, AI-style anomaly detection, automated tests, Dockerized demos, and benchmark reporting on Linux.
 ```
 
 ---
@@ -58,9 +58,9 @@ Use 2-4 bullets depending on how much room you have.
 Use this if your resume has limited space.
 
 ```text
-- Built a C++20 embedded-runtime simulator on Linux with periodic task scheduling, priority and earliest-deadline-first scheduling, bounded message queues, structured JSONL telemetry, configurable fault injection, watchdog monitoring, and simulated recovery events.
-- Developed a Python runtime analyzer with AI-style time-windowed anomaly detection to classify normal, warning, and unstable system states from task, message, fault, and watchdog telemetry.
-- Added GoogleTest/pytest coverage, GitHub Actions CI, Docker Compose demo workflows, and benchmark documentation comparing normal, slow-task, dropped-message, and watchdog fault scenarios.
+- Built a C++20 embedded-runtime simulator on Linux with periodic task scheduling, priority and earliest-deadline-first scheduling, bounded message queues, structured JSONL telemetry, configurable fault injection, watchdog monitoring, queue-overflow benchmarking, and simulated recovery events.
+- Developed a Python runtime analyzer with AI-style time-windowed anomaly detection to classify normal, warning, and unstable system states from task, message, fault, queue-pressure, and watchdog telemetry.
+- Added GoogleTest/pytest coverage, GitHub Actions CI, Docker Compose demo workflows, and benchmark documentation comparing normal, scheduler, queue-overflow, slow-task, dropped-message, and watchdog scenarios.
 ```
 
 ---
@@ -79,7 +79,7 @@ Use this if the project is one of several listed under a Projects section.
 ## 7. One-Bullet Compact Version
 
 ```text
-- Built MiniRTOS-Linux, a C++20 embedded-runtime simulator with periodic scheduling, priority and earliest-deadline-first scheduling, bounded message queues, fault injection, watchdog recovery telemetry, Python AI-style anomaly detection, automated tests, Dockerized demos, and benchmark reporting.
+- Built MiniRTOS-Linux, a C++20 embedded-runtime simulator with periodic scheduling, priority and earliest-deadline-first scheduling, bounded message queues, queue-overflow benchmarking, fault injection, watchdog recovery telemetry, Python AI-style anomaly detection, automated tests, Dockerized demos, and benchmark reporting.
 ```
 
 ---
@@ -244,7 +244,7 @@ I implemented the runtime in C++20 with JSON configs, periodic tasks, round-robi
 ### Result
 
 ```text
-The current system can run normal, priority-scheduler, earliest-deadline-first, and fault scenarios, generate structured logs, detect queue pressure, identify slow-task deadline misses, distinguish fault-injected message drops, log watchdog timeout and recovery events, and produce a benchmark report comparing all scenarios.
+The current system can run normal, priority-scheduler, earliest-deadline-first, queue-overflow, and fault scenarios, generate structured logs, detect queue pressure, identify slow-task deadline misses, distinguish fault-injected message drops, log watchdog timeout and recovery events, and produce a benchmark report comparing all scenarios.
 ```
 
 ---
@@ -283,6 +283,14 @@ Earliest-deadline-first scheduler scenario:
 - Validates that due tasks can run by nearest absolute deadline
 - Uses priority as a tie-breaker when deadlines match
 - Preserves existing JSONL event schema and analyzer compatibility
+
+Queue overflow scenario:
+- Added in Phase 18
+- 958 queue-full drops
+- 0 fault-injected drops
+- 0 deadline misses
+- 0 watchdog timeouts
+- Demonstrates bounded queue pressure as a standalone benchmark
 ```
 
 Use these carefully in interviews to show the system was benchmarked with measured logs.

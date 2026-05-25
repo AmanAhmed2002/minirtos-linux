@@ -36,7 +36,7 @@ scripts/run_watchdog.sh
 
 ## 3. Supported Fault Types
 
-Fault injection works with both current scheduler modes: `round_robin` and `priority`. The scheduler mode controls the order of due task execution, while the fault injector controls whether configured runtime faults are applied to matching tasks or messages.
+Fault injection works with the current scheduler modes: `round_robin`, `priority`, and `earliest_deadline_first`. The scheduler mode controls the order of due task execution, while the fault injector controls whether configured runtime faults are applied to matching tasks or messages.
 
 | Fault Type | Description | Main Runtime Impact |
 |---|---|---|
@@ -189,7 +189,48 @@ The analyzer reports these separately.
 
 ---
 
-## 8. Watchdog Fault Scenario
+
+## 8. Dedicated Queue Overflow Scenario
+
+Phase 18 adds a dedicated queue-overflow scenario:
+
+```text
+configs/queue_overflow.json
+```
+
+This scenario is different from the `dropped_messages` fault. It does not intentionally drop messages through the fault injector. Instead, it stresses the bounded message bus by making producer tasks send messages faster than `LoggerTask` can consume them.
+
+Expected behavior:
+
+```text
+message_dropped events appear with reason=queue_full
+fault_injected events remain 0
+fault_injected_drop events remain 0
+deadline misses should remain low or 0
+```
+
+Expected analyzer classification:
+
+```text
+WARNING
+```
+
+Observed Phase 18 result:
+
+```text
+queue_full_drops: 958
+fault_injected_drops: 0
+deadline_misses: 0
+watchdog_timeouts: 0
+```
+
+Reason:
+
+```text
+The runtime remains schedulable, but bounded queue capacity is exceeded.
+```
+
+## 9. Watchdog Fault Scenario
 
 The watchdog scenario combines slow-task behavior with watchdog monitoring.
 
@@ -230,7 +271,7 @@ The watchdog scenario produced 22 watchdog timeout events and 22 task recovery e
 
 ---
 
-## 9. Run Fault Scenarios
+## 10. Run Fault Scenarios
 
 ### Build First
 
@@ -264,7 +305,7 @@ The watchdog scenario produced 22 watchdog timeout events and 22 task recovery e
 
 ---
 
-## 10. Docker Fault Scenarios
+## 11. Docker Fault Scenarios
 
 Run the full Docker demo:
 
@@ -291,18 +332,19 @@ logs/watchdog_runtime_logs.jsonl
 
 ---
 
-## 11. Expected Analyzer Results
+## 12. Expected Analyzer Results
 
 | Scenario | Expected Status | Reason |
 |---|---|---|
 | Normal | `WARNING` | Queue pressure causes queue-full message drops. |
+| Queue overflow | `WARNING` | Dedicated bounded-queue pressure causes queue-full drops without fault injection. |
 | Slow task | `UNSTABLE` | Repeated deadline misses from `slow_task`. |
 | Dropped messages | `WARNING` | Message reliability degraded without deadline misses. |
 | Watchdog slow task | `UNSTABLE` | Repeated deadline misses trigger watchdog timeout and recovery telemetry. |
 
 ---
 
-## 12. Fault Logging Events
+## 13. Fault Logging Events
 
 ### `fault_injected`
 
@@ -339,7 +381,7 @@ Indicates simulated recovery was logged after watchdog timeout.
 
 ---
 
-## 13. Limitations
+## 14. Limitations
 
 Current fault injection is simulation-based.
 
@@ -350,17 +392,16 @@ Limitations:
 - It does not simulate corrupted message payloads yet.
 - It does not simulate CPU spikes separately from slow task behavior yet.
 - Recovery is currently logged rather than implemented as a true process restart.
-- The scheduler currently supports round-robin and priority modes, but not earliest-deadline-first yet.
+- The scheduler currently supports round-robin, priority, and earliest-deadline-first modes.
 
 ---
 
-## 14. Recommended Future Faults
+## 15. Recommended Future Faults
 
 Recommended future fault modes:
 
-1. Dedicated `queue_overflow` scenario
-2. `cpu_spike`
-3. `task_crash`
+1. `cpu_spike`
+2. `task_crash`
 4. `corrupted_message`
 5. `missed_heartbeat`
 6. `random_latency`
@@ -369,7 +410,6 @@ Recommended future fault modes:
 Recommended future configs:
 
 ```text
-configs/queue_overflow.json
 configs/cpu_spike.json
 configs/task_crash.json
 configs/corrupted_message.json
@@ -377,11 +417,11 @@ configs/corrupted_message.json
 
 ---
 
-## 15. Interview Talking Points
+## 16. Interview Talking Points
 
 - The fault injector makes runtime failures reproducible and observable.
 - `slow_task` validates deadline-miss detection and watchdog escalation.
 - `dropped_messages` validates message reliability analysis without affecting task execution timing.
 - Queue-full drops and fault-injected drops are intentionally separated in telemetry.
-- Fault scenarios can be run under the existing scheduler modes, including priority scheduling, without changing the analyzer event schema.
+- Fault scenarios can be run under the existing scheduler modes, including priority and earliest-deadline-first scheduling, without changing the analyzer event schema.
 - Watchdog scenarios demonstrate embedded-style health monitoring and simulated recovery behavior.

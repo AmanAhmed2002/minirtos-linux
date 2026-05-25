@@ -32,7 +32,7 @@ This script performs the full test workflow:
 4. Check that pytest is installed.
 5. Run Python tests.
 
-Expected output after Phase 17 includes the expanded scheduler tests:
+Expected output after Phase 18 includes the expanded scheduler tests:
 
 ```text
 100% tests passed, 0 tests failed out of 25
@@ -309,6 +309,8 @@ Current tests do not fully prove:
 - Crash recovery behavior.
 - Performance under very large logs.
 - Accuracy of a trained ML model.
+
+Phase 18 adds a config-driven queue-overflow scenario. This scenario does not require a new unit test because it exercises existing bounded queue behavior already covered by the Message Bus tests. The scenario is validated through runtime execution, analyzer output, and Docker demo coverage.
 
 Those areas are future enhancement opportunities.
 
