@@ -11,7 +11,7 @@ The project is designed as a recruiter-ready systems/embedded portfolio project.
 
 ## Project Status
 
-Phases 1-13 are complete.
+Phases 1-16 are complete.
 
 Completed capabilities include:
 
@@ -20,6 +20,7 @@ Completed capabilities include:
 - JSON config loading
 - Periodic task model
 - Round-robin scheduler
+- Priority scheduler mode
 - Structured JSONL runtime logger
 - Bounded message bus
 - Configurable fault injection
@@ -29,11 +30,19 @@ Completed capabilities include:
 - GoogleTest and pytest automated tests
 - Docker and Docker Compose demo
 - Performance and fault benchmark report
+- GitHub Actions CI
+- Priority scheduler configuration and tests
 
 Current phase:
 
 ```text
-Phase 14 - Documentation and GitHub Polish
+Phase 16 - Priority Scheduler Mode Complete
+```
+
+Next recommended phase:
+
+```text
+Phase 17 - Earliest-Deadline-First Scheduler Mode
 ```
 
 ---
@@ -63,7 +72,7 @@ This project is useful for demonstrating:
 | Runtime | C++20 CLI simulator |
 | Configuration | JSON configs for tasks, scheduler, faults, and watchdog settings |
 | Tasks | Simulated periodic tasks with period, deadline, priority, execution time, queue limit, run counters, and deadline-miss counters |
-| Scheduler | Round-robin scheduler loop |
+| Scheduler | Round-robin and priority scheduler modes |
 | Logging | Structured JSONL logs for runtime, scheduler, task, message, fault, watchdog, and recovery events |
 | Message Bus | Bounded FIFO queues with queue-depth telemetry and queue-full drops |
 | Fault Injection | `slow_task` and `dropped_messages` scenarios |
@@ -160,6 +169,7 @@ minirtos-linux/
 │   └── tests/
 │       ├── test_fault_injector.cpp
 │       ├── test_message_bus.cpp
+│       ├── test_scheduler.cpp
 │       └── test_watchdog.cpp
 ├── ai-analyzer/
 │   ├── app/
@@ -170,6 +180,7 @@ minirtos-linux/
 │       └── test_anomaly_detector.py
 ├── configs/
 │   ├── normal.json
+│   ├── priority_scheduler.json
 │   ├── slow_task.json
 │   ├── dropped_messages.json
 │   └── watchdog_slow_task.json
@@ -239,6 +250,12 @@ Run the normal runtime scenario:
 ./scripts/run_normal.sh
 ```
 
+Run the priority scheduler scenario:
+
+```bash
+./cpp-runtime/build/minirtos_runtime --config configs/priority_scheduler.json
+```
+
 Analyze the generated runtime log:
 
 ```bash
@@ -293,6 +310,14 @@ Equivalent command:
 ```bash
 ./cpp-runtime/build/minirtos_runtime --config configs/normal.json
 ```
+
+### Priority Scheduler Scenario
+
+```bash
+./cpp-runtime/build/minirtos_runtime --config configs/priority_scheduler.json
+```
+
+This scenario uses `scheduler_mode: "priority"`. Lower numeric priority values run first, so `priority: 1` runs before `priority: 2`. The config intentionally lists tasks out of priority order so the runtime behavior can show priority-based ordering.
 
 ### Slow Task Fault Scenario
 
@@ -405,10 +430,10 @@ This script:
 4. Checks for pytest.
 5. Runs Python tests.
 
-Expected verified result from Phase 11:
+Expected result after Phase 16:
 
 ```text
-100% tests passed, 0 tests failed out of 19
+100% tests passed, 0 tests failed out of 22
 13 passed
 [INFO] All tests passed
 ```
@@ -459,7 +484,7 @@ The `analyzer` service analyzes the latest `logs/runtime_logs.jsonl`.
 
 ## Benchmark Results
 
-The benchmark report compares the normal, slow-task, dropped-message, and watchdog scenarios.
+The benchmark report currently compares the normal, slow-task, dropped-message, and watchdog scenarios. Phase 16 also adds a priority scheduler scenario for runtime validation; the benchmark report should be refreshed with measured priority-scheduler results during the final documentation/benchmark refresh phase.
 
 Report:
 
@@ -496,9 +521,9 @@ See [`docs/performance-results.md`](docs/performance-results.md) for the full be
 ## Resume Highlights
 
 - Built a C++20 embedded-runtime simulator that models periodic tasks, deadlines, bounded message queues, configurable fault injection, watchdog monitoring, JSONL telemetry, Python analysis, Dockerized demos, and benchmark reporting on Linux.
-- Implemented round-robin scheduling with structured telemetry for task latency, message drops, queue depth, deadline misses, injected faults, watchdog timeouts, and simulated recovery.
+- Implemented round-robin and priority scheduling with structured telemetry for task latency, message drops, queue depth, deadline misses, injected faults, watchdog timeouts, and simulated recovery.
 - Developed a Python analyzer that parses runtime logs, computes task/message/fault/watchdog metrics, classifies system health, reports likely root causes, and performs AI-style time-windowed anomaly detection.
-- Added automated C++ and Python test coverage with GoogleTest, CTest, pytest, and a one-command test workflow.
+- Added automated C++ and Python test coverage with GoogleTest, CTest, pytest, GitHub Actions CI, and a one-command local test workflow.
 - Dockerized the runtime and analyzer with Docker Compose services for normal, fault, watchdog, and full-demo scenarios.
 
 More options are available in [`docs/resume-bullets.md`](docs/resume-bullets.md).
@@ -523,15 +548,20 @@ Completed:
 - Phase 12: Dockerized demo
 - Phase 13: Benchmark report
 - Phase 14: Documentation and GitHub polish
+- Phase 15: GitHub Actions CI
+- Phase 16: Priority scheduler mode
 
 Recommended next phases:
 
-- Phase 15: GitHub Actions CI
-- Phase 16: Optional advanced features
+- Phase 17: Deadline-aware / earliest-deadline-first scheduler mode
+- Phase 18: Dedicated queue overflow scenario and benchmark
+- Phase 19: CPU spike fault injection
+- Phase 20: Task crash simulation
+- Phase 21: Synthetic training-data generator / stronger AI layer
+- Phase 22: Final documentation, CI, benchmark, and resume refresh
 
 Optional future features:
 
-- Priority scheduler mode
 - Deadline-aware scheduler mode
 - Dedicated queue overflow scenario
 - CPU spike fault injection

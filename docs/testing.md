@@ -9,7 +9,8 @@ The project uses:
 - GoogleTest for C++ runtime component tests
 - CTest through CMake for running C++ tests
 - pytest for Python analyzer and anomaly-detector tests
-- `scripts/run_tests.sh` as the one-command test workflow
+- `scripts/run_tests.sh` as the one-command local test workflow
+- GitHub Actions CI for automated build and test verification on `main` pushes and pull requests
 
 The goal is to prove that core runtime components and analyzer logic continue working as the project grows.
 
@@ -31,10 +32,10 @@ This script performs the full test workflow:
 4. Check that pytest is installed.
 5. Run Python tests.
 
-Expected verified Phase 11 output included:
+Expected output after Phase 16 includes the scheduler tests:
 
 ```text
-100% tests passed, 0 tests failed out of 19
+100% tests passed, 0 tests failed out of 22
 13 passed
 [INFO] All tests passed
 ```
@@ -95,6 +96,7 @@ Current C++ test files:
 ```text
 cpp-runtime/tests/test_message_bus.cpp
 cpp-runtime/tests/test_fault_injector.cpp
+cpp-runtime/tests/test_scheduler.cpp
 cpp-runtime/tests/test_watchdog.cpp
 ```
 
@@ -137,7 +139,23 @@ Expected coverage:
 | Source/target matching | Confirms message drop faults apply to matching messages only. |
 | Zero-percent drop | Confirms 0% probability does not drop messages. |
 
-### 4.3 Watchdog Tests
+### 4.3 Scheduler Tests
+
+File:
+
+```text
+cpp-runtime/tests/test_scheduler.cpp
+```
+
+Expected coverage:
+
+| Behavior | Purpose |
+|---|---|
+| Round-robin ordering | Confirms due tasks run in config/vector order under `round_robin`. |
+| Priority ordering | Confirms due tasks run by ascending priority number under `priority`. |
+| Invalid scheduler mode | Confirms unsupported scheduler modes still raise an error. |
+
+### 4.4 Watchdog Tests
 
 File:
 
@@ -266,6 +284,8 @@ Passing tests show that:
 - FIFO message behavior is stable.
 - Invalid message-bus inputs are rejected.
 - Fault injection activates only under intended conditions.
+- Round-robin scheduling preserves task-list order for due tasks.
+- Priority scheduling runs higher-priority due tasks first, where lower numeric priority means higher priority.
 - Slow-task and dropped-message fault logic behaves predictably.
 - Watchdog threshold and cooldown behavior works.
 - Analyzer log parsing handles normal and bad inputs.
@@ -281,7 +301,6 @@ Current tests do not fully prove:
 
 - Real hardware timing correctness.
 - Hard real-time scheduling guarantees.
-- Priority scheduler behavior.
 - Deadline-aware scheduler behavior.
 - CPU spike fault behavior.
 - Crash recovery behavior.
@@ -292,9 +311,9 @@ Those areas are future enhancement opportunities.
 
 ---
 
-## 10. Recommended CI Step
+## 10. GitHub Actions CI
 
-The next recommended phase is GitHub Actions CI.
+GitHub Actions CI was added in Phase 15.
 
 Target file:
 
@@ -302,21 +321,16 @@ Target file:
 .github/workflows/ci.yml
 ```
 
-Expected CI tasks:
+Current CI tasks:
 
 1. Checkout repository.
 2. Install Linux C++ build dependencies.
 3. Install Python and pytest.
 4. Configure CMake with Ninja.
 5. Build runtime and tests.
-6. Run C++ tests.
-7. Run Python tests.
-8. Optionally build Docker images.
+6. Run C++ tests with CTest.
+7. Run Python tests with pytest.
 
-Recommended commit after CI is added:
+The existing CI workflow should continue to work after Phase 16 because it builds the CMake test target and runs all discovered C++ tests automatically.
 
-```bash
-git add .github/workflows/ci.yml
-git commit -m "Add CI for runtime and analyzer tests"
-git push
-```
+Future CI improvements can optionally add Docker image builds, analyzer smoke tests on sample logs, and script permission checks.

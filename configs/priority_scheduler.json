@@ -1,0 +1,31 @@
+{
+  "simulation_name": "priority_scheduler",
+  "duration_seconds": 30,
+  "scheduler_mode": "priority",
+  "tasks": [
+    {
+      "name": "LoggerTask",
+      "period_ms": 500,
+      "deadline_ms": 400,
+      "priority": 3,
+      "execution_time_ms": 15,
+      "queue_limit": 20
+    },
+    {
+      "name": "NetworkTask",
+      "period_ms": 250,
+      "deadline_ms": 200,
+      "priority": 2,
+      "execution_time_ms": 20,
+      "queue_limit": 10
+    },
+    {
+      "name": "ControlTask",
+      "period_ms": 100,
+      "deadline_ms": 80,
+      "priority": 1,
+      "execution_time_ms": 10,
+      "queue_limit": 10
+    }
+  ]
+}

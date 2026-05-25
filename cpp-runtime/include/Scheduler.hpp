@@ -28,6 +28,10 @@ private:
 
     void runRoundRobin();
 
+    void runPriority();
+
+    void executeTask(Task& task, Task::TimePoint now);
+
     void handleTaskMessaging(const Task& task);
 
     void sendMessageToLoggerTask(

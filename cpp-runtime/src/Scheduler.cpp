@@ -2,6 +2,7 @@
 
 #include "Message.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <optional>
@@ -48,8 +49,13 @@ void Scheduler::run() {
 
     if (mode_ == "round_robin") {
         runRoundRobin();
+    } else if (mode_ == "priority") {
+        runPriority();
     } else {
-        throw std::runtime_error("Unsupported scheduler mode: " + mode_);
+        throw std::runtime_error(
+            "Unsupported scheduler mode: " + mode_ +
+            ". Supported modes are round orbin and priority."
+        );
     }
 
     std::cout << "[INFO] Scheduler finished" << std::endl;
@@ -81,67 +87,7 @@ void Scheduler::runRoundRobin() {
             }
 
             if (task.shouldRun(now)) {
-                const long timestamp_ms = elapsedMs(scheduler_start_time_);
-
-                const int extra_execution_time_ms =
-                    fault_injector_.extraExecutionTimeMs(
-                        task.name(),
-                        timestamp_ms
-                    );
-
-                if (extra_execution_time_ms > 0) {
-                    std::cout << "[WARN] Fault injected type=slow_task"
-                              << " target_task=" << task.name()
-                              << " extra_execution_time_ms=" << extra_execution_time_ms
-                              << std::endl;
-
-                    logger_.logFaultInjectedSlowTask(
-                        task.name(),
-                        extra_execution_time_ms
-                    );
-                }
-
-                std::cout << "[INFO] Running task=" << task.name() << std::endl;
-
-                logger_.logTaskStarted(
-                    task.name(),
-                    task.periodMs(),
-                    task.deadlineMs(),
-                    task.priority()
-                );
-
-                const Task::TimePoint before_run = Task::Clock::now();
-
-                task.run(now, extra_execution_time_ms);
-
-                const Task::TimePoint after_run = Task::Clock::now();
-
-                const auto observed_duration_ms =
-                    std::chrono::duration_cast<std::chrono::milliseconds>(
-                        after_run - before_run
-                    ).count();
-
-                std::cout << "[INFO] Completed task=" << task.name()
-                          << " observed_duration_ms=" << observed_duration_ms
-                          << " run_count=" << task.runCount()
-                          << " deadline_miss_count=" << task.deadlineMissCount()
-                          << std::endl;
-
-                logger_.logTaskCompleted(
-                    task.name(),
-                    observed_duration_ms,
-                    task.executionTimeMs(),
-                    task.deadlineMs(),
-                    task.runCount(),
-                    task.deadlineMissCount()
-                );
-
-                const long after_task_timestamp_ms = elapsedMs(scheduler_start_time_);
-
-                inspectWatchdogForTask(task, after_task_timestamp_ms);
-
-                handleTaskMessaging(task);
-
+                executeTask(task, now);
                 ran_task_this_cycle = true;
             }
         }
@@ -151,6 +97,113 @@ void Scheduler::runRoundRobin() {
         }
     }
 }
+
+void Scheduler::runPriority() {
+    scheduler_start_time_ = Task::Clock::now();
+    const Task::TimePoint end_time =
+        scheduler_start_time_ + std::chrono::seconds(duration_seconds_);
+
+    while (Task::Clock::now() < end_time) {
+        const Task::TimePoint now = Task::Clock::now();
+
+        std::vector<Task*> due_tasks;
+
+        for (auto& task : tasks_) {
+            if (task.shouldRun(now)) {
+                due_tasks.push_back(&task);
+            }
+        }
+
+        if (due_tasks.empty()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue;
+        }
+
+        std::stable_sort(
+            due_tasks.begin(),
+            due_tasks.end(),
+            [](const Task* left, const Task* right) {
+                return left->priority() < right->priority();
+            }
+        );
+
+        for (Task* task : due_tasks) {
+            const Task::TimePoint current_time = Task::Clock::now();
+
+            if (current_time >= end_time) {
+                break;
+            }
+
+            if (task->shouldRun(current_time)) {
+                executeTask(*task, current_time);
+            }
+        }
+    }
+}
+
+void Scheduler::executeTask(Task& task, Task::TimePoint now) {
+    const long timestamp_ms = elapsedMs(scheduler_start_time_);
+
+    const int extra_execution_time_ms =
+        fault_injector_.extraExecutionTimeMs(
+            task.name(),
+            timestamp_ms
+        );
+
+    if (extra_execution_time_ms > 0) {
+        std::cout << "[WARN] Fault injected type=slow_task"
+                  << " target_task=" << task.name()
+                  << " extra_execution_time_ms=" << extra_execution_time_ms
+                  << std::endl;
+
+        logger_.logFaultInjectedSlowTask(
+            task.name(),
+            extra_execution_time_ms
+        );
+    }
+
+    std::cout << "[INFO] Running task=" << task.name() << std::endl;
+
+    logger_.logTaskStarted(
+        task.name(),
+        task.periodMs(),
+        task.deadlineMs(),
+        task.priority()
+    );
+
+    const Task::TimePoint before_run = Task::Clock::now();
+
+    task.run(now, extra_execution_time_ms);
+
+    const Task::TimePoint after_run = Task::Clock::now();
+
+    const auto observed_duration_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            after_run - before_run
+        ).count();
+
+    std::cout << "[INFO] Completed task=" << task.name()
+              << " observed_duration_ms=" << observed_duration_ms
+              << " run_count=" << task.runCount()
+              << " deadline_miss_count=" << task.deadlineMissCount()
+              << std::endl;
+
+    logger_.logTaskCompleted(
+        task.name(),
+        observed_duration_ms,
+        task.executionTimeMs(),
+        task.deadlineMs(),
+        task.runCount(),
+        task.deadlineMissCount()
+    );
+
+    const long after_task_timestamp_ms = elapsedMs(scheduler_start_time_);
+
+    inspectWatchdogForTask(task, after_task_timestamp_ms);
+
+    handleTaskMessaging(task);
+}
+
 
 void Scheduler::handleTaskMessaging(const Task& task) {
     if (task.name() == "ControlTask") {

@@ -9,6 +9,8 @@ The architecture is intentionally modular so each system concept is represented 
 - Runtime configuration
 - Task model
 - Scheduler
+  - Round-robin mode
+  - Priority mode
 - Message bus
 - Fault injector
 - Watchdog
@@ -180,10 +182,11 @@ cpp-runtime/src/Scheduler.cpp
 
 The scheduler is responsible for driving the simulated runtime.
 
-Current scheduler mode:
+Current scheduler modes:
 
 ```text
 round_robin
+priority
 ```
 
 Core behavior:
@@ -197,6 +200,35 @@ Core behavior:
 7. Send or receive messages based on task role.
 8. Continue until configured duration expires.
 9. Log scheduler completion and runtime summaries.
+
+
+### 3.4.1 Scheduler Modes
+
+MiniRTOS-Linux currently supports two scheduler modes.
+
+| Mode | Config Value | Behavior |
+|---|---|---|
+| Round robin | `round_robin` | Runs due tasks in the order they appear in the runtime task list. |
+| Priority | `priority` | Runs due tasks by ascending priority number. Lower number means higher priority. |
+
+The priority scheduler reuses the same execution path as round robin: task start/completion logging, fault injection, watchdog inspection, and message bus handling remain consistent across scheduler modes.
+
+Example priority config:
+
+```json
+{
+  "simulation_name": "priority_scheduler",
+  "duration_seconds": 30,
+  "scheduler_mode": "priority",
+  "tasks": [
+    { "name": "LoggerTask", "period_ms": 500, "deadline_ms": 400, "priority": 3, "execution_time_ms": 15, "queue_limit": 20 },
+    { "name": "NetworkTask", "period_ms": 250, "deadline_ms": 200, "priority": 2, "execution_time_ms": 20, "queue_limit": 10 },
+    { "name": "ControlTask", "period_ms": 100, "deadline_ms": 80, "priority": 1, "execution_time_ms": 10, "queue_limit": 10 }
+  ]
+}
+```
+
+Although the config lists `LoggerTask` first, priority mode should run due tasks in priority order, with `ControlTask` before `NetworkTask` before `LoggerTask` when all are due.
 
 Important scheduler events:
 
@@ -411,12 +443,14 @@ main.cpp
   |-- construct Task objects
   |-- construct Scheduler
   |-- Scheduler initializes MessageBus queues
+  |-- Scheduler selects round_robin or priority mode
   |-- Scheduler constructs FaultInjector
   |-- Scheduler constructs Watchdog
   |-- log scheduler_started
   |-- loop until configured duration expires
         |
         |-- check due tasks
+        |-- order due tasks by selected scheduler mode
         |-- apply slow_task fault if active
         |-- log task_started
         |-- simulate task execution
@@ -589,7 +623,7 @@ Docker makes the project easier to review. A recruiter or engineer can run the d
 
 ## 10. Current Limitations
 
-- The scheduler currently supports round-robin mode only.
+- The scheduler currently supports round-robin and priority modes, but not earliest-deadline-first yet.
 - Timing is simulated on Linux rather than hard real-time hardware.
 - Recovery is simulated through logs rather than real thread/process restart.
 - The anomaly detector is feature/rule-based rather than a trained ML model.
@@ -601,13 +635,13 @@ Docker makes the project easier to review. A recruiter or engineer can run the d
 
 Potential next improvements:
 
-1. Priority scheduler mode.
-2. Deadline-aware scheduler mode.
-3. Dedicated queue-overflow config.
-4. CPU-spike fault injection.
-5. Task-crash simulation.
-6. Corrupted-message simulation.
-7. FastAPI analyzer endpoint.
-8. React dashboard.
-9. Synthetic training-data generator.
-10. Trained anomaly detection model.
+1. Deadline-aware / earliest-deadline-first scheduler mode.
+2. Dedicated queue-overflow config.
+3. CPU-spike fault injection.
+4. Task-crash simulation.
+5. Corrupted-message simulation.
+6. FastAPI analyzer endpoint.
+7. React dashboard.
+8. Synthetic training-data generator.
+9. Trained anomaly detection model.
+10. Final documentation and CI refresh after advanced features.

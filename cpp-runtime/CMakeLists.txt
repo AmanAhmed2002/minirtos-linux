@@ -56,10 +56,13 @@ add_executable(minirtos_cpp_tests
     tests/test_message_bus.cpp
     tests/test_fault_injector.cpp
     tests/test_watchdog.cpp
+    tests/test_scheduler.cpp
     src/MessageBus.cpp
     src/FaultInjector.cpp
     src/Watchdog.cpp
     src/Task.cpp
+    src/Scheduler.cpp
+    src/Logger.cpp
 )
 
 target_include_directories(minirtos_cpp_tests

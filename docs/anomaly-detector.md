@@ -12,7 +12,7 @@ The analyzer has two layers:
 The anomaly detector is currently feature-based and rule-scored. It is called "AI-style" because it follows the structure of a machine-learning pipeline:
 
 ```text
-runtime logs -> time windows -> feature extraction -> anomaly score -> classification -> top drivers
+runtime logs -> scheduler/task/message/fault/watchdog events -> time windows -> feature extraction -> anomaly score -> classification -> top drivers
 ```
 
 It is not yet a trained machine learning model.
@@ -82,7 +82,7 @@ logs/runtime_logs.jsonl
 
 Each line is one structured event.
 
-Important event types include:
+Important event types include the following. These event types are stable across both `round_robin` and `priority` scheduler modes:
 
 ```text
 runtime_started
@@ -321,6 +321,7 @@ This helps connect the final classification to concrete runtime behavior.
 | Scenario | Expected Classification | Main Drivers |
 |---|---|---|
 | Normal runtime | `WARNING` | Queue-full message drops. |
+| Priority scheduler runtime | `WARNING` expected if using the same message rates as normal runtime | Queue-full message drops, with task ordering controlled by priority mode. |
 | Slow task fault | `UNSTABLE` | Slow-task fault events and deadline misses. |
 | Dropped messages fault | `WARNING` | Fault-injected message drops. |
 | Watchdog slow task | `UNSTABLE` | Deadline misses, watchdog timeouts, and recovery events. |
@@ -373,7 +374,7 @@ Recommended improvements:
 7. Add visualizations for anomaly scores over time.
 8. Add a FastAPI endpoint for log upload and analysis.
 9. Add a React dashboard for runtime health.
-10. Add GitHub Actions CI to test analyzer behavior automatically.
+10. Extend GitHub Actions CI with analyzer smoke tests on sample logs and optional Docker image builds.
 
 ---
 
@@ -383,4 +384,5 @@ Recommended improvements:
 - The analyzer separates deterministic health reporting from AI-style anomaly scoring.
 - The anomaly detector uses fixed time windows, feature extraction, and explainable scoring.
 - The system can distinguish between queue pressure, slow-task timing faults, dropped-message reliability faults, and watchdog recovery behavior.
+- Scheduler mode changes such as priority scheduling preserve the same event schema, so the analyzer can continue processing logs without special-case parsing.
 - The design is intentionally extensible toward a trained machine learning model.

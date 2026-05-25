@@ -4,11 +4,12 @@
 
 This benchmark report summarizes the observed behavior of MiniRTOS-Linux across normal and fault-injected runtime scenarios.
 
-MiniRTOS-Linux is a software-only C++20 embedded runtime simulator that models periodic tasks, bounded message queues, structured JSONL telemetry, configurable fault injection, watchdog monitoring, simulated recovery behavior, and Python-based runtime analysis.
+MiniRTOS-Linux is a software-only C++20 embedded runtime simulator that models periodic tasks, round-robin and priority scheduling, bounded message queues, structured JSONL telemetry, configurable fault injection, watchdog monitoring, simulated recovery behavior, and Python-based runtime analysis.
 
 The goal of this benchmark phase is to demonstrate that the runtime can:
 
-- Execute periodic simulated tasks under a round-robin scheduler.
+- Execute periodic simulated tasks under round-robin scheduling.
+- Validate priority scheduling as an advanced scheduler mode added in Phase 16.
 - Produce structured JSONL logs for task, message, fault, watchdog, and recovery events.
 - Detect queue pressure through bounded message queue telemetry.
 - Detect slow-task behavior through deadline miss metrics.
@@ -54,6 +55,7 @@ The benchmark assumes the default anomaly-analysis window size:
 | Slow task fault | `configs/slow_task.json` | `logs/slow_task_runtime_logs.jsonl` | Simulates a task taking longer than its deadline. |
 | Dropped messages fault | `configs/dropped_messages.json` | `logs/dropped_messages_runtime_logs.jsonl` | Simulates injected message loss. |
 | Watchdog slow task | `configs/watchdog_slow_task.json` | `logs/watchdog_runtime_logs.jsonl` | Simulates slow-task behavior with watchdog timeout and recovery enabled. |
+| Priority scheduler | `configs/priority_scheduler.json` | `logs/runtime_logs.jsonl` when run manually | Validates that due tasks can be ordered by priority instead of config order. |
 
 ## 4. High-Level Results
 
@@ -254,15 +256,45 @@ Primary root cause:
 ControlTask slow_task fault injection caused repeated deadline misses, which triggered watchdog timeout and recovery behavior.
 ```
 
+
+## 9.5 Priority Scheduler Scenario
+
+Phase 16 added a priority scheduler mode using this config value:
+
+```json
+"scheduler_mode": "priority"
+```
+
+Priority mode keeps the same task execution, logging, fault-injection, watchdog, and message-bus behavior as the baseline scheduler. The key difference is how due tasks are ordered. In priority mode, lower numeric priority values run first. For example, `priority: 1` runs before `priority: 2`.
+
+The priority scheduler validation config intentionally lists tasks out of priority order:
+
+```text
+LoggerTask priority 3
+NetworkTask priority 2
+ControlTask priority 1
+```
+
+When all three tasks are due, the expected priority-mode execution order is:
+
+```text
+ControlTask
+NetworkTask
+LoggerTask
+```
+
+This scenario was added as a runtime validation scenario. The measured benchmark tables above still reflect the Phase 13 Docker benchmark logs. A future Phase 22 benchmark refresh should regenerate and record measured priority-scheduler metrics alongside the existing normal, slow-task, dropped-message, and watchdog scenarios.
+
 ## 10. Key Observations
 
 1. The baseline runtime is schedulable from a task-deadline perspective because the normal scenario produced zero deadline misses.
-2. The bounded message bus correctly rejects messages when the target queue is full.
-3. The default message production and consumption rates create queue pressure because `ControlTask` and `NetworkTask` send messages faster than `LoggerTask` consumes them.
-4. Slow-task fault injection creates clear deadline-miss telemetry.
-5. Dropped-message fault injection affects message reliability without affecting task timing.
-6. Watchdog monitoring successfully detects repeated deadline misses and logs simulated recovery events.
-7. The analyzer can distinguish queue pressure, slow-task faults, injected message loss, and watchdog-triggered recovery behavior.
+2. The priority scheduler can run due tasks by priority while preserving the same logging and analyzer schema.
+3. The bounded message bus correctly rejects messages when the target queue is full.
+4. The default message production and consumption rates create queue pressure because `ControlTask` and `NetworkTask` send messages faster than `LoggerTask` consumes them.
+5. Slow-task fault injection creates clear deadline-miss telemetry.
+6. Dropped-message fault injection affects message reliability without affecting task timing.
+7. Watchdog monitoring successfully detects repeated deadline misses and logs simulated recovery events.
+8. The analyzer can distinguish queue pressure, slow-task faults, injected message loss, and watchdog-triggered recovery behavior.
 
 ## 11. Limitations
 
@@ -271,7 +303,7 @@ This benchmark is intentionally simulation-based and does not measure real embed
 Current limitations:
 
 - Timing is simulated through Linux process execution and sleep behavior rather than hard real-time scheduling.
-- The scheduler currently uses round-robin mode only.
+- The scheduler currently supports round-robin and priority modes, but not earliest-deadline-first yet.
 - Queue pressure appears even in the normal scenario because the current default message generation rate exceeds logger consumption rate.
 - The anomaly detector is AI-style and feature-based rather than a trained machine learning model.
 - Recovery behavior is simulated through logs rather than actual process or thread restart.
@@ -283,16 +315,16 @@ Future phases can improve the benchmark by adding:
 
 - A tuned normal configuration with no queue drops.
 - A dedicated `queue_overflow.json` scenario.
-- Priority-based or deadline-aware scheduler modes.
+- Deadline-aware / earliest-deadline-first scheduler mode.
 - CPU spike fault injection.
 - Task crash fault simulation.
 - Trained anomaly model using generated scenario data.
-- GitHub Actions CI to run C++ and Python tests automatically.
+- Expanded GitHub Actions CI with Docker build and analyzer smoke-test coverage.
 - README screenshots or terminal-output examples.
 
 ## 13. Resume and Interview Talking Points
 
-- Built a C++20 embedded-runtime simulator that models periodic tasks, deadlines, bounded queues, fault injection, watchdog monitoring, and structured telemetry.
+- Built a C++20 embedded-runtime simulator that models periodic tasks, round-robin and priority scheduling, deadlines, bounded queues, fault injection, watchdog monitoring, and structured telemetry.
 - Implemented JSONL runtime logging for task execution, queue depth, message drops, deadline misses, injected faults, watchdog timeouts, and simulated recovery.
 - Created reproducible fault scenarios for slow tasks and dropped messages.
 - Demonstrated that slow-task injection caused 174 deadline misses in `ControlTask`, while watchdog monitoring detected the unhealthy behavior and emitted 22 timeout and 22 recovery events.

@@ -24,6 +24,7 @@ cpp-runtime/include/Config.hpp
 cpp-runtime/src/Config.cpp
 cpp-runtime/include/Scheduler.hpp
 cpp-runtime/src/Scheduler.cpp
+configs/priority_scheduler.json
 configs/slow_task.json
 configs/dropped_messages.json
 configs/watchdog_slow_task.json
@@ -34,6 +35,8 @@ scripts/run_watchdog.sh
 ---
 
 ## 3. Supported Fault Types
+
+Fault injection works with both current scheduler modes: `round_robin` and `priority`. The scheduler mode controls the order of due task execution, while the fault injector controls whether configured runtime faults are applied to matching tasks or messages.
 
 | Fault Type | Description | Main Runtime Impact |
 |---|---|---|
@@ -347,7 +350,7 @@ Limitations:
 - It does not simulate corrupted message payloads yet.
 - It does not simulate CPU spikes separately from slow task behavior yet.
 - Recovery is currently logged rather than implemented as a true process restart.
-- The scheduler currently supports round-robin only.
+- The scheduler currently supports round-robin and priority modes, but not earliest-deadline-first yet.
 
 ---
 
@@ -355,7 +358,7 @@ Limitations:
 
 Recommended future fault modes:
 
-1. `queue_overflow`
+1. Dedicated `queue_overflow` scenario
 2. `cpu_spike`
 3. `task_crash`
 4. `corrupted_message`
@@ -380,4 +383,5 @@ configs/corrupted_message.json
 - `slow_task` validates deadline-miss detection and watchdog escalation.
 - `dropped_messages` validates message reliability analysis without affecting task execution timing.
 - Queue-full drops and fault-injected drops are intentionally separated in telemetry.
+- Fault scenarios can be run under the existing scheduler modes, including priority scheduling, without changing the analyzer event schema.
 - Watchdog scenarios demonstrate embedded-style health monitoring and simulated recovery behavior.
