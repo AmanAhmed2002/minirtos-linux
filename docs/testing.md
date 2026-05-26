@@ -32,11 +32,11 @@ This script performs the full test workflow:
 4. Check that pytest is installed.
 5. Run Python tests.
 
-Expected output after Phase 19 includes the expanded scheduler and CPU-spike fault tests:
+Expected output after Phase 20 includes the expanded scheduler, CPU-spike, and task-crash tests:
 
 ```text
-100% tests passed, 0 tests failed out of 29
-15 passed
+100% tests passed, 0 tests failed out of 34
+17 passed
 [INFO] All tests passed
 ```
 
@@ -141,6 +141,9 @@ Expected coverage:
 | CPU-spike activation timing | Confirms CPU-spike faults activate only after the configured start time. |
 | CPU-spike target matching | Confirms CPU-spike faults apply only to the configured target task. |
 | CPU-spike disabled behavior | Confirms disabled CPU-spike faults do not affect task timing. |
+| Task-crash activation timing | Confirms task-crash faults activate only after the configured start time. |
+| Task-crash target matching | Confirms task-crash faults apply only to the configured target task. |
+| Task-crash disabled behavior | Confirms disabled task-crash faults do not fail tasks. |
 
 ### 4.3 Scheduler Tests
 
@@ -160,6 +163,7 @@ Expected coverage:
 | Earliest-deadline-first priority tie-break | Confirms priority breaks ties when due tasks have the same deadline. |
 | Earliest-deadline-first stable-order tie-break | Confirms original task order is preserved when deadline and priority are tied. |
 | Invalid scheduler mode | Confirms unsupported scheduler modes still raise an error. |
+| Task-crash scheduler handling | Confirms task-crash faults log failure/skipped-task telemetry while allowing the scheduler to continue. |
 
 ### 4.4 Watchdog Tests
 
@@ -214,6 +218,7 @@ Expected coverage:
 | Watchdog unstable classification | Confirms watchdog events classify as unstable. |
 | Message drop reason counting | Confirms queue-full and fault-injected drops are counted separately. |
 | CPU-spike root cause reporting | Confirms CPU-spike faults are counted separately and reported in root causes. |
+| Task-crash root cause reporting | Confirms task-crash faults, task failures, and skipped tasks are counted and reported as unstable. |
 
 ### 5.2 Anomaly Detector Tests
 
@@ -235,6 +240,7 @@ Expected coverage:
 | Deadline-miss unstable classification | Confirms repeated deadline misses classify as unstable. |
 | Overall anomaly report | Confirms summary report generation works. |
 | CPU-spike timing pressure | Confirms CPU-spike windows can classify as unstable when deadline misses occur. |
+| Task-crash failure windows | Confirms task-failure and skipped-task windows classify as unstable. |
 
 ---
 
@@ -295,7 +301,7 @@ Passing tests show that:
 - Round-robin scheduling preserves task-list order for due tasks.
 - Priority scheduling runs higher-priority due tasks first, where lower numeric priority means higher priority.
 - Earliest-deadline-first scheduling runs due tasks by nearest absolute deadline, then priority, then stable task order.
-- Slow-task, CPU-spike, and dropped-message fault logic behaves predictably.
+- Slow-task, CPU-spike, task-crash, and dropped-message fault logic behaves predictably.
 - Watchdog threshold and cooldown behavior works.
 - Analyzer log parsing handles normal and bad inputs.
 - Health classification detects unstable watchdog scenarios.
@@ -310,11 +316,11 @@ Current tests do not fully prove:
 
 - Real hardware timing correctness.
 - Hard real-time scheduling guarantees.
-- Crash recovery behavior.
+- Real process/thread crash recovery behavior. The project currently simulates task crash behavior inside the scheduler.
 - Performance under very large logs.
 - Accuracy of a trained ML model.
 
-Phase 18 adds a config-driven queue-overflow scenario. Phase 19 adds CPU-spike unit/analyzer tests and a Docker/demo scenario. This scenario does not require a new unit test because it exercises existing bounded queue behavior already covered by the Message Bus tests. The scenario is validated through runtime execution, analyzer output, and Docker demo coverage.
+Phase 18 adds a config-driven queue-overflow scenario. Phase 19 adds CPU-spike unit/analyzer tests and a Docker/demo scenario. Phase 20 adds task-crash unit/analyzer tests and a Docker/demo scenario. This scenario does not require a new unit test because it exercises existing bounded queue behavior already covered by the Message Bus tests. The scenario is validated through runtime execution, analyzer output, and Docker demo coverage.
 
 Those areas are future enhancement opportunities.
 

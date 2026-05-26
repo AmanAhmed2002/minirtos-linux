@@ -42,6 +42,7 @@ Fault injection works with the current scheduler modes: `round_robin`, `priority
 |---|---|---|
 | `slow_task` | Adds extra execution time to a selected task after a configured time. | Deadline misses, unstable task timing, possible watchdog timeouts. |
 | `cpu_spike` | Adds simulated CPU-load delay to a selected task after a configured time. | Increased task duration, deadline misses, unstable timing windows. |
+| `task_crash` | Simulates a target task entering a failed state after a configured time. | `task_failed`, `task_skipped`, unstable runtime health, and failure telemetry without terminating the real process. |
 | `dropped_messages` | Drops matching messages after a configured time using a configured probability. | Message reliability degradation and `message_dropped` telemetry. |
 
 ---
@@ -66,7 +67,7 @@ Common JSON fields:
 | Field | Purpose |
 |---|---|
 | `enabled` | Turns fault injection on or off. |
-| `type` | Selects the fault type, such as `slow_task` or `dropped_messages`. |
+| `type` | Selects the fault type, such as `slow_task`, `cpu_spike`, `task_crash`, or `dropped_messages`. |
 | `target_task` | Selects the affected task or message target. |
 | `start_after_ms` | Delays fault activation until the runtime has passed this timestamp. |
 | `extra_execution_time_ms` | Adds simulated execution time for `slow_task`. |
@@ -168,8 +169,60 @@ Fault summary:
 ```
 
 If the injected CPU spike makes the observed task duration exceed the target task deadline, the run should also produce deadline-miss telemetry and may be classified as `UNSTABLE`.
+---
 
-## 7. Dropped Messages Fault
+## 7. Task Crash Fault
+
+The `task_crash` fault simulates a task failure without crashing the real runtime process.
+
+Example behavior:
+
+1. Runtime starts normally.
+2. The configured start time is reached.
+3. The configured target task enters a failed simulated state.
+4. The runtime logs `fault_injected` with `fault_type=task_crash`.
+5. The runtime logs `task_failed` for the first failure.
+6. Future due runs of that task are logged as `task_skipped`.
+7. The scheduler continues running the remaining tasks until the configured duration ends.
+8. The analyzer classifies the scenario as `UNSTABLE`.
+
+Example scenario command:
+
+```bash
+./cpp-runtime/build/minirtos_runtime --config configs/task_crash.json
+```
+
+Expected event types:
+
+```text
+fault_injected
+task_failed
+task_skipped
+runtime_summary
+```
+
+Expected fault telemetry:
+
+```text
+fault_type=task_crash
+task=NetworkTask
+reason=simulated_task_crash
+reason=task_in_failed_state
+```
+
+Expected analyzer behavior:
+
+```text
+Runtime status: UNSTABLE
+Fault summary:
+  task_crash: greater than 0
+Task failure summary:
+  task_failures: 1
+  task_skips: greater than 0
+```
+
+
+## 8. Dropped Messages Fault
 
 The `dropped_messages` fault simulates message-level reliability failures.
 
@@ -221,7 +274,7 @@ The dropped messages scenario produced 176 fault-injected message drops.
 
 ---
 
-## 8. Queue-Full Drops vs Fault-Injected Drops
+## 9. Queue-Full Drops vs Fault-Injected Drops
 
 MiniRTOS-Linux can produce two important message-drop categories.
 
@@ -237,7 +290,7 @@ The analyzer reports these separately.
 ---
 
 
-## 9. Dedicated Queue Overflow Scenario
+## 10. Dedicated Queue Overflow Scenario
 
 Phase 18 adds a dedicated queue-overflow scenario:
 
@@ -277,7 +330,7 @@ Reason:
 The runtime remains schedulable, but bounded queue capacity is exceeded.
 ```
 
-## 10. Watchdog Fault Scenario
+## 11. Watchdog Fault Scenario
 
 The watchdog scenario combines slow-task behavior with watchdog monitoring.
 
@@ -318,7 +371,7 @@ The watchdog scenario produced 22 watchdog timeout events and 22 task recovery e
 
 ---
 
-## 11. Run Fault Scenarios
+## 12. Run Fault Scenarios
 
 ### Build First
 
@@ -336,6 +389,12 @@ The watchdog scenario produced 22 watchdog timeout events and 22 task recovery e
 
 ```bash
 ./scripts/run_fault.sh configs/cpu_spike.json
+```
+
+### Run Task Crash Fault
+
+```bash
+./cpp-runtime/build/minirtos_runtime --config configs/task_crash.json
 ```
 
 ### Run Dropped Messages Fault
@@ -358,7 +417,7 @@ The watchdog scenario produced 22 watchdog timeout events and 22 task recovery e
 
 ---
 
-## 12. Docker Fault Scenarios
+## 13. Docker Fault Scenarios
 
 Run the full Docker demo:
 
@@ -370,6 +429,7 @@ Run individual Docker services:
 
 ```bash
 docker compose run --rm runtime-cpu-spike
+docker compose run --rm runtime-task-crash
 docker compose run --rm runtime-slow-task
 docker compose run --rm runtime-dropped-messages
 docker compose run --rm runtime-watchdog
@@ -380,6 +440,7 @@ Generated scenario logs:
 
 ```text
 logs/cpu_spike_runtime_logs.jsonl
+logs/task_crash_runtime_logs.jsonl
 logs/slow_task_runtime_logs.jsonl
 logs/dropped_messages_runtime_logs.jsonl
 logs/watchdog_runtime_logs.jsonl
@@ -387,7 +448,7 @@ logs/watchdog_runtime_logs.jsonl
 
 ---
 
-## 13. Expected Analyzer Results
+## 14. Expected Analyzer Results
 
 | Scenario | Expected Status | Reason |
 |---|---|---|
@@ -395,12 +456,13 @@ logs/watchdog_runtime_logs.jsonl
 | Queue overflow | `WARNING` | Dedicated bounded-queue pressure causes queue-full drops without fault injection. |
 | Slow task | `UNSTABLE` | Repeated deadline misses from `slow_task`. |
 | CPU spike | `UNSTABLE` expected if deadline misses occur | Simulated CPU-load pressure increases target-task duration. |
+| Task crash | `UNSTABLE` | Simulated task failure creates `task_failed` and `task_skipped` telemetry. |
 | Dropped messages | `WARNING` | Message reliability degraded without deadline misses. |
 | Watchdog slow task | `UNSTABLE` | Repeated deadline misses trigger watchdog timeout and recovery telemetry. |
 
 ---
 
-## 14. Fault Logging Events
+## 15. Fault Logging Events
 
 ### `fault_injected`
 
@@ -427,6 +489,14 @@ queue_full
 fault_injected_drop
 ```
 
+### `task_failed`
+
+Indicates a simulated task crash/failure was triggered for a target task.
+
+### `task_skipped`
+
+Indicates a previously failed simulated task was skipped instead of being executed.
+
 ### `watchdog_timeout`
 
 Indicates repeated deadline misses reached the watchdog threshold.
@@ -437,13 +507,13 @@ Indicates simulated recovery was logged after watchdog timeout.
 
 ---
 
-## 15. Limitations
+## 16. Limitations
 
 Current fault injection is simulation-based.
 
 Limitations:
 
-- It does not crash real threads or processes yet.
+- `task_crash` simulates a task failure but does not crash real threads or processes.
 - It does not simulate memory corruption.
 - It does not simulate corrupted message payloads yet.
 - Recovery is currently logged rather than implemented as a true process restart.
@@ -451,12 +521,11 @@ Limitations:
 
 ---
 
-## 16. Recommended Future Faults
+## 17. Recommended Future Faults
 
 Recommended future fault modes:
 
-1. `task_crash`
-4. `corrupted_message`
+1. `corrupted_message`
 5. `missed_heartbeat`
 6. `random_latency`
 7. `network_partition`
@@ -464,17 +533,17 @@ Recommended future fault modes:
 Recommended future configs:
 
 ```text
-configs/task_crash.json
 configs/corrupted_message.json
 ```
 
 ---
 
-## 17. Interview Talking Points
+## 18. Interview Talking Points
 
 - The fault injector makes runtime failures reproducible and observable.
 - `slow_task` validates deadline-miss detection and watchdog escalation.
 - `cpu_spike` validates simulated CPU-load pressure as a distinct timing fault.
+- `task_crash` validates simulated task failure handling without terminating the real runtime process.
 - `dropped_messages` validates message reliability analysis without affecting task execution timing.
 - Queue-full drops and fault-injected drops are intentionally separated in telemetry.
 - Fault scenarios can be run under the existing scheduler modes, including priority and earliest-deadline-first scheduling, without changing the analyzer event schema.

@@ -89,6 +89,8 @@ runtime_started
 scheduler_started
 task_started
 task_completed
+task_failed
+task_skipped
 message_sent
 message_received
 message_dropped
@@ -131,6 +133,7 @@ It reports:
 - Fault injection counts
 - Watchdog timeout counts
 - Task recovery counts
+- Task failure and skipped-task counts
 - Likely root causes
 - Overall health status
 
@@ -170,6 +173,7 @@ A run is unstable when there are serious unhealthy signals:
 
 - Watchdog timeout events exist
 - Task recovery events exist
+- Task failure or repeated skipped-task events exist
 - Total deadline misses are high
 - Slow-task faults exist with deadline misses
 
@@ -214,6 +218,8 @@ message_dropped_count
 queue_full_drop_count
 fault_injected_drop_count
 fault_injected_count
+task_failed_count
+task_skipped_count
 watchdog_timeout_count
 task_recovered_count
 error_event_count
@@ -225,7 +231,8 @@ These features represent:
 - Task execution behavior
 - Deadline health
 - Message bus pressure
-- Fault injection activity, including `cpu_spike` events
+- Fault injection activity, including `cpu_spike` and `task_crash` events
+- Task failure and skipped-task telemetry
 - Watchdog activity
 - Runtime severity level
 
@@ -243,6 +250,8 @@ The score increases when unhealthy features appear, such as:
 - Queue-full drops
 - Fault-injected drops
 - Fault-injected events
+- Task failures
+- Skipped failed tasks
 - Watchdog timeouts
 - Task recovery events
 - Warning events
@@ -267,6 +276,8 @@ UNSTABLE
 A window is considered unstable if it contains severe signals such as:
 
 ```text
+task_failed_count > 0
+task_skipped_count >= 3
 watchdog_timeout_count > 0
 task_recovered_count > 0
 deadline_missed_count >= 3
@@ -306,6 +317,8 @@ message_dropped_count
 queue_full_drop_count
 fault_injected_drop_count
 fault_injected_count
+task_failed_count
+task_skipped_count
 watchdog_timeout_count
 task_recovered_count
 warning_event_count
@@ -325,6 +338,7 @@ This helps connect the final classification to concrete runtime behavior.
 | Earliest-deadline-first scheduler runtime | `WARNING` expected if using the same message rates as normal runtime | Queue-full message drops, with task ordering controlled by EDF mode. |
 | Queue overflow | `WARNING` | High queue-full message drops caused by bounded queue pressure. |
 | CPU spike fault | `UNSTABLE` expected if deadline misses occur | CPU-spike fault events, high task duration, and deadline misses. |
+| Task crash fault | `UNSTABLE` | Task-crash fault events, task failure, and skipped-task telemetry. |
 | Slow task fault | `UNSTABLE` | Slow-task fault events and deadline misses. |
 | Dropped messages fault | `WARNING` | Fault-injected message drops. |
 | Watchdog slow task | `UNSTABLE` | Deadline misses, watchdog timeouts, and recovery events. |
@@ -386,6 +400,6 @@ Recommended improvements:
 - The runtime emits structured JSONL telemetry that becomes analyzer input.
 - The analyzer separates deterministic health reporting from AI-style anomaly scoring.
 - The anomaly detector uses fixed time windows, feature extraction, and explainable scoring.
-- The system can distinguish between dedicated queue pressure, CPU-spike timing pressure, slow-task timing faults, dropped-message reliability faults, and watchdog recovery behavior.
+- The system can distinguish between dedicated queue pressure, CPU-spike timing pressure, task-crash failure behavior, slow-task timing faults, dropped-message reliability faults, and watchdog recovery behavior.
 - Scheduler mode changes such as priority and earliest-deadline-first scheduling preserve the same event schema, so the analyzer can continue processing logs without special-case parsing.
 - The design is intentionally extensible toward a trained machine learning model.

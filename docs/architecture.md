@@ -17,6 +17,7 @@ The architecture is intentionally modular so each system concept is represented 
   - slow_task
   - dropped_messages
   - cpu_spike
+  - task_crash
 - Watchdog
 - Structured logger
 - Python analyzer
@@ -37,6 +38,7 @@ The architecture is intentionally modular so each system concept is represented 
 | runtime-deadline         |
 | runtime-queue-overflow   |
 | runtime-cpu-spike       |
+| runtime-task-crash      |
 | runtime-slow-task        |
 | runtime-dropped-messages |
 | runtime-watchdog         |
@@ -142,6 +144,7 @@ configs/normal.json
 configs/slow_task.json
 configs/dropped_messages.json
 configs/cpu_spike.json
+configs/task_crash.json
 configs/watchdog_slow_task.json
 ```
 
@@ -204,7 +207,7 @@ Core behavior:
 1. Start the scheduler loop.
 2. Check which tasks are due.
 3. Run due tasks.
-4. Apply fault injection if configured, including slow-task, dropped-message, or CPU-spike behavior.
+4. Apply fault injection if configured, including slow-task, dropped-message, CPU-spike, or task-crash behavior.
 5. Log task start and completion events.
 6. Inspect task health using the watchdog.
 7. Send or receive messages based on task role.
@@ -298,6 +301,8 @@ runtime_started
 scheduler_started
 task_started
 task_completed
+task_failed
+task_skipped
 message_sent
 message_received
 message_dropped
@@ -400,6 +405,7 @@ Current fault types:
 | `slow_task` | Adds extra execution time to a target task after a configured start time. |
 | `dropped_messages` | Drops matching messages after a configured start time using a configured probability. |
 | `cpu_spike` | Adds simulated CPU-load delay to a target task after a configured start time. |
+| `task_crash` | Simulates a target task entering a failed state without terminating the runtime process. |
 
 Example fault config fields:
 
@@ -423,6 +429,7 @@ Fault-specific impact:
 
 - `slow_task` creates task timing pressure and deadline misses.
 - `cpu_spike` creates simulated CPU-load pressure and can produce deadline misses for the targeted task.
+- `task_crash` logs task failure and skipped-task telemetry while allowing the overall runtime process to continue.
 - `dropped_messages` creates message reliability issues without necessarily affecting task timing.
 
 ---
@@ -487,7 +494,8 @@ main.cpp
         |
         |-- check due tasks
         |-- order due tasks by selected scheduler mode
-        |-- apply slow_task fault if active
+        |-- apply task_crash fault if active and skip failed tasks
+        |-- apply slow_task or cpu_spike timing faults if active
         |-- log task_started
         |-- simulate task execution
         |-- log task_completed
@@ -521,6 +529,7 @@ Analyzer responsibilities:
 - Summarize message bus behavior.
 - Summarize fault injection behavior.
 - Summarize watchdog behavior.
+- Summarize task failure and skipped-task behavior.
 - Classify deterministic system health.
 - Identify likely root causes.
 - Run AI-style time-windowed anomaly detection.
@@ -556,6 +565,8 @@ message_dropped_count
 queue_full_drop_count
 fault_injected_drop_count
 fault_injected_count
+task_failed_count
+task_skipped_count
 watchdog_timeout_count
 task_recovered_count
 error_event_count
@@ -594,6 +605,7 @@ Docker Compose services:
 | `runtime-deadline` | Runs the earliest-deadline-first scheduler scenario. |
 | `runtime-queue-overflow` | Runs the dedicated queue-overflow scenario using `configs/queue_overflow.json`. |
 | `runtime-cpu-spike` | Runs the CPU spike fault scenario using `configs/cpu_spike.json`. |
+| `runtime-task-crash` | Runs the task crash fault scenario using `configs/task_crash.json`. |
 | `runtime-slow-task` | Runs the slow-task fault scenario. |
 | `runtime-dropped-messages` | Runs the dropped-message fault scenario. |
 | `runtime-watchdog` | Runs the watchdog scenario. |
@@ -623,6 +635,7 @@ logs/priority_scheduler_runtime_logs.jsonl
 logs/deadline_scheduler_runtime_logs.jsonl
 logs/queue_overflow_runtime_logs.jsonl
 logs/cpu_spike_runtime_logs.jsonl
+logs/task_crash_runtime_logs.jsonl
 logs/slow_task_runtime_logs.jsonl
 logs/dropped_messages_runtime_logs.jsonl
 logs/watchdog_runtime_logs.jsonl
@@ -641,6 +654,7 @@ The benchmark report compares:
 - Earliest-deadline-first scheduler behavior
 - Queue-overflow behavior
 - CPU-spike timing-pressure behavior
+- Task-crash failure behavior
 - Slow-task fault behavior
 - Dropped-message fault behavior
 - Watchdog timeout and recovery behavior
@@ -674,7 +688,7 @@ Docker makes the project easier to review. A recruiter or engineer can run the d
 ## 10. Current Limitations
 
 - Timing is simulated on Linux rather than hard real-time hardware.
-- Recovery is simulated through logs rather than real thread/process restart.
+- Recovery and task-crash behavior are simulated through logs and scheduler state rather than real thread/process restart.
 - The anomaly detector is feature/rule-based rather than a trained ML model.
 - Normal runtime and the dedicated queue-overflow scenario can produce queue-full drops when message production exceeds logger consumption.
 
@@ -684,8 +698,7 @@ Docker makes the project easier to review. A recruiter or engineer can run the d
 
 Potential next improvements:
 
-1. Task-crash simulation.
-3. Corrupted-message simulation.
+1. Corrupted-message simulation.
 4. FastAPI analyzer endpoint.
 5. React dashboard.
 6. Synthetic training-data generator.
