@@ -225,7 +225,7 @@ These features represent:
 - Task execution behavior
 - Deadline health
 - Message bus pressure
-- Fault injection activity
+- Fault injection activity, including `cpu_spike` events
 - Watchdog activity
 - Runtime severity level
 
@@ -324,6 +324,7 @@ This helps connect the final classification to concrete runtime behavior.
 | Priority scheduler runtime | `WARNING` expected if using the same message rates as normal runtime | Queue-full message drops, with task ordering controlled by priority mode. |
 | Earliest-deadline-first scheduler runtime | `WARNING` expected if using the same message rates as normal runtime | Queue-full message drops, with task ordering controlled by EDF mode. |
 | Queue overflow | `WARNING` | High queue-full message drops caused by bounded queue pressure. |
+| CPU spike fault | `UNSTABLE` expected if deadline misses occur | CPU-spike fault events, high task duration, and deadline misses. |
 | Slow task fault | `UNSTABLE` | Slow-task fault events and deadline misses. |
 | Dropped messages fault | `WARNING` | Fault-injected message drops. |
 | Watchdog slow task | `UNSTABLE` | Deadline misses, watchdog timeouts, and recovery events. |
@@ -385,6 +386,6 @@ Recommended improvements:
 - The runtime emits structured JSONL telemetry that becomes analyzer input.
 - The analyzer separates deterministic health reporting from AI-style anomaly scoring.
 - The anomaly detector uses fixed time windows, feature extraction, and explainable scoring.
-- The system can distinguish between dedicated queue pressure, slow-task timing faults, dropped-message reliability faults, and watchdog recovery behavior.
+- The system can distinguish between dedicated queue pressure, CPU-spike timing pressure, slow-task timing faults, dropped-message reliability faults, and watchdog recovery behavior.
 - Scheduler mode changes such as priority and earliest-deadline-first scheduling preserve the same event schema, so the analyzer can continue processing logs without special-case parsing.
 - The design is intentionally extensible toward a trained machine learning model.

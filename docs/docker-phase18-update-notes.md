@@ -79,3 +79,10 @@ ls -lh logs
 ## Expected result
 
 The full demo should complete successfully and include `logs/queue_overflow_runtime_logs.jsonl`. The analyzer should classify the queue-overflow scenario as `WARNING` with queue-full drops greater than 0 and fault-injected drops equal to 0.
+
+
+---
+
+## Phase 19 follow-up note
+
+Phase 19 extends the Docker demo again by adding `configs/cpu_spike.json`, the `runtime-cpu-spike` Docker Compose service, and `logs/cpu_spike_runtime_logs.jsonl`.

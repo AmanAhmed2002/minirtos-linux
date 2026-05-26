@@ -41,6 +41,7 @@ Fault injection works with the current scheduler modes: `round_robin`, `priority
 | Fault Type | Description | Main Runtime Impact |
 |---|---|---|
 | `slow_task` | Adds extra execution time to a selected task after a configured time. | Deadline misses, unstable task timing, possible watchdog timeouts. |
+| `cpu_spike` | Adds simulated CPU-load delay to a selected task after a configured time. | Increased task duration, deadline misses, unstable timing windows. |
 | `dropped_messages` | Drops matching messages after a configured time using a configured probability. | Message reliability degradation and `message_dropped` telemetry. |
 
 ---
@@ -122,7 +123,53 @@ ControlTask produced 174 deadline misses in the slow task fault scenario.
 
 ---
 
-## 6. Dropped Messages Fault
+
+---
+
+## 6. CPU Spike Fault
+
+The `cpu_spike` fault simulates CPU-load pressure on a selected task.
+
+Unlike `dropped_messages`, this fault affects task timing rather than message reliability. It is similar to `slow_task` in that it increases simulated execution time, but it is logged separately as `fault_type=cpu_spike` so the analyzer and documentation can distinguish CPU-load pressure from a generic slow-task fault.
+
+Example scenario command:
+
+```bash
+./scripts/run_fault.sh configs/cpu_spike.json
+```
+
+Equivalent direct command:
+
+```bash
+./cpp-runtime/build/minirtos_runtime --config configs/cpu_spike.json
+```
+
+Expected event types:
+
+```text
+fault_injected
+task_completed
+runtime_summary
+```
+
+Expected fault telemetry:
+
+```text
+fault_type=cpu_spike
+target_task=NetworkTask
+extra_execution_time_ms=220
+```
+
+Expected analyzer behavior:
+
+```text
+Fault summary:
+  cpu_spike: greater than 0
+```
+
+If the injected CPU spike makes the observed task duration exceed the target task deadline, the run should also produce deadline-miss telemetry and may be classified as `UNSTABLE`.
+
+## 7. Dropped Messages Fault
 
 The `dropped_messages` fault simulates message-level reliability failures.
 
@@ -174,7 +221,7 @@ The dropped messages scenario produced 176 fault-injected message drops.
 
 ---
 
-## 7. Queue-Full Drops vs Fault-Injected Drops
+## 8. Queue-Full Drops vs Fault-Injected Drops
 
 MiniRTOS-Linux can produce two important message-drop categories.
 
@@ -190,7 +237,7 @@ The analyzer reports these separately.
 ---
 
 
-## 8. Dedicated Queue Overflow Scenario
+## 9. Dedicated Queue Overflow Scenario
 
 Phase 18 adds a dedicated queue-overflow scenario:
 
@@ -230,7 +277,7 @@ Reason:
 The runtime remains schedulable, but bounded queue capacity is exceeded.
 ```
 
-## 9. Watchdog Fault Scenario
+## 10. Watchdog Fault Scenario
 
 The watchdog scenario combines slow-task behavior with watchdog monitoring.
 
@@ -271,7 +318,7 @@ The watchdog scenario produced 22 watchdog timeout events and 22 task recovery e
 
 ---
 
-## 10. Run Fault Scenarios
+## 11. Run Fault Scenarios
 
 ### Build First
 
@@ -283,6 +330,12 @@ The watchdog scenario produced 22 watchdog timeout events and 22 task recovery e
 
 ```bash
 ./scripts/run_fault.sh configs/slow_task.json
+```
+
+### Run CPU Spike Fault
+
+```bash
+./scripts/run_fault.sh configs/cpu_spike.json
 ```
 
 ### Run Dropped Messages Fault
@@ -305,7 +358,7 @@ The watchdog scenario produced 22 watchdog timeout events and 22 task recovery e
 
 ---
 
-## 11. Docker Fault Scenarios
+## 12. Docker Fault Scenarios
 
 Run the full Docker demo:
 
@@ -316,6 +369,7 @@ docker compose up --build demo
 Run individual Docker services:
 
 ```bash
+docker compose run --rm runtime-cpu-spike
 docker compose run --rm runtime-slow-task
 docker compose run --rm runtime-dropped-messages
 docker compose run --rm runtime-watchdog
@@ -325,6 +379,7 @@ docker compose run --rm analyzer
 Generated scenario logs:
 
 ```text
+logs/cpu_spike_runtime_logs.jsonl
 logs/slow_task_runtime_logs.jsonl
 logs/dropped_messages_runtime_logs.jsonl
 logs/watchdog_runtime_logs.jsonl
@@ -332,19 +387,20 @@ logs/watchdog_runtime_logs.jsonl
 
 ---
 
-## 12. Expected Analyzer Results
+## 13. Expected Analyzer Results
 
 | Scenario | Expected Status | Reason |
 |---|---|---|
 | Normal | `WARNING` | Queue pressure causes queue-full message drops. |
 | Queue overflow | `WARNING` | Dedicated bounded-queue pressure causes queue-full drops without fault injection. |
 | Slow task | `UNSTABLE` | Repeated deadline misses from `slow_task`. |
+| CPU spike | `UNSTABLE` expected if deadline misses occur | Simulated CPU-load pressure increases target-task duration. |
 | Dropped messages | `WARNING` | Message reliability degraded without deadline misses. |
 | Watchdog slow task | `UNSTABLE` | Repeated deadline misses trigger watchdog timeout and recovery telemetry. |
 
 ---
 
-## 13. Fault Logging Events
+## 14. Fault Logging Events
 
 ### `fault_injected`
 
@@ -381,7 +437,7 @@ Indicates simulated recovery was logged after watchdog timeout.
 
 ---
 
-## 14. Limitations
+## 15. Limitations
 
 Current fault injection is simulation-based.
 
@@ -390,18 +446,16 @@ Limitations:
 - It does not crash real threads or processes yet.
 - It does not simulate memory corruption.
 - It does not simulate corrupted message payloads yet.
-- It does not simulate CPU spikes separately from slow task behavior yet.
 - Recovery is currently logged rather than implemented as a true process restart.
 - The scheduler currently supports round-robin, priority, and earliest-deadline-first modes.
 
 ---
 
-## 15. Recommended Future Faults
+## 16. Recommended Future Faults
 
 Recommended future fault modes:
 
-1. `cpu_spike`
-2. `task_crash`
+1. `task_crash`
 4. `corrupted_message`
 5. `missed_heartbeat`
 6. `random_latency`
@@ -410,17 +464,17 @@ Recommended future fault modes:
 Recommended future configs:
 
 ```text
-configs/cpu_spike.json
 configs/task_crash.json
 configs/corrupted_message.json
 ```
 
 ---
 
-## 16. Interview Talking Points
+## 17. Interview Talking Points
 
 - The fault injector makes runtime failures reproducible and observable.
 - `slow_task` validates deadline-miss detection and watchdog escalation.
+- `cpu_spike` validates simulated CPU-load pressure as a distinct timing fault.
 - `dropped_messages` validates message reliability analysis without affecting task execution timing.
 - Queue-full drops and fault-injected drops are intentionally separated in telemetry.
 - Fault scenarios can be run under the existing scheduler modes, including priority and earliest-deadline-first scheduling, without changing the analyzer event schema.

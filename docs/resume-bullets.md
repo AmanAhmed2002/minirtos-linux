@@ -22,7 +22,7 @@ Embedded Systems Fault Detection and Runtime Telemetry Simulator
 ## 2. One-Line Project Summary
 
 ```text
-Built a C++20 embedded-runtime simulator with periodic task scheduling, priority and earliest-deadline-first scheduling, bounded message queues, queue-overflow benchmarking, configurable fault injection, watchdog recovery telemetry, Python log analysis, AI-style anomaly detection, automated tests, Dockerized demos, and benchmark reporting on Linux.
+Built a C++20 embedded-runtime simulator with periodic task scheduling, priority and earliest-deadline-first scheduling, bounded message queues, queue-overflow benchmarking, CPU-spike fault injection, configurable fault injection, watchdog recovery telemetry, Python log analysis, AI-style anomaly detection, automated tests, Dockerized demos, and benchmark reporting on Linux.
 ```
 
 ---
@@ -43,7 +43,7 @@ Use 2-4 bullets depending on how much room you have.
 
 - Built a software-only embedded runtime simulator in C++20 that models real-time tasks, round-robin and priority and earliest-deadline-first scheduling, bounded message queues, configurable fault injection, watchdog monitoring, Python log analysis, Dockerized demo workflows, benchmark reporting, and deadline tracking on Linux.
 - Implemented round-robin and priority and earliest-deadline-first scheduling with structured JSONL telemetry for task latency, queue depth, message drops, fault injection, deadline misses, watchdog timeouts, and simulated recovery events.
-- Developed reproducible fault-injection scenarios for slow tasks and dropped messages, enabling deterministic validation of runtime resilience and anomaly detection workflows.
+- Developed reproducible fault-injection scenarios for CPU spikes, slow tasks, and dropped messages, enabling deterministic validation of runtime resilience and anomaly detection workflows.
 - Designed watchdog logic to detect repeated task deadline misses and log simulated task recovery actions for embedded-style fault response.
 - Built a Python telemetry analyzer that parses JSONL runtime logs, computes task/message/fault/watchdog metrics, classifies system health, and reports likely root causes.
 - Added an AI-style anomaly detection layer that converts runtime logs into fixed time windows, extracts task/message/fault/watchdog features, computes anomaly scores, classifies system state, and reports top anomaly drivers.
@@ -60,7 +60,7 @@ Use this if your resume has limited space.
 ```text
 - Built a C++20 embedded-runtime simulator on Linux with periodic task scheduling, priority and earliest-deadline-first scheduling, bounded message queues, structured JSONL telemetry, configurable fault injection, watchdog monitoring, queue-overflow benchmarking, and simulated recovery events.
 - Developed a Python runtime analyzer with AI-style time-windowed anomaly detection to classify normal, warning, and unstable system states from task, message, fault, queue-pressure, and watchdog telemetry.
-- Added GoogleTest/pytest coverage, GitHub Actions CI, Docker Compose demo workflows, and benchmark documentation comparing normal, scheduler, queue-overflow, slow-task, dropped-message, and watchdog scenarios.
+- Added GoogleTest/pytest coverage, GitHub Actions CI, Docker Compose demo workflows, and benchmark documentation comparing normal, scheduler, queue-overflow, CPU-spike, slow-task, dropped-message, and watchdog scenarios.
 ```
 
 ---
@@ -71,7 +71,7 @@ Use this if the project is one of several listed under a Projects section.
 
 ```text
 - Built a C++20 Linux-based embedded-runtime simulator with periodic tasks, round-robin and priority and earliest-deadline-first scheduling, bounded queues, fault injection, watchdog telemetry, JSONL logging, automated tests, Dockerized demos, and benchmark reporting.
-- Created a Python analyzer with AI-style anomaly detection that extracts time-windowed telemetry features, classifies runtime health, and reports root causes for slow-task, dropped-message, queue-pressure, and watchdog scenarios.
+- Created a Python analyzer with AI-style anomaly detection that extracts time-windowed telemetry features, classifies runtime health, and reports root causes for CPU-spike, slow-task, dropped-message, queue-pressure, and watchdog scenarios.
 ```
 
 ---
@@ -291,6 +291,14 @@ Queue overflow scenario:
 - 0 deadline misses
 - 0 watchdog timeouts
 - Demonstrates bounded queue pressure as a standalone benchmark
+
+CPU spike scenario:
+- Added in Phase 19
+- Uses `fault_type=cpu_spike`
+- Targets `NetworkTask`
+- Adds simulated CPU-load pressure through extra execution time
+- Demonstrates timing-pressure fault analysis separately from generic slow-task behavior
+- Final measured event counts should be recorded after Docker/analyzer verification
 ```
 
 Use these carefully in interviews to show the system was benchmarked with measured logs.
@@ -300,5 +308,5 @@ Use these carefully in interviews to show the system was benchmarked with measur
 ## 15. Final Project Pitch
 
 ```text
-MiniRTOS-Linux is a C++20 and Python systems project that simulates embedded runtime behavior on Linux. It models periodic tasks, round-robin and priority and earliest-deadline-first scheduling, deadlines, bounded queues, configurable faults, watchdog monitoring, structured telemetry, and anomaly detection. The project is Dockerized, tested with GoogleTest and pytest, and documented with benchmark results, making it easy to clone, run, analyze, and discuss in technical interviews.
+MiniRTOS-Linux is a C++20 and Python systems project that simulates embedded runtime behavior on Linux. It models periodic tasks, round-robin and priority and earliest-deadline-first scheduling, deadlines, bounded queues, CPU-spike fault injection, configurable faults, watchdog monitoring, structured telemetry, and anomaly detection. The project is Dockerized, tested with GoogleTest and pytest, and documented with benchmark results, making it easy to clone, run, analyze, and discuss in technical interviews.
 ```

@@ -38,6 +38,7 @@ logs/normal_runtime_logs.jsonl
 logs/priority_scheduler_runtime_logs.jsonl
 logs/deadline_scheduler_runtime_logs.jsonl
 logs/queue_overflow_runtime_logs.jsonl
+logs/cpu_spike_runtime_logs.jsonl
 logs/slow_task_runtime_logs.jsonl
 logs/dropped_messages_runtime_logs.jsonl
 logs/watchdog_runtime_logs.jsonl
@@ -59,6 +60,7 @@ The benchmark assumes the default anomaly-analysis window size:
 | Priority scheduler | `configs/priority_scheduler.json` | `logs/priority_scheduler_runtime_logs.jsonl` | Validates that due tasks can be ordered by priority instead of config order. |
 | Earliest-deadline-first scheduler | `configs/deadline_scheduler.json` | `logs/deadline_scheduler_runtime_logs.jsonl` | Validates that due tasks can be ordered by nearest absolute deadline instead of config order. |
 | Queue overflow | `configs/queue_overflow.json` | `logs/queue_overflow_runtime_logs.jsonl` | Intentionally stresses `LoggerTask` bounded queue capacity. |
+| CPU spike fault | `configs/cpu_spike.json` | `logs/cpu_spike_runtime_logs.jsonl` | Injects simulated CPU-load pressure into `NetworkTask`. |
 | Slow task fault | `configs/slow_task.json` | `logs/slow_task_runtime_logs.jsonl` | Simulates a task taking longer than its deadline. |
 | Dropped messages fault | `configs/dropped_messages.json` | `logs/dropped_messages_runtime_logs.jsonl` | Simulates injected message loss. |
 | Watchdog slow task | `configs/watchdog_slow_task.json` | `logs/watchdog_runtime_logs.jsonl` | Simulates slow-task behavior with watchdog timeout and recovery enabled. |
@@ -69,6 +71,7 @@ The benchmark assumes the default anomaly-analysis window size:
 |---|---:|---:|---:|---:|---|---|---|
 | Normal runtime | 1,444 | 1,105 | 339 | 0 | WARNING | WARNING | No deadline misses or injected faults, but bounded queue pressure caused queue-full message drops. |
 | Queue overflow | 3,070 | 2,112 | 958 | 0 | WARNING | WARNING | Dedicated queue-pressure scenario produced 958 queue-full drops with no deadline misses or fault-injected drops. |
+| CPU spike fault | Pending measured result | Pending measured result | Pending measured result | Pending measured result | Pending verification | Pending verification | Simulated CPU-load pressure targets `NetworkTask`; final metrics should be recorded after running Docker/analyzer verification. |
 | Slow task fault | 1,336 | 731 | 605 | 0 | UNSTABLE | UNSTABLE | `ControlTask` repeatedly exceeded its deadline after slow-task fault injection. |
 | Dropped messages fault | 1,617 | 1,103 | 514 | 0 | WARNING | WARNING | Fault injection caused message drops without causing deadline misses. |
 | Watchdog slow task | 1,380 | 731 | 627 | 22 | UNSTABLE | UNSTABLE | Watchdog detected repeated deadline misses and logged simulated recovery events. |
@@ -161,6 +164,7 @@ The watchdog scenario used the same slow-task behavior as the slow task fault sc
 |---|---|---:|---:|---:|
 | Normal runtime | None | 0 | 0 | 0 |
 | Queue overflow | None | 0 | 0 | 0 |
+| CPU spike fault | `cpu_spike` | Pending measured result | Pending measured result | Pending measured result |
 | Slow task fault | `slow_task` | 174 | 0 | 0 |
 | Dropped messages fault | `dropped_messages` | 176 | 0 | 0 |
 | Watchdog slow task | `slow_task` | 174 | 22 | 22 |
@@ -227,7 +231,52 @@ The runtime remained schedulable, but bounded queue capacity was exceeded.
 
 This validates that queue pressure can be reproduced as a standalone benchmark scenario instead of only appearing incidentally in the normal runtime.
 
-### 9.3 Slow Task Fault Scenario
+
+
+### 9.3 CPU Spike Fault Scenario
+
+Phase 19 adds a CPU spike scenario using:
+
+```text
+configs/cpu_spike.json
+```
+
+This scenario injects simulated CPU-load pressure into `NetworkTask` after the configured start time. The current recommended config uses:
+
+```text
+target_task: NetworkTask
+start_after_ms: 5000
+extra_execution_time_ms: 220
+```
+
+Expected analyzer result after verification:
+
+```text
+Simulation: cpu_spike
+Fault summary:
+  cpu_spike: greater than 0
+```
+
+If the injected CPU spike makes `NetworkTask` exceed its deadline, the expected deterministic and AI-style classifications are:
+
+```text
+UNSTABLE
+```
+
+Reason:
+
+```text
+CPU-spike fault injection increased target-task duration and produced deadline-miss telemetry.
+```
+
+Final measured event counts, task metrics, and anomaly scores should be recorded after running:
+
+```bash
+docker compose up --build demo
+./scripts/run_analyzer.sh logs/cpu_spike_runtime_logs.jsonl 5000
+```
+
+### 9.4 Slow Task Fault Scenario
 
 The slow task scenario injected 174 `slow_task` faults into `ControlTask`.
 
@@ -251,7 +300,7 @@ Primary root cause:
 ControlTask slow_task fault injection
 ```
 
-### 9.4 Dropped Messages Fault Scenario
+### 9.5 Dropped Messages Fault Scenario
 
 The dropped messages scenario injected 176 `dropped_messages` faults.
 
@@ -282,7 +331,7 @@ Primary root cause:
 Dropped message fault injection
 ```
 
-### 9.5 Watchdog Slow Task Scenario
+### 9.6 Watchdog Slow Task Scenario
 
 The watchdog scenario injected the same type of slow-task behavior as the slow task fault scenario, but watchdog monitoring was enabled.
 
@@ -314,7 +363,7 @@ ControlTask slow_task fault injection caused repeated deadline misses, which tri
 ```
 
 
-## 9.6 Priority Scheduler Scenario
+## 9.7 Priority Scheduler Scenario
 
 Phase 16 added a priority scheduler mode using this config value:
 
@@ -340,11 +389,11 @@ NetworkTask
 LoggerTask
 ```
 
-This scenario was added as a runtime validation scenario. The measured benchmark tables above still reflect the Phase 13 Docker benchmark logs. A future Phase 22 benchmark refresh should regenerate and record measured priority-scheduler metrics alongside the existing normal, slow-task, dropped-message, and watchdog scenarios.
+This scenario was added as a runtime validation scenario. The measured benchmark tables above still reflect the Phase 13 Docker benchmark logs. A future Phase 22 benchmark refresh should regenerate and record measured priority-scheduler metrics alongside the existing normal, queue-overflow, CPU-spike, slow-task, dropped-message, and watchdog scenarios.
 
 
 
-## 9.7 Earliest-Deadline-First Scheduler Scenario
+## 9.8 Earliest-Deadline-First Scheduler Scenario
 
 Phase 17 added an earliest-deadline-first scheduler mode using this config value:
 
@@ -362,7 +411,7 @@ Tie-breakers:
 3. Stable config/task order if both deadline and priority are tied
 ```
 
-This scenario was added as a runtime validation scenario. The measured benchmark tables above still reflect the earlier Docker benchmark logs. A future benchmark refresh should regenerate and record priority-scheduler and earliest-deadline-first metrics alongside the normal, slow-task, dropped-message, and watchdog scenarios.
+This scenario was added as a runtime validation scenario. The measured benchmark tables above still reflect the earlier Docker benchmark logs. A future benchmark refresh should regenerate and record priority-scheduler and earliest-deadline-first metrics alongside the normal, queue-overflow, CPU-spike, slow-task, dropped-message, and watchdog scenarios.
 
 ## 10. Key Observations
 
@@ -370,7 +419,8 @@ This scenario was added as a runtime validation scenario. The measured benchmark
 2. The priority scheduler can run due tasks by priority while preserving the same logging and analyzer schema.
 3. The earliest-deadline-first scheduler can run due tasks by nearest deadline while preserving the same logging and analyzer schema.
 4. The dedicated queue-overflow scenario reproduces bounded-queue pressure with 958 queue-full drops and no deadline misses.
-5. The bounded message bus correctly rejects messages when the target queue is full.
+5. The CPU spike scenario adds a distinct timing-pressure fault type that should be tracked separately from slow-task faults after verification.
+6. The bounded message bus correctly rejects messages when the target queue is full.
 4. The default message production and consumption rates create queue pressure because `ControlTask` and `NetworkTask` send messages faster than `LoggerTask` consumes them.
 5. Slow-task fault injection creates clear deadline-miss telemetry.
 6. Dropped-message fault injection affects message reliability without affecting task timing.
@@ -394,7 +444,6 @@ Current limitations:
 Future phases can improve the benchmark by adding:
 
 - A tuned normal configuration with no queue drops.
-- CPU spike fault injection.
 - Task crash fault simulation.
 - Trained anomaly model using generated scenario data.
 - Expanded GitHub Actions CI with Docker build and analyzer smoke-test coverage.
@@ -404,7 +453,7 @@ Future phases can improve the benchmark by adding:
 
 - Built a C++20 embedded-runtime simulator that models periodic tasks, round-robin, priority, and earliest-deadline-first scheduling, deadlines, bounded queues, fault injection, watchdog monitoring, and structured telemetry.
 - Implemented JSONL runtime logging for task execution, queue depth, message drops, deadline misses, injected faults, watchdog timeouts, and simulated recovery.
-- Created reproducible scenarios for queue overflow, slow tasks, and dropped messages.
+- Created reproducible scenarios for queue overflow, CPU spikes, slow tasks, and dropped messages.
 - Demonstrated that slow-task injection caused 174 deadline misses in `ControlTask`, while watchdog monitoring detected the unhealthy behavior and emitted 22 timeout and 22 recovery events.
 - Built a Python analyzer that summarizes runtime health, identifies root causes, and supports AI-style anomaly classification using time-windowed telemetry.
 - Dockerized the runtime and analyzer so the full scenario suite can be reproduced with Docker Compose.

@@ -32,11 +32,11 @@ This script performs the full test workflow:
 4. Check that pytest is installed.
 5. Run Python tests.
 
-Expected output after Phase 18 includes the expanded scheduler tests:
+Expected output after Phase 19 includes the expanded scheduler and CPU-spike fault tests:
 
 ```text
-100% tests passed, 0 tests failed out of 25
-13 passed
+100% tests passed, 0 tests failed out of 29
+15 passed
 [INFO] All tests passed
 ```
 
@@ -138,6 +138,9 @@ Expected coverage:
 | Dropped-message 100% drop | Confirms configured message drops can always occur. |
 | Source/target matching | Confirms message drop faults apply to matching messages only. |
 | Zero-percent drop | Confirms 0% probability does not drop messages. |
+| CPU-spike activation timing | Confirms CPU-spike faults activate only after the configured start time. |
+| CPU-spike target matching | Confirms CPU-spike faults apply only to the configured target task. |
+| CPU-spike disabled behavior | Confirms disabled CPU-spike faults do not affect task timing. |
 
 ### 4.3 Scheduler Tests
 
@@ -210,6 +213,7 @@ Expected coverage:
 | Normal health classification | Confirms clean logs classify correctly. |
 | Watchdog unstable classification | Confirms watchdog events classify as unstable. |
 | Message drop reason counting | Confirms queue-full and fault-injected drops are counted separately. |
+| CPU-spike root cause reporting | Confirms CPU-spike faults are counted separately and reported in root causes. |
 
 ### 5.2 Anomaly Detector Tests
 
@@ -230,6 +234,7 @@ Expected coverage:
 | Watchdog unstable classification | Confirms watchdog events classify as unstable. |
 | Deadline-miss unstable classification | Confirms repeated deadline misses classify as unstable. |
 | Overall anomaly report | Confirms summary report generation works. |
+| CPU-spike timing pressure | Confirms CPU-spike windows can classify as unstable when deadline misses occur. |
 
 ---
 
@@ -290,7 +295,7 @@ Passing tests show that:
 - Round-robin scheduling preserves task-list order for due tasks.
 - Priority scheduling runs higher-priority due tasks first, where lower numeric priority means higher priority.
 - Earliest-deadline-first scheduling runs due tasks by nearest absolute deadline, then priority, then stable task order.
-- Slow-task and dropped-message fault logic behaves predictably.
+- Slow-task, CPU-spike, and dropped-message fault logic behaves predictably.
 - Watchdog threshold and cooldown behavior works.
 - Analyzer log parsing handles normal and bad inputs.
 - Health classification detects unstable watchdog scenarios.
@@ -305,12 +310,11 @@ Current tests do not fully prove:
 
 - Real hardware timing correctness.
 - Hard real-time scheduling guarantees.
-- CPU spike fault behavior.
 - Crash recovery behavior.
 - Performance under very large logs.
 - Accuracy of a trained ML model.
 
-Phase 18 adds a config-driven queue-overflow scenario. This scenario does not require a new unit test because it exercises existing bounded queue behavior already covered by the Message Bus tests. The scenario is validated through runtime execution, analyzer output, and Docker demo coverage.
+Phase 18 adds a config-driven queue-overflow scenario. Phase 19 adds CPU-spike unit/analyzer tests and a Docker/demo scenario. This scenario does not require a new unit test because it exercises existing bounded queue behavior already covered by the Message Bus tests. The scenario is validated through runtime execution, analyzer output, and Docker demo coverage.
 
 Those areas are future enhancement opportunities.
 

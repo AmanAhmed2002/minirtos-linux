@@ -14,6 +14,9 @@ The architecture is intentionally modular so each system concept is represented 
   - Earliest-deadline-first mode
 - Message bus
 - Fault injector
+  - slow_task
+  - dropped_messages
+  - cpu_spike
 - Watchdog
 - Structured logger
 - Python analyzer
@@ -33,6 +36,7 @@ The architecture is intentionally modular so each system concept is represented 
 | runtime-priority         |
 | runtime-deadline         |
 | runtime-queue-overflow   |
+| runtime-cpu-spike       |
 | runtime-slow-task        |
 | runtime-dropped-messages |
 | runtime-watchdog         |
@@ -137,6 +141,7 @@ The runtime currently uses config files such as:
 configs/normal.json
 configs/slow_task.json
 configs/dropped_messages.json
+configs/cpu_spike.json
 configs/watchdog_slow_task.json
 ```
 
@@ -199,7 +204,7 @@ Core behavior:
 1. Start the scheduler loop.
 2. Check which tasks are due.
 3. Run due tasks.
-4. Apply fault injection if configured.
+4. Apply fault injection if configured, including slow-task, dropped-message, or CPU-spike behavior.
 5. Log task start and completion events.
 6. Inspect task health using the watchdog.
 7. Send or receive messages based on task role.
@@ -394,6 +399,7 @@ Current fault types:
 |---|---|
 | `slow_task` | Adds extra execution time to a target task after a configured start time. |
 | `dropped_messages` | Drops matching messages after a configured start time using a configured probability. |
+| `cpu_spike` | Adds simulated CPU-load delay to a target task after a configured start time. |
 
 Example fault config fields:
 
@@ -416,6 +422,7 @@ fault_injected
 Fault-specific impact:
 
 - `slow_task` creates task timing pressure and deadline misses.
+- `cpu_spike` creates simulated CPU-load pressure and can produce deadline misses for the targeted task.
 - `dropped_messages` creates message reliability issues without necessarily affecting task timing.
 
 ---
@@ -586,6 +593,7 @@ Docker Compose services:
 | `runtime-priority` | Runs the priority scheduler scenario. |
 | `runtime-deadline` | Runs the earliest-deadline-first scheduler scenario. |
 | `runtime-queue-overflow` | Runs the dedicated queue-overflow scenario using `configs/queue_overflow.json`. |
+| `runtime-cpu-spike` | Runs the CPU spike fault scenario using `configs/cpu_spike.json`. |
 | `runtime-slow-task` | Runs the slow-task fault scenario. |
 | `runtime-dropped-messages` | Runs the dropped-message fault scenario. |
 | `runtime-watchdog` | Runs the watchdog scenario. |
@@ -614,6 +622,7 @@ logs/normal_runtime_logs.jsonl
 logs/priority_scheduler_runtime_logs.jsonl
 logs/deadline_scheduler_runtime_logs.jsonl
 logs/queue_overflow_runtime_logs.jsonl
+logs/cpu_spike_runtime_logs.jsonl
 logs/slow_task_runtime_logs.jsonl
 logs/dropped_messages_runtime_logs.jsonl
 logs/watchdog_runtime_logs.jsonl
@@ -631,6 +640,7 @@ The benchmark report compares:
 - Priority scheduler behavior
 - Earliest-deadline-first scheduler behavior
 - Queue-overflow behavior
+- CPU-spike timing-pressure behavior
 - Slow-task fault behavior
 - Dropped-message fault behavior
 - Watchdog timeout and recovery behavior
@@ -674,8 +684,7 @@ Docker makes the project easier to review. A recruiter or engineer can run the d
 
 Potential next improvements:
 
-1. CPU-spike fault injection.
-2. Task-crash simulation.
+1. Task-crash simulation.
 3. Corrupted-message simulation.
 4. FastAPI analyzer endpoint.
 5. React dashboard.

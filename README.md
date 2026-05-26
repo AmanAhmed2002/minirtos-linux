@@ -11,7 +11,7 @@ The project is designed as a recruiter-ready systems/embedded portfolio project.
 
 ## Project Status
 
-Phases 1-18 are complete.
+Phases 1-18 are complete. Phase 19 implementation files have been updated and are ready for final verification.
 
 Completed capabilities include:
 
@@ -35,11 +35,12 @@ Completed capabilities include:
 - Priority scheduler configuration and tests
 - Earliest-deadline-first scheduler configuration and tests
 - Dedicated queue-overflow benchmark scenario
+- CPU spike fault-injection scenario
 
 Current phase:
 
 ```text
-Phase 18 - Dedicated Queue Overflow Scenario and Benchmark Complete
+Phase 20 - Task Crash Simulation Ready for Final Verification
 ```
 
 Next recommended phase:
@@ -78,7 +79,7 @@ This project is useful for demonstrating:
 | Scheduler | Round-robin, priority, and earliest-deadline-first scheduler modes |
 | Logging | Structured JSONL logs for runtime, scheduler, task, message, fault, watchdog, and recovery events |
 | Message Bus | Bounded FIFO queues with queue-depth telemetry, queue-full drops, and a dedicated queue-overflow benchmark scenario |
-| Fault Injection | `slow_task` and `dropped_messages` scenarios |
+| Fault Injection | `slow_task`, `dropped_messages`, and `cpu_spike` scenarios |
 | Watchdog | Detects repeated deadline misses and logs simulated task recovery |
 | Analyzer | Python CLI reads JSONL logs and reports system health, metrics, and root causes |
 | AI-Style Detection | Time-windowed feature extraction, anomaly scoring, state classification, and top anomaly drivers |
@@ -99,6 +100,7 @@ This project is useful for demonstrating:
 | runtime-priority         |
 | runtime-deadline         |
 | runtime-queue-overflow   |
+| runtime-cpu-spike       |
 | runtime-slow-task        |
 | runtime-dropped-messages |
 | runtime-watchdog         |
@@ -189,6 +191,7 @@ minirtos-linux/
 │   ├── priority_scheduler.json
 │   ├── deadline_scheduler.json
 │   ├── queue_overflow.json
+│   ├── cpu_spike.json
 │   ├── slow_task.json
 │   ├── dropped_messages.json
 │   └── watchdog_slow_task.json
@@ -276,6 +279,12 @@ Run the dedicated queue-overflow scenario:
 ./cpp-runtime/build/minirtos_runtime --config configs/queue_overflow.json
 ```
 
+Run the CPU spike fault scenario:
+
+```bash
+./cpp-runtime/build/minirtos_runtime --config configs/cpu_spike.json
+```
+
 Analyze the generated runtime log:
 
 ```bash
@@ -357,6 +366,14 @@ This scenario uses `scheduler_mode: "earliest_deadline_first"`. When multiple ta
 
 This scenario intentionally creates bounded-queue pressure by making `ControlTask` and `NetworkTask` produce messages faster than `LoggerTask` can consume them. It is expected to produce `queue_full` message drops without injecting dropped-message faults.
 
+### CPU Spike Fault Scenario
+
+```bash
+./cpp-runtime/build/minirtos_runtime --config configs/cpu_spike.json
+```
+
+This scenario injects simulated CPU-load pressure into `NetworkTask` after the configured start time. It is expected to log `fault_type=cpu_spike`, increase the target task duration, and produce deadline-miss telemetry when the simulated duration exceeds the task deadline.
+
 ### Slow Task Fault Scenario
 
 ```bash
@@ -398,6 +415,7 @@ logs/normal_runtime_logs.jsonl
 logs/priority_scheduler_runtime_logs.jsonl
 logs/deadline_scheduler_runtime_logs.jsonl
 logs/queue_overflow_runtime_logs.jsonl
+logs/cpu_spike_runtime_logs.jsonl
 logs/slow_task_runtime_logs.jsonl
 logs/dropped_messages_runtime_logs.jsonl
 logs/watchdog_runtime_logs.jsonl
@@ -432,6 +450,7 @@ Analyze a specific Docker demo scenario:
 ./scripts/run_analyzer.sh logs/priority_scheduler_runtime_logs.jsonl 5000
 ./scripts/run_analyzer.sh logs/deadline_scheduler_runtime_logs.jsonl 5000
 ./scripts/run_analyzer.sh logs/queue_overflow_runtime_logs.jsonl 5000
+./scripts/run_analyzer.sh logs/cpu_spike_runtime_logs.jsonl 5000
 ./scripts/run_analyzer.sh logs/slow_task_runtime_logs.jsonl 5000
 ./scripts/run_analyzer.sh logs/dropped_messages_runtime_logs.jsonl 5000
 ./scripts/run_analyzer.sh logs/watchdog_runtime_logs.jsonl 5000
@@ -508,10 +527,11 @@ The full demo runs:
 2. Priority scheduler scenario
 3. Earliest-deadline-first scheduler scenario
 4. Queue overflow scenario
-5. Slow task fault scenario
-6. Dropped messages fault scenario
-7. Watchdog slow task scenario
-8. Analyzer output for each scenario
+5. CPU spike fault scenario
+6. Slow task fault scenario
+7. Dropped messages fault scenario
+8. Watchdog slow task scenario
+9. Analyzer output for each scenario
 
 Generated logs are written to the local `logs/` directory through a mounted Docker volume.
 
@@ -522,6 +542,7 @@ docker compose run --rm runtime-normal
 docker compose run --rm runtime-priority
 docker compose run --rm runtime-deadline
 docker compose run --rm runtime-queue-overflow
+docker compose run --rm runtime-cpu-spike
 docker compose run --rm runtime-slow-task
 docker compose run --rm runtime-dropped-messages
 docker compose run --rm runtime-watchdog
@@ -545,11 +566,25 @@ That update should create this scenario-specific log:
 logs/queue_overflow_runtime_logs.jsonl
 ```
 
+### Docker Note After Phase 19
+
+No Dockerfile changes are required for Phase 19 because the runtime image already builds the C++ executable and copies the project configs/scripts. The required Docker update is to add the CPU spike scenario to `docker-compose.yml` and `scripts/run_docker_demo.sh` so the full demo also runs:
+
+```text
+configs/cpu_spike.json
+```
+
+That update should create this scenario-specific log:
+
+```text
+logs/cpu_spike_runtime_logs.jsonl
+```
+
 ---
 
 ## Benchmark Results
 
-The benchmark report currently compares the normal, queue-overflow, slow-task, dropped-message, and watchdog scenarios, while documenting the priority and earliest-deadline-first scheduler validation scenarios. Phase 18 adds a dedicated queue-overflow benchmark with 958 queue-full drops, zero deadline misses, and zero fault-injected drops.
+The benchmark report currently compares the normal, queue-overflow, CPU-spike, slow-task, dropped-message, and watchdog scenarios, while documenting the priority and earliest-deadline-first scheduler validation scenarios. Phase 18 adds a dedicated queue-overflow benchmark with 958 queue-full drops, zero deadline misses, and zero fault-injected drops.
 
 Report:
 
@@ -563,6 +598,7 @@ Summary:
 |---|---|---|---|
 | Normal runtime | WARNING | WARNING | No deadline misses or injected faults, but queue pressure caused queue-full message drops. |
 | Queue overflow | WARNING | WARNING | Dedicated queue pressure scenario produced 958 queue-full drops with no deadline misses or fault-injected drops. |
+| CPU spike fault | Pending measured result | Pending measured result | Simulated CPU-load pressure targets `NetworkTask` and is expected to produce `fault_type=cpu_spike` and timing/deadline pressure. |
 | Slow task fault | UNSTABLE | UNSTABLE | `ControlTask` repeatedly exceeded its deadline after slow-task fault injection. |
 | Dropped messages fault | WARNING | WARNING | Fault injection caused message drops without causing deadline misses. |
 | Watchdog slow task | UNSTABLE | UNSTABLE | Watchdog detected repeated deadline misses and logged simulated recovery events. |
@@ -590,7 +626,7 @@ See [`docs/performance-results.md`](docs/performance-results.md) for the full be
 - Implemented round-robin, priority, and earliest-deadline-first scheduling with structured telemetry for task latency, message drops, queue depth, deadline misses, injected faults, watchdog timeouts, and simulated recovery.
 - Developed a Python analyzer that parses runtime logs, computes task/message/fault/watchdog metrics, classifies system health, reports likely root causes, and performs AI-style time-windowed anomaly detection.
 - Added automated C++ and Python test coverage with GoogleTest, CTest, pytest, GitHub Actions CI, and a one-command local test workflow.
-- Dockerized the runtime and analyzer with Docker Compose services for normal, scheduler, queue-overflow, fault, watchdog, and full-demo scenarios.
+- Dockerized the runtime and analyzer with Docker Compose services for normal, scheduler, queue-overflow, CPU-spike, fault, watchdog, and full-demo scenarios.
 
 More options are available in [`docs/resume-bullets.md`](docs/resume-bullets.md).
 
@@ -618,17 +654,17 @@ Completed:
 - Phase 16: Priority scheduler mode
 - Phase 17: Deadline-aware / earliest-deadline-first scheduler mode
 - Phase 18: Dedicated queue overflow scenario and benchmark
+- Phase 19: CPU spike fault injection
 
 Recommended next phases:
 
-- Phase 19: CPU spike fault injection
+- Phase 20: Task crash simulation
 - Phase 20: Task crash simulation
 - Phase 21: Synthetic training-data generator / stronger AI layer
 - Phase 22: Final documentation, CI, benchmark, and resume refresh
 
 Optional future features:
 
-- CPU spike fault injection
 - Task crash simulation
 - Corrupted message simulation
 - FastAPI analyzer endpoint
