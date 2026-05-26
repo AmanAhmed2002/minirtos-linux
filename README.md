@@ -5,40 +5,9 @@
 
 MiniRTOS-Linux is a software-only C++20 embedded runtime simulator that models periodic tasks, bounded message queues, configurable fault injection, task-crash simulation, watchdog monitoring, structured JSONL telemetry, Python-based runtime analysis, AI-style anomaly detection, synthetic training-dataset generation, a trained lightweight ML anomaly classifier, automated tests, Dockerized demos, and benchmark reporting.
 
-The project is designed as a recruiter-ready systems/embedded portfolio project. It demonstrates Linux development workflow, C++20 runtime design, Python tooling, observability, fault analysis, testing, Docker, machine-learning integration, and documentation without requiring physical embedded hardware.
+The project is designed as a systems/embedded portfolio project. It demonstrates Linux development workflow, C++20 runtime design, Python tooling, observability, fault analysis, testing, Docker, machine-learning integration, and documentation without requiring physical embedded hardware.
 
 ---
-
-## Project Status
-
-Phases 1-22 are complete or ready for final verification.
-
-Phase 21 added the synthetic training-data generator that converts scenario JSONL logs into labeled, window-level feature rows.
-
-Phase 22 adds the actual AI/ML layer:
-
-- Trains a lightweight `RandomForestClassifier` on the generated synthetic dataset.
-- Saves model and label-encoder artifacts.
-- Writes model metrics to JSON.
-- Supports prediction from the generated dataset.
-- Supports prediction from runtime JSONL logs using the same anomaly-detector feature schema.
-- Optionally integrates ML predictions into the existing analyzer through `--ml-model`.
-- Keeps the deterministic analyzer and explainable rule-based anomaly detector intact.
-
-Current phase:
-
-```text
-Phase 22 - Train and Integrate Actual AI Model
-```
-
-Next recommended phase:
-
-```text
-Phase 23 - Final Documentation, CI, Docker, Benchmark, and Resume Refresh
-```
-
----
-
 ## Why This Project Exists
 
 Many embedded and real-time systems rely on periodic tasks, bounded queues, deadlines, watchdogs, and telemetry to detect unhealthy runtime behavior. MiniRTOS-Linux simulates those concepts in a Linux-based software environment so the project can be built, tested, analyzed, and demonstrated on a normal development machine.
@@ -441,48 +410,5 @@ See [`docs/performance-results.md`](docs/performance-results.md).
 | [`ai-analyzer/ml/README.md`](ai-analyzer/ml/README.md) | ML training and prediction guide. |
 
 ---
-
-## Roadmap
-
-Completed:
-
-- Phase 1: Linux scaffold
-- Phase 2: JSON config loader
-- Phase 3: Task model
-- Phase 4: Round-robin scheduler
-- Phase 5: Structured JSONL logger
-- Phase 6: Bounded message bus
-- Phase 7: Fault injection
-- Phase 8: Watchdog monitoring
-- Phase 9: Python log analyzer
-- Phase 10: AI-style anomaly detection
-- Phase 11: Automated testing
-- Phase 12: Dockerized demo
-- Phase 13: Benchmark report
-- Phase 14: Documentation and GitHub polish
-- Phase 15: GitHub Actions CI
-- Phase 16: Priority scheduler mode
-- Phase 17: Earliest-deadline-first scheduler mode
-- Phase 18: Dedicated queue overflow scenario and benchmark
-- Phase 19: CPU spike fault injection
-- Phase 20: Task crash simulation
-- Phase 21: Synthetic training-data generator
-- Phase 22: Trained lightweight ML anomaly classifier
-
-Recommended next phase:
-
-- Phase 23: Final documentation, CI, Docker, benchmark, and resume refresh
-
-Optional future features:
-
-- Corrupted message simulation
-- FastAPI analyzer endpoint
-- React dashboard
-- ONNX model export
-- Visualization of anomaly scores and ML predictions
-
----
-
-## License
 
 This project is licensed under the MIT License. See [`LICENSE`](LICENSE).
