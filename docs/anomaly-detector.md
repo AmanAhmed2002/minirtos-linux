@@ -4,15 +4,22 @@
 
 MiniRTOS-Linux includes a Python analysis layer that reads structured JSONL runtime logs and reports system health.
 
-The analyzer has two layers:
+The analyzer has three related pieces after Phase 21:
 
 1. A deterministic health analyzer.
 2. An AI-style time-windowed anomaly detector.
+3. A synthetic training-dataset generator.
 
 The anomaly detector is currently feature-based and rule-scored. It is called "AI-style" because it follows the structure of a machine-learning pipeline:
 
 ```text
 runtime logs -> scheduler/task/message/fault/watchdog events -> time windows -> feature extraction -> anomaly score -> classification -> top drivers
+```
+
+Phase 21 extends this into:
+
+```text
+runtime logs -> time windows -> feature extraction -> scenario labels -> CSV dataset
 ```
 
 It is not yet a trained machine learning model.
@@ -24,6 +31,7 @@ It is not yet a trained machine learning model.
 ```text
 ai-analyzer/app/analyze.py
 ai-analyzer/app/anomaly_detector.py
+ai-analyzer/training/generate_dataset.py
 scripts/run_analyzer.sh
 ```
 
@@ -32,6 +40,7 @@ Related tests:
 ```text
 ai-analyzer/tests/test_analyzer.py
 ai-analyzer/tests/test_anomaly_detector.py
+ai-analyzer/tests/test_training_dataset.py
 ```
 
 ---
@@ -329,7 +338,74 @@ This helps connect the final classification to concrete runtime behavior.
 
 ---
 
-## 12. Scenario Expectations
+## 12. Synthetic Training Dataset Generation
+
+Phase 21 adds a training dataset generator:
+
+```text
+ai-analyzer/training/generate_dataset.py
+```
+
+The generator reuses the same window splitting and feature extraction logic from the anomaly detector. This keeps the training dataset aligned with the same feature schema used for anomaly scoring.
+
+### 12.1 Dataset Command
+
+```bash
+python3 ai-analyzer/training/generate_dataset.py \
+  --output reports/generated/synthetic_dataset.csv \
+  --window-ms 5000 \
+  --scenario normal=logs/normal_runtime_logs.jsonl \
+  --scenario priority_scheduler=logs/priority_scheduler_runtime_logs.jsonl \
+  --scenario deadline_scheduler=logs/deadline_scheduler_runtime_logs.jsonl \
+  --scenario queue_overflow=logs/queue_overflow_runtime_logs.jsonl \
+  --scenario cpu_spike=logs/cpu_spike_runtime_logs.jsonl \
+  --scenario task_crash=logs/task_crash_runtime_logs.jsonl \
+  --scenario slow_task=logs/slow_task_runtime_logs.jsonl \
+  --scenario dropped_messages=logs/dropped_messages_runtime_logs.jsonl \
+  --scenario watchdog=logs/watchdog_runtime_logs.jsonl
+```
+
+Docker command:
+
+```bash
+docker compose run --rm training-dataset
+```
+
+### 12.2 Dataset Output
+
+Default output:
+
+```text
+reports/generated/synthetic_dataset.csv
+```
+
+This file is generated output and should not be committed.
+
+### 12.3 Dataset Labels
+
+Current scenario labels:
+
+```text
+NORMAL
+QUEUE_PRESSURE
+CPU_SPIKE
+TASK_CRASH
+SLOW_TASK
+DROPPED_MESSAGES
+WATCHDOG_RECOVERY
+```
+
+### 12.4 Dataset Columns
+
+Expected columns include scenario metadata, window bounds, event count, and all anomaly feature names such as `deadline_missed_count`, `message_dropped_count`, `fault_injected_count`, `task_failed_count`, `task_skipped_count`, `watchdog_timeout_count`, and `warning_event_count`.
+
+### 12.5 Why This Matters
+
+The dataset generator creates the foundation for a future trained anomaly model. It does not claim to train a model yet. It turns reproducible runtime scenarios into labeled feature data that can later be used by logistic regression, random forest, gradient boosting, or another lightweight classifier.
+
+---
+
+## 13. Scenario Expectations
 
 | Scenario | Expected Classification | Main Drivers |
 |---|---|---|
@@ -369,7 +445,7 @@ Current limitations:
 
 - The detector is feature/rule-based, not trained.
 - It does not use historical baseline learning yet.
-- It does not use supervised labels yet.
+- It now supports scenario-derived synthetic labels, but it does not use manually annotated production labels yet.
 - It does not persist model artifacts.
 - It does not export ONNX or pickle models.
 - It does not include visualization yet.
@@ -382,8 +458,8 @@ Current limitations:
 
 Recommended improvements:
 
-1. Generate synthetic labeled datasets from many scenario runs.
-2. Add a training script under `ai-analyzer/training/`.
+1. Train a lightweight model using `reports/generated/synthetic_dataset.csv`.
+2. Compare trained-model classifications against current rule-based classifications.
 3. Train a lightweight model such as logistic regression, random forest, or gradient boosting.
 4. Compare trained-model classifications against current rule-based classifications.
 5. Export model artifacts.
@@ -402,4 +478,5 @@ Recommended improvements:
 - The anomaly detector uses fixed time windows, feature extraction, and explainable scoring.
 - The system can distinguish between dedicated queue pressure, CPU-spike timing pressure, task-crash failure behavior, slow-task timing faults, dropped-message reliability faults, and watchdog recovery behavior.
 - Scheduler mode changes such as priority and earliest-deadline-first scheduling preserve the same event schema, so the analyzer can continue processing logs without special-case parsing.
-- The design is intentionally extensible toward a trained machine learning model.
+- Phase 21 adds a synthetic dataset generator that exports labeled feature rows for future model training.
+- The design is intentionally extensible toward a trained machine learning model, while the current system remains AI-style rather than trained ML.

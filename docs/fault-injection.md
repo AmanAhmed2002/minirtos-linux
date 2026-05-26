@@ -548,3 +548,38 @@ configs/corrupted_message.json
 - Queue-full drops and fault-injected drops are intentionally separated in telemetry.
 - Fault scenarios can be run under the existing scheduler modes, including priority and earliest-deadline-first scheduling, without changing the analyzer event schema.
 - Watchdog scenarios demonstrate embedded-style health monitoring and simulated recovery behavior.
+
+
+---
+
+## 19. Synthetic Dataset Labels
+
+Phase 21 maps scenario logs to labels for future model training:
+
+| Scenario | Dataset Label |
+|---|---|
+| Normal, priority scheduler, deadline scheduler | `NORMAL` |
+| Queue overflow | `QUEUE_PRESSURE` |
+| CPU spike | `CPU_SPIKE` |
+| Task crash | `TASK_CRASH` |
+| Slow task | `SLOW_TASK` |
+| Dropped messages | `DROPPED_MESSAGES` |
+| Watchdog slow task | `WATCHDOG_RECOVERY` |
+
+The labels are scenario-level labels. Future trained-model work may refine this into per-window or per-event labels.
+
+---
+
+## 20. Phase 21 Note
+
+Fault scenarios are now not only analyzer inputs; they are also data sources for the synthetic training dataset generator. After running the Docker demo, generate the dataset with:
+
+```bash
+docker compose run --rm training-dataset
+```
+
+Expected output:
+
+```text
+reports/generated/synthetic_dataset.csv
+```

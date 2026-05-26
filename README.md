@@ -3,7 +3,7 @@
 **Embedded Runtime Simulator with AI-Based Fault Detection**
 ![CI](https://github.com/AmanAhmed2002/minirtos-linux/actions/workflows/ci.yml/badge.svg)
 
-MiniRTOS-Linux is a software-only C++20 embedded runtime simulator that models periodic tasks, bounded message queues, configurable fault injection, task-crash simulation, watchdog monitoring, structured JSONL telemetry, Python-based runtime analysis, AI-style anomaly detection, automated tests, Dockerized demos, and benchmark reporting.
+MiniRTOS-Linux is a software-only C++20 embedded runtime simulator that models periodic tasks, bounded message queues, configurable fault injection, task-crash simulation, watchdog monitoring, structured JSONL telemetry, Python-based runtime analysis, AI-style anomaly detection, synthetic training-dataset generation, automated tests, Dockerized demos, and benchmark reporting.
 
 The project is designed as a recruiter-ready systems/embedded portfolio project. It demonstrates Linux development workflow, C++20 runtime design, Python tooling, observability, fault analysis, testing, Docker, and documentation without requiring physical embedded hardware.
 
@@ -11,7 +11,7 @@ The project is designed as a recruiter-ready systems/embedded portfolio project.
 
 ## Project Status
 
-Phases 1-20 are complete or ready for final verification. Phase 20 adds simulated task-crash fault injection, task failure/skipped-task telemetry, analyzer support, tests, Docker demo coverage, and documentation updates.
+Phases 1-21 are complete or ready for final verification. Phase 21 adds a synthetic training-data generator that converts scenario JSONL logs into labeled, window-level feature rows for future machine-learning experiments.
 
 Completed capabilities include:
 
@@ -37,17 +37,19 @@ Completed capabilities include:
 - Dedicated queue-overflow benchmark scenario
 - CPU spike fault-injection scenario
 - Task crash fault-simulation scenario
+- Synthetic training-dataset generator / stronger AI layer
+- Synthetic training-dataset generator
 
 Current phase:
 
 ```text
-Phase 20 - Task Crash Simulation Ready for Final Verification
+Phase 21 - Synthetic Training-Data Generator / Stronger AI Layer
 ```
 
 Next recommended phase:
 
 ```text
-Phase 21 - Synthetic Training-Data Generator / Stronger AI Layer
+Phase 22 - Final Documentation, CI, Docker, Benchmark, and Resume Refresh
 ```
 
 ---
@@ -65,6 +67,7 @@ This project is useful for demonstrating:
 - Fault injection and resilience testing
 - Python analysis tooling
 - AI-style anomaly detection features
+- Synthetic feature dataset generation
 - Dockerized reproducibility
 - Test-driven project hardening
 
@@ -84,6 +87,7 @@ This project is useful for demonstrating:
 | Watchdog | Detects repeated deadline misses and logs simulated task recovery |
 | Analyzer | Python CLI reads JSONL logs and reports system health, metrics, and root causes |
 | AI-Style Detection | Time-windowed feature extraction, anomaly scoring, state classification, and top anomaly drivers |
+| Synthetic Dataset | Converts scenario logs into labeled window-level CSV rows for future ML training/evaluation |
 | Testing | GoogleTest for C++ and pytest for Python |
 | Docker | Dockerized runtime/analyzer demo with Docker Compose |
 | Benchmarking | Markdown benchmark report comparing normal, scheduler, queue-overflow, and fault scenarios |
@@ -185,9 +189,13 @@ minirtos-linux/
 │   ├── app/
 │   │   ├── analyze.py
 │   │   └── anomaly_detector.py
+│   ├── training/
+│   │   ├── README.md
+│   │   └── generate_dataset.py
 │   └── tests/
 │       ├── test_analyzer.py
-│       └── test_anomaly_detector.py
+│       ├── test_anomaly_detector.py
+│       └── test_training_dataset.py
 ├── configs/
 │   ├── normal.json
 │   ├── priority_scheduler.json
@@ -298,6 +306,23 @@ Analyze the generated runtime log:
 
 ```bash
 ./scripts/run_analyzer.sh logs/runtime_logs.jsonl
+```
+
+Generate the synthetic training dataset after scenario logs exist:
+
+```bash
+python3 ai-analyzer/training/generate_dataset.py \
+  --output reports/generated/synthetic_dataset.csv \
+  --window-ms 5000 \
+  --scenario normal=logs/normal_runtime_logs.jsonl \
+  --scenario priority_scheduler=logs/priority_scheduler_runtime_logs.jsonl \
+  --scenario deadline_scheduler=logs/deadline_scheduler_runtime_logs.jsonl \
+  --scenario queue_overflow=logs/queue_overflow_runtime_logs.jsonl \
+  --scenario cpu_spike=logs/cpu_spike_runtime_logs.jsonl \
+  --scenario task_crash=logs/task_crash_runtime_logs.jsonl \
+  --scenario slow_task=logs/slow_task_runtime_logs.jsonl \
+  --scenario dropped_messages=logs/dropped_messages_runtime_logs.jsonl \
+  --scenario watchdog=logs/watchdog_runtime_logs.jsonl
 ```
 
 Run the full test suite:
@@ -496,6 +521,61 @@ More detail is available in [`docs/anomaly-detector.md`](docs/anomaly-detector.m
 
 ---
 
+## Generate Synthetic Training Dataset
+
+Phase 21 adds a dataset generator at:
+
+```text
+ai-analyzer/training/generate_dataset.py
+```
+
+It converts scenario logs into labeled, fixed-window feature rows and writes:
+
+```text
+reports/generated/synthetic_dataset.csv
+```
+
+The generated CSV is ignored by Git because it is generated output.
+
+Run it locally after scenario logs exist:
+
+```bash
+python3 ai-analyzer/training/generate_dataset.py \
+  --output reports/generated/synthetic_dataset.csv \
+  --window-ms 5000 \
+  --scenario normal=logs/normal_runtime_logs.jsonl \
+  --scenario priority_scheduler=logs/priority_scheduler_runtime_logs.jsonl \
+  --scenario deadline_scheduler=logs/deadline_scheduler_runtime_logs.jsonl \
+  --scenario queue_overflow=logs/queue_overflow_runtime_logs.jsonl \
+  --scenario cpu_spike=logs/cpu_spike_runtime_logs.jsonl \
+  --scenario task_crash=logs/task_crash_runtime_logs.jsonl \
+  --scenario slow_task=logs/slow_task_runtime_logs.jsonl \
+  --scenario dropped_messages=logs/dropped_messages_runtime_logs.jsonl \
+  --scenario watchdog=logs/watchdog_runtime_logs.jsonl
+```
+
+Or through Docker:
+
+```bash
+docker compose run --rm training-dataset
+```
+
+Expected labels:
+
+```text
+NORMAL
+QUEUE_PRESSURE
+CPU_SPIKE
+TASK_CRASH
+SLOW_TASK
+DROPPED_MESSAGES
+WATCHDOG_RECOVERY
+```
+
+More detail is available in [`ai-analyzer/training/README.md`](ai-analyzer/training/README.md).
+
+---
+
 ## Run Tests
 
 Run all C++ and Python tests:
@@ -552,6 +632,7 @@ The full demo runs:
 8. Dropped messages fault scenario
 9. Watchdog slow task scenario
 10. Analyzer output for each scenario
+11. Synthetic training dataset generation
 
 Generated logs are written to the local `logs/` directory through a mounted Docker volume.
 
@@ -568,6 +649,7 @@ docker compose run --rm runtime-slow-task
 docker compose run --rm runtime-dropped-messages
 docker compose run --rm runtime-watchdog
 docker compose run --rm analyzer
+docker compose run --rm training-dataset
 ```
 
 The `analyzer` service analyzes the latest `logs/runtime_logs.jsonl`.
@@ -615,6 +697,16 @@ That update should create this scenario-specific log:
 logs/task_crash_runtime_logs.jsonl
 ```
 
+### Docker Note After Phase 21
+
+No Dockerfile changes are required for Phase 21 if the existing runtime/analyzer image already includes Python and copies the full project directory. The required Docker update is to add the `training-dataset` service and/or call `generate_dataset.py` in `scripts/run_docker_demo.sh`.
+
+That update should create this generated dataset:
+
+```text
+reports/generated/synthetic_dataset.csv
+```
+
 ---
 
 ## Benchmark Results
@@ -653,6 +745,7 @@ See [`docs/performance-results.md`](docs/performance-results.md) for the full be
 | [`docs/anomaly-detector.md`](docs/anomaly-detector.md) | Explains JSONL parsing, feature extraction, scoring, classifications, and limitations. |
 | [`docs/performance-results.md`](docs/performance-results.md) | Benchmark report from the generated runtime logs. |
 | [`docs/resume-bullets.md`](docs/resume-bullets.md) | Resume, LinkedIn, and interview-ready project summaries. |
+| [`ai-analyzer/training/README.md`](ai-analyzer/training/README.md) | Explains the synthetic training dataset generator and command usage. |
 
 ---
 
@@ -692,19 +785,19 @@ Completed:
 - Phase 18: Dedicated queue overflow scenario and benchmark
 - Phase 19: CPU spike fault injection
 - Phase 20: Task crash simulation
-
-Recommended next phases:
-
 - Phase 21: Synthetic training-data generator / stronger AI layer
-- Phase 22: Final documentation, CI, benchmark, and resume refresh
+
+Recommended next phase:
+
+- Phase 22: Final documentation, CI, benchmark, Docker, and resume refresh
 
 Optional future features:
 
 - Corrupted message simulation
 - FastAPI analyzer endpoint
 - React dashboard
-- Synthetic training-data generator
 - Trained anomaly detection model
+- Model artifact export and evaluation report
 
 ---
 

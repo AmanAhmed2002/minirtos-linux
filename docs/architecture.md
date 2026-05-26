@@ -22,6 +22,7 @@ The architecture is intentionally modular so each system concept is represented 
 - Structured logger
 - Python analyzer
 - AI-style anomaly detector
+- Synthetic training-dataset generator
 - Dockerized demonstration workflow
 
 ---
@@ -585,6 +586,48 @@ The detector is intentionally feature/rule-based right now. It provides an AI-st
 
 ---
 
+## 6.1 Synthetic Training Dataset Generator
+
+Phase 21 adds a synthetic dataset generator.
+
+Main files:
+
+```text
+ai-analyzer/training/generate_dataset.py
+ai-analyzer/training/README.md
+ai-analyzer/tests/test_training_dataset.py
+```
+
+Generated output:
+
+```text
+reports/generated/synthetic_dataset.csv
+```
+
+The generator uses scenario-specific logs and creates labeled feature rows. It reuses the anomaly detector's windowing and feature-extraction logic so the CSV columns stay aligned with the runtime anomaly pipeline.
+
+Pipeline:
+
+```text
+scenario logs -> fixed time windows -> extracted anomaly features -> scenario label assignment -> synthetic_dataset.csv
+```
+
+Supported labels:
+
+```text
+NORMAL
+QUEUE_PRESSURE
+CPU_SPIKE
+TASK_CRASH
+SLOW_TASK
+DROPPED_MESSAGES
+WATCHDOG_RECOVERY
+```
+
+The generated CSV is ignored by Git because it is generated output.
+
+---
+
 ## 7. Docker Architecture
 
 Docker files:
@@ -612,6 +655,7 @@ Docker Compose services:
 | `runtime-priority-scheduler` | Optional service for the priority scheduler scenario. |
 | `runtime-deadline-scheduler` | Optional service for the earliest-deadline-first scheduler scenario. |
 | `analyzer` | Runs the analyzer against `logs/runtime_logs.jsonl`. |
+| `training-dataset` | Generates `reports/generated/synthetic_dataset.csv` from scenario logs. |
 
 The local `logs/` folder is mounted into the container:
 
@@ -642,6 +686,12 @@ logs/watchdog_runtime_logs.jsonl
   |
   v
 Python analyzer metrics
+  |
+  v
+Python synthetic dataset generator
+  |
+  v
+reports/generated/synthetic_dataset.csv
   |
   v
 docs/performance-results.md
@@ -690,6 +740,7 @@ Docker makes the project easier to review. A recruiter or engineer can run the d
 - Timing is simulated on Linux rather than hard real-time hardware.
 - Recovery and task-crash behavior are simulated through logs and scheduler state rather than real thread/process restart.
 - The anomaly detector is feature/rule-based rather than a trained ML model.
+- The synthetic dataset generator labels windows based on scenario identity rather than manual human annotation.
 - Normal runtime and the dedicated queue-overflow scenario can produce queue-full drops when message production exceeds logger consumption.
 
 ---

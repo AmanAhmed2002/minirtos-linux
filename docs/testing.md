@@ -8,7 +8,7 @@ The project uses:
 
 - GoogleTest for C++ runtime component tests
 - CTest through CMake for running C++ tests
-- pytest for Python analyzer and anomaly-detector tests
+- pytest for Python analyzer, anomaly-detector, and training-dataset tests
 - `scripts/run_tests.sh` as the one-command local test workflow
 - GitHub Actions CI for automated build and test verification on `main` pushes and pull requests
 
@@ -197,6 +197,7 @@ Current Python test files:
 ```text
 ai-analyzer/tests/test_analyzer.py
 ai-analyzer/tests/test_anomaly_detector.py
+ai-analyzer/tests/test_training_dataset.py
 ```
 
 ### 5.1 Analyzer Tests
@@ -226,6 +227,7 @@ File:
 
 ```text
 ai-analyzer/tests/test_anomaly_detector.py
+ai-analyzer/tests/test_training_dataset.py
 ```
 
 Expected coverage:
@@ -241,6 +243,27 @@ Expected coverage:
 | Overall anomaly report | Confirms summary report generation works. |
 | CPU-spike timing pressure | Confirms CPU-spike windows can classify as unstable when deadline misses occur. |
 | Task-crash failure windows | Confirms task-failure and skipped-task windows classify as unstable. |
+
+
+### 5.3 Training Dataset Tests
+
+File:
+
+```text
+ai-analyzer/tests/test_training_dataset.py
+```
+
+Expected coverage:
+
+| Behavior | Purpose |
+|---|---|
+| Scenario label inference | Confirms known scenario names map to expected labels. |
+| Unknown label rejection | Confirms unknown scenario labels fail safely. |
+| Scenario argument parsing | Confirms `NAME=PATH` command arguments are parsed correctly. |
+| Invalid scenario argument rejection | Confirms bad CLI-style input fails safely. |
+| CSV generation | Confirms dataset rows and headers are written correctly. |
+| Missing log failure | Confirms missing logs fail when `skip_missing=False`. |
+| Missing log skip mode | Confirms missing logs can be skipped when `skip_missing=True`. |
 
 ---
 
@@ -285,12 +308,55 @@ Run one file:
 
 ```bash
 python3 -m pytest ai-analyzer/tests/test_analyzer.py -q
-python3 -m pytest ai-analyzer/tests/test_anomaly_detector.py -q
+python3 -m pytest ai-analyzer/tests/test_anomaly_detector.py
+ai-analyzer/tests/test_training_dataset.py -q
 ```
 
 ---
 
-## 8. What Passing Tests Prove
+## 8. Validate Dataset Generation
+
+Generate scenario logs first:
+
+```bash
+docker compose up --build demo
+```
+
+Generate the dataset locally:
+
+```bash
+python3 ai-analyzer/training/generate_dataset.py \
+  --output reports/generated/synthetic_dataset.csv \
+  --window-ms 5000 \
+  --scenario normal=logs/normal_runtime_logs.jsonl \
+  --scenario priority_scheduler=logs/priority_scheduler_runtime_logs.jsonl \
+  --scenario deadline_scheduler=logs/deadline_scheduler_runtime_logs.jsonl \
+  --scenario queue_overflow=logs/queue_overflow_runtime_logs.jsonl \
+  --scenario cpu_spike=logs/cpu_spike_runtime_logs.jsonl \
+  --scenario task_crash=logs/task_crash_runtime_logs.jsonl \
+  --scenario slow_task=logs/slow_task_runtime_logs.jsonl \
+  --scenario dropped_messages=logs/dropped_messages_runtime_logs.jsonl \
+  --scenario watchdog=logs/watchdog_runtime_logs.jsonl
+```
+
+Or use Docker:
+
+```bash
+docker compose run --rm training-dataset
+```
+
+Verify output:
+
+```bash
+ls -lh reports/generated
+head -n 5 reports/generated/synthetic_dataset.csv
+```
+
+The CSV is generated output and should remain ignored by Git.
+
+---
+
+## 9. What Passing Tests Prove
 
 Passing tests show that:
 
@@ -307,6 +373,7 @@ Passing tests show that:
 - Health classification detects unstable watchdog scenarios.
 - Message drop reasons are counted correctly.
 - Anomaly detector windowing, feature extraction, and classification are stable.
+- The dataset generator can map scenario logs into labeled CSV rows.
 
 ---
 
@@ -320,7 +387,7 @@ Current tests do not fully prove:
 - Performance under very large logs.
 - Accuracy of a trained ML model.
 
-Phase 18 adds a config-driven queue-overflow scenario. Phase 19 adds CPU-spike unit/analyzer tests and a Docker/demo scenario. Phase 20 adds task-crash unit/analyzer tests and a Docker/demo scenario. This scenario does not require a new unit test because it exercises existing bounded queue behavior already covered by the Message Bus tests. The scenario is validated through runtime execution, analyzer output, and Docker demo coverage.
+Phase 18 adds a config-driven queue-overflow scenario. Phase 19 adds CPU-spike unit/analyzer tests and a Docker/demo scenario. Phase 20 adds task-crash unit/analyzer tests and a Docker/demo scenario. Phase 21 adds synthetic dataset generator tests. This scenario does not require a new unit test because it exercises existing bounded queue behavior already covered by the Message Bus tests. The scenario is validated through runtime execution, analyzer output, and Docker demo coverage.
 
 Those areas are future enhancement opportunities.
 

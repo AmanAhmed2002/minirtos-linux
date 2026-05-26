@@ -22,7 +22,7 @@ Embedded Systems Fault Detection and Runtime Telemetry Simulator
 ## 2. One-Line Project Summary
 
 ```text
-Built a C++20 embedded-runtime simulator with periodic task scheduling, priority and earliest-deadline-first scheduling, bounded message queues, queue-overflow benchmarking, CPU-spike fault injection, task-crash simulation, configurable fault injection, watchdog recovery telemetry, Python log analysis, AI-style anomaly detection, automated tests, Dockerized demos, and benchmark reporting on Linux.
+Built a C++20 embedded-runtime simulator with periodic task scheduling, priority and earliest-deadline-first scheduling, bounded message queues, queue-overflow benchmarking, CPU-spike fault injection, task-crash simulation, configurable fault injection, watchdog recovery telemetry, Python log analysis, AI-style anomaly detection, synthetic training-dataset generation, automated tests, Dockerized demos, and benchmark reporting on Linux.
 ```
 
 ---
@@ -30,7 +30,7 @@ Built a C++20 embedded-runtime simulator with periodic task scheduling, priority
 ## 3. Short Resume Summary Version
 
 ```text
-MiniRTOS-Linux is a C++20 embedded-runtime simulator that models periodic tasks, deadlines, priority and earliest-deadline-first scheduling, bounded queues, fault injection, task-crash simulation, watchdog monitoring, structured telemetry, Python-based runtime analysis, AI-style anomaly detection, Dockerized demos, and automated tests.
+MiniRTOS-Linux is a C++20 embedded-runtime simulator that models periodic tasks, deadlines, priority and earliest-deadline-first scheduling, bounded queues, fault injection, task-crash simulation, watchdog monitoring, structured telemetry, Python-based runtime analysis, AI-style anomaly detection, synthetic training-data generation, Dockerized demos, and automated tests.
 ```
 
 ---
@@ -79,7 +79,7 @@ Use this if the project is one of several listed under a Projects section.
 ## 7. One-Bullet Compact Version
 
 ```text
-- Built MiniRTOS-Linux, a C++20 embedded-runtime simulator with periodic scheduling, priority and earliest-deadline-first scheduling, bounded message queues, queue-overflow benchmarking, fault injection, watchdog recovery telemetry, task-crash simulation, Python AI-style anomaly detection, automated tests, Dockerized demos, and benchmark reporting.
+- Built MiniRTOS-Linux, a C++20 embedded-runtime simulator with periodic scheduling, priority and earliest-deadline-first scheduling, bounded message queues, queue-overflow benchmarking, fault injection, watchdog recovery telemetry, task-crash simulation, Python AI-style anomaly detection, synthetic training-data generation, automated tests, Dockerized demos, and benchmark reporting.
 ```
 
 ---
@@ -128,7 +128,7 @@ The project models common embedded and RTOS concepts: periodic tasks, execution 
 ### Question: Where is the AI?
 
 ```text
-The AI layer is in the Python analyzer. The runtime emits JSONL telemetry, then the analyzer converts those logs into fixed time windows, extracts features such as deadline misses, task duration, message drops, fault events, and watchdog events, computes anomaly scores, classifies each window as normal, warning, or unstable, and reports the top anomaly drivers. It is currently an explainable AI-style detector, with future room for a trained model.
+The AI layer is in the Python analyzer and training-data workflow. The runtime emits JSONL telemetry, then the analyzer converts those logs into fixed time windows, extracts features such as deadline misses, task duration, message drops, fault events, and watchdog events, computes anomaly scores, classifies each window as normal, warning, or unstable, and reports the top anomaly drivers. It is currently an explainable AI-style detector and synthetic dataset pipeline, with future room for a trained model.
 ```
 
 ### Question: What did the benchmark show?
@@ -146,7 +146,7 @@ The hardest part was connecting runtime behavior to useful telemetry. It was not
 ### Question: What would you improve next?
 
 ```text
-I would add an earliest-deadline-first scheduler mode next, then add more fault types such as CPU spikes, task crashes, corrupted messages, and a trained anomaly model using synthetic labeled scenario data.
+I would complete the final documentation, benchmark, CI, and Docker refresh, then train a lightweight anomaly model from the generated synthetic dataset and compare its classifications against the current explainable rule-based anomaly detector.
 ```
 
 ---
@@ -216,7 +216,7 @@ Emphasize:
 Best bullet:
 
 ```text
-- Built an explainable anomaly detection pipeline that converts runtime logs into fixed time windows, extracts health features, scores anomalous behavior, classifies system state, and reports top anomaly drivers.
+- Built an explainable anomaly detection pipeline that converts runtime logs into fixed time windows, extracts health features, scores anomalous behavior, classifies system state, reports top anomaly drivers, and generates labeled synthetic datasets for future model training.
 ```
 
 ---
@@ -238,13 +238,13 @@ I needed to build a runtime simulator that could schedule tasks, produce telemet
 ### Action
 
 ```text
-I implemented the runtime in C++20 with JSON configs, periodic tasks, round-robin and priority scheduler modes, bounded message queues, structured JSONL logging, fault injection, and watchdog monitoring. Then I built a Python analyzer that parses the logs, computes metrics, classifies health, and performs AI-style anomaly detection. I added tests, Docker Compose demos, and benchmark documentation.
+I implemented the runtime in C++20 with JSON configs, periodic tasks, round-robin and priority scheduler modes, bounded message queues, structured JSONL logging, fault injection, and watchdog monitoring. Then I built a Python analyzer that parses the logs, computes metrics, classifies health, performs AI-style anomaly detection, and generates labeled synthetic feature datasets. I added tests, Docker Compose demos, and benchmark documentation.
 ```
 
 ### Result
 
 ```text
-The current system can run normal, priority-scheduler, earliest-deadline-first, queue-overflow, task-crash, and fault scenarios, generate structured logs, detect queue pressure, identify slow-task deadline misses, distinguish fault-injected message drops, log watchdog timeout and recovery events, and produce a benchmark report comparing all scenarios.
+The current system can run normal, priority-scheduler, earliest-deadline-first, queue-overflow, CPU-spike, task-crash, slow-task, dropped-message, and watchdog scenarios, generate structured logs, detect queue pressure, identify slow-task deadline misses, distinguish fault-injected message drops, log watchdog timeout and recovery events, and produce a benchmark report comparing all scenarios.
 ```
 
 ---
@@ -311,7 +311,13 @@ Task crash scenario:
 - Demonstrates simulated task failure without terminating the real runtime process
 - Final measured event counts should be recorded after Docker/analyzer verification
 
-Use these carefully in interviews to show the system was benchmarked with measured logs.
+Synthetic dataset generator:
+- Added in Phase 21
+- Converts scenario logs into labeled window-level feature rows
+- Exports reports/generated/synthetic_dataset.csv
+- Supports future trained-model experiments
+
+Use these carefully in interviews to show the system was benchmarked with measured logs and designed for measurable telemetry.
 
 ---
 

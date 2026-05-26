@@ -4,7 +4,7 @@
 
 This benchmark report summarizes the observed behavior of MiniRTOS-Linux across normal and fault-injected runtime scenarios.
 
-MiniRTOS-Linux is a software-only C++20 embedded runtime simulator that models periodic tasks, round-robin, priority, and earliest-deadline-first scheduling, bounded message queues, structured JSONL telemetry, configurable fault injection, watchdog monitoring, simulated recovery behavior, and Python-based runtime analysis.
+MiniRTOS-Linux is a software-only C++20 embedded runtime simulator that models periodic tasks, round-robin, priority, and earliest-deadline-first scheduling, bounded message queues, structured JSONL telemetry, configurable fault injection, watchdog monitoring, simulated recovery behavior, Python-based runtime analysis, and synthetic training-dataset generation.
 
 The goal of this benchmark phase is to demonstrate that the runtime can:
 
@@ -18,6 +18,7 @@ The goal of this benchmark phase is to demonstrate that the runtime can:
 - Detect repeated deadline misses through watchdog timeout and recovery events.
 - Detect simulated task-crash behavior through `task_failed` and `task_skipped` telemetry.
 - Support downstream deterministic and AI-style anomaly analysis.
+- Convert scenario logs into labeled synthetic training-data rows for future ML work.
 
 ## 2. Test Environment
 
@@ -46,6 +47,16 @@ logs/dropped_messages_runtime_logs.jsonl
 logs/watchdog_runtime_logs.jsonl
 ```
 
+### Generated Dataset
+
+Phase 21 adds:
+
+```text
+reports/generated/synthetic_dataset.csv
+```
+
+Generated reports are ignored by Git.
+
 ### Analyzer Window Size
 
 The benchmark assumes the default anomaly-analysis window size:
@@ -56,17 +67,17 @@ The benchmark assumes the default anomaly-analysis window size:
 
 ## 3. Scenarios Tested
 
-| Scenario | Config File | Log File | Purpose |
-|---|---|---|---|
-| Normal runtime | `configs/normal.json` | `logs/normal_runtime_logs.jsonl` | Baseline system behavior without explicit fault injection. |
-| Priority scheduler | `configs/priority_scheduler.json` | `logs/priority_scheduler_runtime_logs.jsonl` | Validates that due tasks can be ordered by priority instead of config order. |
-| Earliest-deadline-first scheduler | `configs/deadline_scheduler.json` | `logs/deadline_scheduler_runtime_logs.jsonl` | Validates that due tasks can be ordered by nearest absolute deadline instead of config order. |
-| Queue overflow | `configs/queue_overflow.json` | `logs/queue_overflow_runtime_logs.jsonl` | Intentionally stresses `LoggerTask` bounded queue capacity. |
-| CPU spike fault | `configs/cpu_spike.json` | `logs/cpu_spike_runtime_logs.jsonl` | Injects simulated CPU-load pressure into `NetworkTask`. |
-| Task crash fault | `configs/task_crash.json` | `logs/task_crash_runtime_logs.jsonl` | Simulates `NetworkTask` entering a failed state without terminating the runtime process. |
-| Slow task fault | `configs/slow_task.json` | `logs/slow_task_runtime_logs.jsonl` | Simulates a task taking longer than its deadline. |
-| Dropped messages fault | `configs/dropped_messages.json` | `logs/dropped_messages_runtime_logs.jsonl` | Simulates injected message loss. |
-| Watchdog slow task | `configs/watchdog_slow_task.json` | `logs/watchdog_runtime_logs.jsonl` | Simulates slow-task behavior with watchdog timeout and recovery enabled. |
+| Scenario | Config File | Log File | Dataset Label | Purpose |
+|---|---|---|---|---|
+| Normal runtime | `configs/normal.json` | `logs/normal_runtime_logs.jsonl` | `NORMAL` | Baseline system behavior without explicit fault injection. |
+| Priority scheduler | `configs/priority_scheduler.json` | `logs/priority_scheduler_runtime_logs.jsonl` | `NORMAL` | Validates that due tasks can be ordered by priority instead of config order. |
+| Earliest-deadline-first scheduler | `configs/deadline_scheduler.json` | `logs/deadline_scheduler_runtime_logs.jsonl` | `NORMAL` | Validates that due tasks can be ordered by nearest absolute deadline instead of config order. |
+| Queue overflow | `configs/queue_overflow.json` | `logs/queue_overflow_runtime_logs.jsonl` | `QUEUE_PRESSURE` | Intentionally stresses `LoggerTask` bounded queue capacity. |
+| CPU spike fault | `configs/cpu_spike.json` | `logs/cpu_spike_runtime_logs.jsonl` | `CPU_SPIKE` | Injects simulated CPU-load pressure into `NetworkTask`. |
+| Task crash fault | `configs/task_crash.json` | `logs/task_crash_runtime_logs.jsonl` | `TASK_CRASH` | Simulates `NetworkTask` entering a failed state without terminating the runtime process. |
+| Slow task fault | `configs/slow_task.json` | `logs/slow_task_runtime_logs.jsonl` | `SLOW_TASK` | Simulates a task taking longer than its deadline. |
+| Dropped messages fault | `configs/dropped_messages.json` | `logs/dropped_messages_runtime_logs.jsonl` | `DROPPED_MESSAGES` | Simulates injected message loss. |
+| Watchdog slow task | `configs/watchdog_slow_task.json` | `logs/watchdog_runtime_logs.jsonl` | `WATCHDOG_RECOVERY` | Simulates slow-task behavior with watchdog timeout and recovery enabled. |
 
 ## 4. High-Level Results
 
@@ -455,7 +466,54 @@ Tie-breakers:
 
 This scenario was added as a runtime validation scenario. The measured benchmark tables above still reflect the earlier Docker benchmark logs. A future benchmark refresh should regenerate and record priority-scheduler and earliest-deadline-first metrics alongside the normal, queue-overflow, CPU-spike, slow-task, dropped-message, and watchdog scenarios.
 
-## 10. Key Observations
+## 10. Synthetic Dataset Generation Results
+
+Phase 21 adds dataset generation from scenario logs.
+
+Command:
+
+```bash
+python3 ai-analyzer/training/generate_dataset.py \
+  --output reports/generated/synthetic_dataset.csv \
+  --window-ms 5000 \
+  --scenario normal=logs/normal_runtime_logs.jsonl \
+  --scenario priority_scheduler=logs/priority_scheduler_runtime_logs.jsonl \
+  --scenario deadline_scheduler=logs/deadline_scheduler_runtime_logs.jsonl \
+  --scenario queue_overflow=logs/queue_overflow_runtime_logs.jsonl \
+  --scenario cpu_spike=logs/cpu_spike_runtime_logs.jsonl \
+  --scenario task_crash=logs/task_crash_runtime_logs.jsonl \
+  --scenario slow_task=logs/slow_task_runtime_logs.jsonl \
+  --scenario dropped_messages=logs/dropped_messages_runtime_logs.jsonl \
+  --scenario watchdog=logs/watchdog_runtime_logs.jsonl
+```
+
+Docker command:
+
+```bash
+docker compose run --rm training-dataset
+```
+
+Expected output:
+
+```text
+reports/generated/synthetic_dataset.csv
+```
+
+Expected labels:
+
+```text
+NORMAL
+QUEUE_PRESSURE
+CPU_SPIKE
+TASK_CRASH
+SLOW_TASK
+DROPPED_MESSAGES
+WATCHDOG_RECOVERY
+```
+
+The generated CSV should be treated as a reproducible artifact, not a committed source file.
+
+## 11. Key Observations
 
 1. The baseline runtime is schedulable from a task-deadline perspective because the normal scenario produced zero deadline misses.
 2. The priority scheduler can run due tasks by priority while preserving the same logging and analyzer schema.
@@ -470,7 +528,7 @@ This scenario was added as a runtime validation scenario. The measured benchmark
 7. Watchdog monitoring successfully detects repeated deadline misses and logs simulated recovery events.
 8. The analyzer can distinguish queue pressure, slow-task faults, injected message loss, and watchdog-triggered recovery behavior.
 
-## 11. Limitations
+## 12. Limitations
 
 This benchmark is intentionally simulation-based and does not measure real embedded hardware timing.
 
@@ -479,23 +537,25 @@ Current limitations:
 - Timing is simulated through Linux process execution and sleep behavior rather than hard real-time scheduling.
 - Queue pressure appears even in the normal scenario because the current default message generation rate exceeds logger consumption rate.
 - The anomaly detector is AI-style and feature-based rather than a trained machine learning model.
+- The synthetic dataset labels are scenario-derived rather than manually annotated.
 - Recovery behavior is simulated through logs rather than actual process or thread restart.
 - Benchmark results may vary slightly between machines or Docker environments.
 
-## 12. Recommended Follow-Up Improvements
+## 13. Recommended Follow-Up Improvements
 
 Future phases can improve the benchmark by adding:
 
 - A tuned normal configuration with no queue drops.
 - Trained anomaly model using generated scenario data.
+- Dataset generator smoke tests in CI.
 - Expanded GitHub Actions CI with Docker build and analyzer smoke-test coverage.
 - README screenshots or terminal-output examples.
 
-## 13. Resume and Interview Talking Points
+## 14. Resume and Interview Talking Points
 
 - Built a C++20 embedded-runtime simulator that models periodic tasks, round-robin, priority, and earliest-deadline-first scheduling, deadlines, bounded queues, fault injection, watchdog monitoring, and structured telemetry.
 - Implemented JSONL runtime logging for task execution, queue depth, message drops, deadline misses, injected faults, watchdog timeouts, and simulated recovery.
 - Created reproducible scenarios for queue overflow, CPU spikes, task crashes, slow tasks, and dropped messages.
 - Demonstrated that slow-task injection caused 174 deadline misses in `ControlTask`, while watchdog monitoring detected the unhealthy behavior and emitted 22 timeout and 22 recovery events.
 - Built a Python analyzer that summarizes runtime health, identifies root causes, and supports AI-style anomaly classification using time-windowed telemetry.
-- Dockerized the runtime and analyzer so the full scenario suite can be reproduced with Docker Compose.
+- Dockerized the runtime, analyzer, and dataset generator so the full scenario suite can be reproduced with Docker Compose.
