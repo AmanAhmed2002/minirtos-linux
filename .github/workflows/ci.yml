@@ -25,18 +25,25 @@ jobs:
             cmake \
             ninja-build \
             python3 \
-            python3-pip \
-            python3-pytest \
-            git
+            python3-pip
 
-      - name: Configure C++ project
-        run: cmake -S cpp-runtime -B cpp-runtime/build -G Ninja
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pytest scikit-learn joblib
+
+      - name: Configure C++ build
+        run: |
+          cmake -S cpp-runtime -B cpp-runtime/build -G Ninja
 
       - name: Build C++ runtime and tests
-        run: cmake --build cpp-runtime/build
+        run: |
+          cmake --build cpp-runtime/build
 
       - name: Run C++ tests
-        run: ctest --test-dir cpp-runtime/build --output-on-failure
+        run: |
+          ctest --test-dir cpp-runtime/build --output-on-failure
 
       - name: Run Python tests
-        run: python3 -m pytest ai-analyzer/tests -q
+        run: |
+          python3 -m pytest ai-analyzer/tests -q
