@@ -220,3 +220,55 @@ TEST(FaultInjectorTest, CpuSpikeDoesNotActivateWhenDisabled) {
     EXPECT_FALSE(injector.shouldCpuSpikeTask("NetworkTask", 6000));
     EXPECT_EQ(injector.cpuSpikeExtraExecutionTimeMs("NetworkTask", 6000), 0);
 }
+
+
+TEST(FaultInjectorTest, TaskCrashDoesNotActivateBeforeStartTime) {
+    FaultConfig config;
+    config.enabled = true;
+    config.type = "task_crash";
+    config.target_task = "NetworkTask";
+    config.start_after_ms = 5000;
+
+    FaultInjector injector(config);
+
+    EXPECT_TRUE(injector.isEnabled());
+    EXPECT_FALSE(injector.shouldCrashTask("NetworkTask", 4999));
+}
+
+TEST(FaultInjectorTest, TaskCrashActivatesForTargetAfterStartTime) {
+    FaultConfig config;
+    config.enabled = true;
+    config.type = "task_crash";
+    config.target_task = "NetworkTask";
+    config.start_after_ms = 5000;
+
+    FaultInjector injector(config);
+
+    EXPECT_TRUE(injector.shouldCrashTask("NetworkTask", 5000));
+    EXPECT_TRUE(injector.shouldCrashTask("NetworkTask", 6000));
+}
+
+TEST(FaultInjectorTest, TaskCrashDoesNotActivateForDifferentTask) {
+    FaultConfig config;
+    config.enabled = true;
+    config.type = "task_crash";
+    config.target_task = "NetworkTask";
+    config.start_after_ms = 5000;
+
+    FaultInjector injector(config);
+
+    EXPECT_FALSE(injector.shouldCrashTask("ControlTask", 6000));
+}
+
+TEST(FaultInjectorTest, TaskCrashDoesNotActivateWhenDisabled) {
+    FaultConfig config;
+    config.enabled = false;
+    config.type = "task_crash";
+    config.target_task = "NetworkTask";
+    config.start_after_ms = 5000;
+
+    FaultInjector injector(config);
+
+    EXPECT_FALSE(injector.isEnabled());
+    EXPECT_FALSE(injector.shouldCrashTask("NetworkTask", 6000));
+}

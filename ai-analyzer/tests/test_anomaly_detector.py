@@ -99,6 +99,22 @@ def test_extract_features_counts_runtime_signals() -> None:
             "severity": "warning",
             "task": "ControlTask",
         },
+        {
+            "timestamp_ms": 180,
+            "event_type": "task_failed",
+            "severity": "error",
+            "fault_type": "task_crash",
+            "task": "NetworkTask",
+            "reason": "simulated_task_crash",
+        },
+        {
+            "timestamp_ms": 190,
+            "event_type": "task_skipped",
+            "severity": "warning",
+            "fault_type": "task_crash",
+            "task": "NetworkTask",
+            "reason": "task_in_failed_state",
+        },
     ]
 
     features = extract_features(events)
@@ -115,9 +131,10 @@ def test_extract_features_counts_runtime_signals() -> None:
     assert features["fault_injected_count"] == 1
     assert features["watchdog_timeout_count"] == 1
     assert features["task_recovered_count"] == 1
-    assert features["error_event_count"] == 1
-    assert features["warning_event_count"] == 5
-
+    assert features["error_event_count"] == 2
+    assert features["warning_event_count"] == 6
+    assert features["task_failed_count"] == 1
+    assert features["task_skipped_count"] == 1
 
 def test_classify_score_marks_clean_window_normal() -> None:
     features = {
@@ -244,3 +261,60 @@ def test_analyze_anomaly_windows_detects_cpu_spike_timing_pressure() -> None:
     assert report["anomaly_window_count"] >= 1
     assert report["highest_score"] > 0
     assert "deadline_missed_count" in report["top_overall_drivers"]
+def test_analyze_anomaly_windows_detects_task_crash_failure() -> None:
+    events = [
+        {
+            "timestamp_ms": 0,
+            "event_type": "task_completed",
+            "severity": "info",
+            "observed_duration_ms": 20,
+            "deadline_missed": False,
+        },
+        {
+            "timestamp_ms": 5000,
+            "event_type": "fault_injected",
+            "severity": "error",
+            "fault_type": "task_crash",
+            "target_task": "NetworkTask",
+            "reason": "simulated_task_crash",
+        },
+        {
+            "timestamp_ms": 5001,
+            "event_type": "task_failed",
+            "severity": "error",
+            "fault_type": "task_crash",
+            "task": "NetworkTask",
+            "reason": "simulated_task_crash",
+        },
+        {
+            "timestamp_ms": 5250,
+            "event_type": "task_skipped",
+            "severity": "warning",
+            "fault_type": "task_crash",
+            "task": "NetworkTask",
+            "reason": "task_in_failed_state",
+        },
+        {
+            "timestamp_ms": 5500,
+            "event_type": "task_skipped",
+            "severity": "warning",
+            "fault_type": "task_crash",
+            "task": "NetworkTask",
+            "reason": "task_in_failed_state",
+        },
+        {
+            "timestamp_ms": 5750,
+            "event_type": "task_skipped",
+            "severity": "warning",
+            "fault_type": "task_crash",
+            "task": "NetworkTask",
+            "reason": "task_in_failed_state",
+        },
+    ]
+
+    report = analyze_anomaly_windows(events, 5000)
+
+    assert report["overall_classification"] == "UNSTABLE"
+    assert report["anomaly_window_count"] >= 1
+    assert report["highest_score"] > 0
+    assert "task_failed_count" in report["top_overall_drivers"]

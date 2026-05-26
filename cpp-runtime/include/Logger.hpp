@@ -71,7 +71,7 @@ public:
         int extra_execution_time_ms
     );
     
-        void logFaultInjectedCpuSpike(
+    void logFaultInjectedCpuSpike(
         const std::string& target_task,
         int extra_execution_time_ms
     );
@@ -81,6 +81,23 @@ public:
         const std::string& target_task,
         const std::string& message_type,
         int sequence_id,
+        const std::string& reason
+    );
+    
+    void logFaultInjectedTaskCrash(
+        const std::string& target_task,
+        const std::string& reason
+    );
+    
+    void logTaskFailed(
+        const std::string& task_name,
+        const std::string& fault_type,
+        const std::string& reason
+    );
+    
+    void logTaskSkipped(
+        const std::string& task_name,
+        const std::string& fault_type,
         const std::string& reason
     );
 

@@ -242,3 +242,48 @@ def test_analyze_reports_cpu_spike_fault_as_unstable_when_deadlines_missed() -> 
     assert report["fault_counts"]["cpu_spike"] == 1
     assert report["task_metrics"]["NetworkTask"]["deadline_misses"] == 3
     assert "CPU-spike fault injection was active." in report["root_causes"]
+def test_analyze_reports_task_crash_as_unstable() -> None:
+    events = [
+        {
+            "timestamp_ms": 0,
+            "event_type": "runtime_started",
+            "severity": "info",
+            "simulation_name": "task_crash",
+            "scheduler_mode": "round_robin",
+            "duration_seconds": 30,
+        },
+        {
+            "timestamp_ms": 5000,
+            "event_type": "fault_injected",
+            "severity": "error",
+            "fault_type": "task_crash",
+            "target_task": "NetworkTask",
+            "reason": "simulated_task_crash",
+        },
+        {
+            "timestamp_ms": 5000,
+            "event_type": "task_failed",
+            "severity": "error",
+            "fault_type": "task_crash",
+            "task": "NetworkTask",
+            "reason": "simulated_task_crash",
+        },
+        {
+            "timestamp_ms": 5250,
+            "event_type": "task_skipped",
+            "severity": "warning",
+            "fault_type": "task_crash",
+            "task": "NetworkTask",
+            "reason": "task_in_failed_state",
+        },
+    ]
+
+    report = analyze(events)
+
+    assert report["status"] == "UNSTABLE"
+    assert report["fault_counts"]["task_crash"] == 1
+    assert report["event_counts"]["task_failed"] == 1
+    assert report["event_counts"]["task_skipped"] == 1
+    assert report["failed_tasks"]["NetworkTask"] == 1
+    assert report["skipped_tasks"]["NetworkTask"] == 1
+    assert "Task-crash fault injection was active." in report["root_causes"]

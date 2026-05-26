@@ -52,7 +52,15 @@ services:
     command: ./cpp-runtime/build/minirtos_runtime --config configs/cpu_spike.json
     volumes:
       - ./logs:/app/logs
-
+    
+  runtime-task-crash:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.runtime
+    container_name: minirtos-runtime-task-crash
+    command: ./cpp-runtime/build/minirtos_runtime --config configs/task_crash.json
+    volumes:
+      - ./logs:/app/logs
   runtime-slow-task:
     build:
       context: .

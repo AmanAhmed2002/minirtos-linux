@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+#include <set>
+
 class Scheduler {
 public:
     Scheduler(
@@ -33,6 +35,8 @@ private:
     void runEarliestDeadlineFirst();
 
     void executeTask(Task& task, Task::TimePoint now);
+     
+    bool handleTaskCrashIfNeeded(Task& task, Task::TimePoint now);
 
     void handleTaskMessaging(const Task& task);
 
@@ -62,4 +66,5 @@ private:
     Watchdog watchdog_;
     Task::TimePoint scheduler_start_time_;
     int next_message_sequence_id_;
+    std::set<std::string> failed_tasks_;
 };

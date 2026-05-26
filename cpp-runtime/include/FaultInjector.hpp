@@ -22,11 +22,15 @@ public:
         long timestamp_ms
     ) const;
     
-        bool shouldCpuSpikeTask(
+    bool shouldCpuSpikeTask(
         const std::string& task_name,
         long timestamp_ms
     ) const;
-
+    
+    bool shouldCrashTask(
+        const std::string& task_name,
+        long timestamp_ms
+    ) const;
     int cpuSpikeExtraExecutionTimeMs(
         const std::string& task_name,
         long timestamp_ms

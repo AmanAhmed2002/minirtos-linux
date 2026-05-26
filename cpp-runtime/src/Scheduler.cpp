@@ -9,6 +9,8 @@
 #include <stdexcept>
 #include <thread>
 #include <utility>
+#include <set>
+
 
 Scheduler::Scheduler(
     std::string mode,
@@ -190,14 +192,63 @@ void Scheduler::runEarliestDeadlineFirst() {
     }
 }
 
-void Scheduler::executeTask(Task& task, Task::TimePoint now) {
+bool Scheduler::handleTaskCrashIfNeeded(Task& task, Task::TimePoint now) {
     const long timestamp_ms = elapsedMs(scheduler_start_time_);
 
-        const int slow_task_extra_execution_time_ms =
-        fault_injector_.extraExecutionTimeMs(
+    if (failed_tasks_.count(task.name()) > 0) {
+        std::cout << "[WARN] Task skipped"
+                  << " task=" << task.name()
+                  << " fault_type=task_crash"
+                  << " reason=task_in_failed_state"
+                  << std::endl;
+
+        logger_.logTaskSkipped(
             task.name(),
-            timestamp_ms
+            "task_crash",
+            "task_in_failed_state"
         );
+
+        task.skip(now);
+        return true;
+    }
+
+    if (!fault_injector_.shouldCrashTask(task.name(), timestamp_ms)) {
+        return false;
+    }
+
+    failed_tasks_.insert(task.name());
+
+    std::cout << "[ERROR] Fault injected type=task_crash"
+              << " target_task=" << task.name()
+              << " reason=simulated_task_crash"
+              << std::endl;
+
+    logger_.logFaultInjectedTaskCrash(
+        task.name(),
+        "simulated_task_crash"
+    );
+
+    logger_.logTaskFailed(
+        task.name(),
+        "task_crash",
+        "simulated_task_crash"
+    );
+
+    task.skip(now);
+    return true;
+}
+
+void Scheduler::executeTask(Task& task, Task::TimePoint now) {
+    if (handleTaskCrashIfNeeded(task, now)) {
+        return; 
+    }
+    const long timestamp_ms = elapsedMs(scheduler_start_time_);
+
+    const int slow_task_extra_execution_time_ms =
+         fault_injector_.extraExecutionTimeMs(
+             task.name(),
+             timestamp_ms
+         );
 
     const int cpu_spike_extra_execution_time_ms =
         fault_injector_.cpuSpikeExtraExecutionTimeMs(

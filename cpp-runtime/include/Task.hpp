@@ -15,6 +15,7 @@ public:
     bool shouldRun(TimePoint now) const;
     TimePoint absoluteDeadline() const;
     void run(TimePoint now, int extra_execution_time_ms = 0);
+    void skip(TimePoint now);
 
     const std::string& name() const;
     int periodMs() const;

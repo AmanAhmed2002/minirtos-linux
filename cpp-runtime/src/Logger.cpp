@@ -219,6 +219,62 @@ void Logger::logFaultInjectedCpuSpike(
     writeLine(line.str());
 }
 
+void Logger::logFaultInjectedTaskCrash(
+    const std::string& target_task,
+    const std::string& reason
+) {
+    std::ostringstream line;
+
+    line << "{"
+         << "\"timestamp_ms\":" << timestampMs() << ","
+         << "\"event_type\":\"fault_injected\","
+         << "\"severity\":\"error\","
+         << "\"fault_type\":\"task_crash\","
+         << "\"target_task\":\"" << escapeJsonString(target_task) << "\","
+         << "\"reason\":\"" << escapeJsonString(reason) << "\""
+         << "}";
+
+    writeLine(line.str());
+}
+
+void Logger::logTaskFailed(
+    const std::string& task_name,
+    const std::string& fault_type,
+    const std::string& reason
+) {
+    std::ostringstream line;
+
+    line << "{"
+         << "\"timestamp_ms\":" << timestampMs() << ","
+         << "\"event_type\":\"task_failed\","
+         << "\"severity\":\"error\","
+         << "\"fault_type\":\"" << escapeJsonString(fault_type) << "\","
+         << "\"task\":\"" << escapeJsonString(task_name) << "\","
+         << "\"reason\":\"" << escapeJsonString(reason) << "\""
+         << "}";
+
+    writeLine(line.str());
+}
+
+void Logger::logTaskSkipped(
+    const std::string& task_name,
+    const std::string& fault_type,
+    const std::string& reason
+) {
+    std::ostringstream line;
+
+    line << "{"
+         << "\"timestamp_ms\":" << timestampMs() << ","
+         << "\"event_type\":\"task_skipped\","
+         << "\"severity\":\"warning\","
+         << "\"fault_type\":\"" << escapeJsonString(fault_type) << "\","
+         << "\"task\":\"" << escapeJsonString(task_name) << "\","
+         << "\"reason\":\"" << escapeJsonString(reason) << "\""
+         << "}";
+
+    writeLine(line.str());
+}
+
 void Logger::logFaultInjectedDroppedMessage(
     const std::string& source_task,
     const std::string& target_task,

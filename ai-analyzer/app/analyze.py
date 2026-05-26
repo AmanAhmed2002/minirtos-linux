@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
         default="logs/runtime_logs.jsonl",
         help="Path to the JSONL runtime log file. Default: logs/runtime_logs.jsonl",
     )
-    
+
     parser.add_argument(
         "--window-ms",
         type=int,
@@ -152,6 +152,12 @@ def classify_health(
         for metrics in task_metrics.values()
     )
 
+    if event_counts["task_failed"] > 0:
+        return "UNSTABLE"
+
+    if event_counts["task_skipped"] > 0:
+        return "UNSTABLE"
+
     if event_counts["watchdog_timeout"] > 0:
         return "UNSTABLE"
 
@@ -183,6 +189,8 @@ def collect_root_causes(
     drop_reason_counts: Counter[str],
     watchdog_tasks: Counter[str],
     recovered_tasks: Counter[str],
+    failed_tasks: Counter[str],
+    skipped_tasks: Counter[str],
 ) -> list[str]:
     causes: list[str] = []
 
@@ -196,18 +204,21 @@ def collect_root_causes(
 
     if fault_counts["slow_task"] > 0:
         causes.append("Slow-task fault injection was active.")
-    
+
     if fault_counts["cpu_spike"] > 0:
         causes.append("CPU-spike fault injection was active.")
-    
+
     if fault_counts["dropped_messages"] > 0:
         causes.append("Dropped-message fault injection was active.")
-    
+
+    if fault_counts["task_crash"] > 0:
+        causes.append("Task-crash fault injection was active.")
+
     if drop_reason_counts["queue_full"] > 0:
         causes.append(
             "One or more task queues became full, causing queue_full message drops."
         )
-    
+
     if drop_reason_counts["fault_injected_drop"] > 0:
         causes.append(
             "Fault injection intentionally dropped messages before enqueue."
@@ -221,6 +232,16 @@ def collect_root_causes(
     for task_name, count in sorted(recovered_tasks.items()):
         causes.append(
             f"Simulated recovery ran for {task_name} {count} time(s)."
+        )
+
+    for task_name, count in sorted(failed_tasks.items()):
+        causes.append(
+            f"{task_name} failed due to simulated task crash {count} time(s)."
+        )
+
+    for task_name, count in sorted(skipped_tasks.items()):
+        causes.append(
+            f"{task_name} was skipped because it remained in a failed state {count} time(s)."
         )
 
     if not causes and status == "NORMAL":
@@ -267,6 +288,18 @@ def analyze(events: list[Event]) -> dict[str, Any]:
         if event.get("event_type") == "task_recovered"
     )
 
+    failed_tasks: Counter[str] = Counter(
+        str(event.get("task", "unknown"))
+        for event in events
+        if event.get("event_type") == "task_failed"
+    )
+
+    skipped_tasks: Counter[str] = Counter(
+        str(event.get("task", "unknown"))
+        for event in events
+        if event.get("event_type") == "task_skipped"
+    )
+
     task_metrics = collect_task_metrics(events)
 
     status = classify_health(
@@ -283,6 +316,8 @@ def analyze(events: list[Event]) -> dict[str, Any]:
         drop_reason_counts=drop_reason_counts,
         watchdog_tasks=watchdog_tasks,
         recovered_tasks=recovered_tasks,
+        failed_tasks=failed_tasks,
+        skipped_tasks=skipped_tasks,
     )
 
     timestamps = [
@@ -309,6 +344,8 @@ def analyze(events: list[Event]) -> dict[str, Any]:
         "drop_reason_counts": drop_reason_counts,
         "watchdog_tasks": watchdog_tasks,
         "recovered_tasks": recovered_tasks,
+        "failed_tasks": failed_tasks,
+        "skipped_tasks": skipped_tasks,
         "task_metrics": task_metrics,
         "status": status,
         "root_causes": root_causes,
@@ -402,6 +439,21 @@ def print_report(log_path: Path, events: list[Event], report: dict[str, Any]) ->
     if report["recovered_tasks"]:
         print("  recovered_tasks:")
         for task_name, count in sorted(report["recovered_tasks"].items()):
+            print(f"    - {task_name}: {count}")
+
+    print()
+    print("Task failure summary:")
+    print(f"  task_failures: {report['event_counts']['task_failed']}")
+    print(f"  task_skips: {report['event_counts']['task_skipped']}")
+
+    if report["failed_tasks"]:
+        print("  failed_tasks:")
+        for task_name, count in sorted(report["failed_tasks"].items()):
+            print(f"    - {task_name}: {count}")
+
+    if report["skipped_tasks"]:
+        print("  skipped_tasks:")
+        for task_name, count in sorted(report["skipped_tasks"].items()):
             print(f"    - {task_name}: {count}")
 
     print()

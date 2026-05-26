@@ -45,6 +45,10 @@ void Task::run(TimePoint now, int extra_execution_time_ms) {
     next_run_time_ = now + std::chrono::milliseconds(period_ms_);
 }
 
+void Task::skip(TimePoint now) {
+    next_run_time_ = now + std::chrono::milliseconds(period_ms_);
+}
+
 const std::string& Task::name() const {
     return name_;
 }

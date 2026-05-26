@@ -53,6 +53,16 @@ int FaultInjector::cpuSpikeExtraExecutionTimeMs(
     return config_.extra_execution_time_ms;
 }
 
+bool FaultInjector::shouldCrashTask(
+    const std::string& task_name,
+    long timestamp_ms
+) const {
+    return config_.enabled &&
+           config_.type == "task_crash" &&
+           config_.target_task == task_name &&
+           hasStarted(timestamp_ms);
+}
+
 bool FaultInjector::shouldDropMessage(
     const Message& message,
     long timestamp_ms

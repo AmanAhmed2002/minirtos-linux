@@ -282,6 +282,49 @@ TEST(SchedulerTest, EarliestDeadlineFirstModePreservesConfigOrderWhenDeadlineAnd
     EXPECT_EQ(task_order[2], "ThirdTask");
 }
 
+TEST(SchedulerTest, TaskCrashFaultLogsFailureAndSkipsTask) {
+    const std::string log_path = "logs/test_scheduler_task_crash.jsonl";
+    std::filesystem::remove(log_path);
+
+    FaultConfig fault_config;
+    fault_config.enabled = true;
+    fault_config.type = "task_crash";
+    fault_config.target_task = "NetworkTask";
+    fault_config.start_after_ms = 0;
+
+    WatchdogConfig watchdog_config;
+
+    std::vector<TaskConfig> configs{
+        makeTaskConfig("ControlTask", 1, 80, 100),
+        makeTaskConfig("NetworkTask", 2, 200, 100),
+        makeTaskConfig("LoggerTask", 3, 400, 100)
+    };
+
+    {
+        Logger logger(log_path);
+
+        Scheduler scheduler(
+            "round_robin",
+            1,
+            makeTasks(configs),
+            logger,
+            fault_config,
+            watchdog_config
+        );
+
+        scheduler.run();
+    }
+
+    const std::string log_contents = readFile(log_path);
+
+    EXPECT_NE(log_contents.find("\"event_type\":\"fault_injected\""), std::string::npos);
+    EXPECT_NE(log_contents.find("\"fault_type\":\"task_crash\""), std::string::npos);
+    EXPECT_NE(log_contents.find("\"event_type\":\"task_failed\""), std::string::npos);
+    EXPECT_NE(log_contents.find("\"event_type\":\"task_skipped\""), std::string::npos);
+    EXPECT_NE(log_contents.find("\"reason\":\"simulated_task_crash\""), std::string::npos);
+    EXPECT_NE(log_contents.find("\"reason\":\"task_in_failed_state\""), std::string::npos);
+}
+
 TEST(SchedulerTest, InvalidSchedulerModeThrowsRuntimeError) {
     const std::string log_path = "logs/test_scheduler_invalid_mode.jsonl";
     std::filesystem::remove(log_path);

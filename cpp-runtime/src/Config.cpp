@@ -41,10 +41,10 @@ void validateFaultConfig(const FaultConfig& faults) {
         return;
     }
 
-    if (faults.type != "slow_task" && faults.type != "dropped_messages" && faults.type != "cpu_spike") {
+    if (faults.type != "slow_task" && faults.type != "dropped_messages" && faults.type != "cpu_spike" && faults.type != "task_crash") {
         throw std::runtime_error(
             "Unsupported fault type: " + faults.type +
-            ". Supported fault types are slow_task and dropped_messages, and cpu_spike"
+            ". Supported fault types are slow_task and dropped_messages, and cpu_spike, and task_crash."
         );
     }
 

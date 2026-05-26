@@ -46,6 +46,10 @@ run_and_analyze \
     "CPU spike fault scenario" \
     "configs/cpu_spike.json" \
     "logs/cpu_spike_runtime_logs.jsonl"
+run_and_analyze \
+    "task crash fault scenario" \
+    "configs/task_crash.json" \
+    "logs/task_crash_runtime_logs.jsonl"
 
 run_and_analyze \
     "slow task fault scenario" \

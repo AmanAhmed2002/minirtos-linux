@@ -20,6 +20,8 @@ FEATURE_NAMES = [
     "queue_full_drop_count",
     "fault_injected_drop_count",
     "fault_injected_count",
+    "task_failed_count",
+    "task_skipped_count",
     "watchdog_timeout_count",
     "task_recovered_count",
     "error_event_count",
@@ -137,7 +139,12 @@ def extract_features(window_events: list[Event]) -> dict[str, float]:
 
         elif event_type == "fault_injected":
             features["fault_injected_count"] += 1
+        
+        elif event_type == "task_failed":
+           features["task_failed_count"] += 1
 
+        elif event_type == "task_skipped":
+            features["task_skipped_count"] += 1
         elif event_type == "watchdog_timeout":
             features["watchdog_timeout_count"] += 1
 
@@ -155,6 +162,8 @@ def extract_features(window_events: list[Event]) -> dict[str, float]:
 
 def score_features(features: dict[str, float]) -> tuple[float, list[str]]:
     weighted_rules = [
+        ("task_failed_count", 0.45, 1.0),
+        ("task_skipped_count", 0.30, 3.0),
         ("watchdog_timeout_count", 0.35, 1.0),
         ("task_recovered_count", 0.25, 1.0),
         ("deadline_missed_count", 0.25, 3.0),
@@ -198,6 +207,12 @@ def score_features(features: dict[str, float]) -> tuple[float, list[str]]:
 
 
 def classify_score(score: float, features: dict[str, float]) -> str:
+    if features.get("task_failed_count", 0) > 0:
+        return "UNSTABLE"
+
+    if features.get("task_skipped_count", 0) >= 3:
+        return "UNSTABLE"
+    
     if features.get("watchdog_timeout_count", 0) > 0:
         return "UNSTABLE"
 
