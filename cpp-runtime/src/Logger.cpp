@@ -201,6 +201,24 @@ void Logger::logFaultInjectedSlowTask(
     writeLine(line.str());
 }
 
+void Logger::logFaultInjectedCpuSpike(
+    const std::string& target_task,
+    int extra_execution_time_ms
+) {
+    std::ostringstream line;
+
+    line << "{"
+         << "\"timestamp_ms\":" << timestampMs() << ","
+         << "\"event_type\":\"fault_injected\","
+         << "\"severity\":\"warning\","
+         << "\"fault_type\":\"cpu_spike\","
+         << "\"target_task\":\"" << escapeJsonString(target_task) << "\","
+         << "\"extra_execution_time_ms\":" << extra_execution_time_ms
+         << "}";
+
+    writeLine(line.str());
+}
+
 void Logger::logFaultInjectedDroppedMessage(
     const std::string& source_task,
     const std::string& target_task,

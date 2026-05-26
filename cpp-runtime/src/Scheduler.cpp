@@ -193,21 +193,42 @@ void Scheduler::runEarliestDeadlineFirst() {
 void Scheduler::executeTask(Task& task, Task::TimePoint now) {
     const long timestamp_ms = elapsedMs(scheduler_start_time_);
 
-    const int extra_execution_time_ms =
+        const int slow_task_extra_execution_time_ms =
         fault_injector_.extraExecutionTimeMs(
             task.name(),
             timestamp_ms
         );
 
-    if (extra_execution_time_ms > 0) {
+    const int cpu_spike_extra_execution_time_ms =
+        fault_injector_.cpuSpikeExtraExecutionTimeMs(
+            task.name(),
+            timestamp_ms
+        );
+
+    const int extra_execution_time_ms =
+        slow_task_extra_execution_time_ms + cpu_spike_extra_execution_time_ms;
+
+    if (slow_task_extra_execution_time_ms > 0) {
         std::cout << "[WARN] Fault injected type=slow_task"
                   << " target_task=" << task.name()
-                  << " extra_execution_time_ms=" << extra_execution_time_ms
+                  << " extra_execution_time_ms=" << slow_task_extra_execution_time_ms
                   << std::endl;
 
         logger_.logFaultInjectedSlowTask(
             task.name(),
-            extra_execution_time_ms
+            slow_task_extra_execution_time_ms
+        );
+    }
+
+    if (cpu_spike_extra_execution_time_ms > 0) {
+        std::cout << "[WARN] Fault injected type=cpu_spike"
+                  << " target_task=" << task.name()
+                  << " extra_execution_time_ms=" << cpu_spike_extra_execution_time_ms
+                  << std::endl;
+
+        logger_.logFaultInjectedCpuSpike(
+            task.name(),
+            cpu_spike_extra_execution_time_ms
         );
     }
 

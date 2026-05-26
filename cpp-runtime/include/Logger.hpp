@@ -70,6 +70,11 @@ public:
         const std::string& target_task,
         int extra_execution_time_ms
     );
+    
+        void logFaultInjectedCpuSpike(
+        const std::string& target_task,
+        int extra_execution_time_ms
+    );
 
     void logFaultInjectedDroppedMessage(
         const std::string& source_task,

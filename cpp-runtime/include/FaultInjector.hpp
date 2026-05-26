@@ -21,6 +21,16 @@ public:
         const std::string& task_name,
         long timestamp_ms
     ) const;
+    
+        bool shouldCpuSpikeTask(
+        const std::string& task_name,
+        long timestamp_ms
+    ) const;
+
+    int cpuSpikeExtraExecutionTimeMs(
+        const std::string& task_name,
+        long timestamp_ms
+    ) const;
 
     bool shouldDropMessage(
         const Message& message,

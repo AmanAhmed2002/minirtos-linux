@@ -41,10 +41,10 @@ void validateFaultConfig(const FaultConfig& faults) {
         return;
     }
 
-    if (faults.type != "slow_task" && faults.type != "dropped_messages") {
+    if (faults.type != "slow_task" && faults.type != "dropped_messages" && faults.type != "cpu_spike") {
         throw std::runtime_error(
             "Unsupported fault type: " + faults.type +
-            ". Supported fault types are slow_task and dropped_messages."
+            ". Supported fault types are slow_task and dropped_messages, and cpu_spike"
         );
     }
 
@@ -56,9 +56,12 @@ void validateFaultConfig(const FaultConfig& faults) {
         throw std::runtime_error("Fault config start_after_ms cannot be negative");
     }
 
-    if (faults.type == "slow_task" && faults.extra_execution_time_ms <= 0) {
+    if (
+        (faults.type == "slow_task" || faults.type == "cpu_spike") &&
+        faults.extra_execution_time_ms <= 0
+    ) {
         throw std::runtime_error(
-            "slow_task fault requires extra_execution_time_ms greater than 0"
+            faults.type + " fault requires extra_execution_time_ms greater than 0"
         );
     }
 

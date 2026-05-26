@@ -196,15 +196,18 @@ def collect_root_causes(
 
     if fault_counts["slow_task"] > 0:
         causes.append("Slow-task fault injection was active.")
-
+    
+    if fault_counts["cpu_spike"] > 0:
+        causes.append("CPU-spike fault injection was active.")
+    
     if fault_counts["dropped_messages"] > 0:
         causes.append("Dropped-message fault injection was active.")
-
+    
     if drop_reason_counts["queue_full"] > 0:
         causes.append(
             "One or more task queues became full, causing queue_full message drops."
         )
-
+    
     if drop_reason_counts["fault_injected_drop"] > 0:
         causes.append(
             "Fault injection intentionally dropped messages before enqueue."

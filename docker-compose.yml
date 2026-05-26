@@ -44,6 +44,15 @@ services:
     volumes:
       - ./logs:/app/logs
 
+  runtime-cpu-spike:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.runtime
+    container_name: minirtos-runtime-cpu-spike
+    command: ./cpp-runtime/build/minirtos_runtime --config configs/cpu_spike.json
+    volumes:
+      - ./logs:/app/logs
+
   runtime-slow-task:
     build:
       context: .

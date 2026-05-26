@@ -32,6 +32,27 @@ int FaultInjector::extraExecutionTimeMs(
     return config_.extra_execution_time_ms;
 }
 
+bool FaultInjector::shouldCpuSpikeTask(
+    const std::string& task_name,
+    long timestamp_ms
+) const {
+    return config_.enabled &&
+           config_.type == "cpu_spike" &&
+           config_.target_task == task_name &&
+           hasStarted(timestamp_ms);
+}
+
+int FaultInjector::cpuSpikeExtraExecutionTimeMs(
+    const std::string& task_name,
+    long timestamp_ms
+) const {
+    if (!shouldCpuSpikeTask(task_name, timestamp_ms)) {
+        return 0;
+    }
+
+    return config_.extra_execution_time_ms;
+}
+
 bool FaultInjector::shouldDropMessage(
     const Message& message,
     long timestamp_ms

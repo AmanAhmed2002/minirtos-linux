@@ -184,3 +184,61 @@ def test_analyze_counts_message_drop_reasons() -> None:
     assert report["event_counts"]["message_dropped"] == 2
     assert report["drop_reason_counts"]["queue_full"] == 1
     assert report["drop_reason_counts"]["fault_injected_drop"] == 1
+
+
+def test_analyze_reports_cpu_spike_fault_as_unstable_when_deadlines_missed() -> None:
+    events = [
+        {
+            "timestamp_ms": 0,
+            "event_type": "runtime_started",
+            "severity": "info",
+            "simulation_name": "cpu_spike",
+            "scheduler_mode": "round_robin",
+            "duration_seconds": 30,
+        },
+        {
+            "timestamp_ms": 5000,
+            "event_type": "fault_injected",
+            "severity": "warning",
+            "fault_type": "cpu_spike",
+            "target_task": "NetworkTask",
+            "extra_execution_time_ms": 220,
+        },
+        {
+            "timestamp_ms": 5010,
+            "event_type": "task_completed",
+            "severity": "warning",
+            "task": "NetworkTask",
+            "observed_duration_ms": 240,
+            "run_count": 1,
+            "deadline_miss_count": 1,
+            "deadline_missed": True,
+        },
+        {
+            "timestamp_ms": 5260,
+            "event_type": "task_completed",
+            "severity": "warning",
+            "task": "NetworkTask",
+            "observed_duration_ms": 240,
+            "run_count": 2,
+            "deadline_miss_count": 2,
+            "deadline_missed": True,
+        },
+        {
+            "timestamp_ms": 5520,
+            "event_type": "task_completed",
+            "severity": "warning",
+            "task": "NetworkTask",
+            "observed_duration_ms": 240,
+            "run_count": 3,
+            "deadline_miss_count": 3,
+            "deadline_missed": True,
+        },
+    ]
+
+    report = analyze(events)
+
+    assert report["status"] == "UNSTABLE"
+    assert report["fault_counts"]["cpu_spike"] == 1
+    assert report["task_metrics"]["NetworkTask"]["deadline_misses"] == 3
+    assert "CPU-spike fault injection was active." in report["root_causes"]

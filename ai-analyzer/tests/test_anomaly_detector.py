@@ -195,3 +195,52 @@ def test_analyze_anomaly_windows_detects_unstable_window() -> None:
     assert report["anomaly_window_count"] >= 1
     assert report["highest_score"] > 0
     assert "watchdog_timeout_count" in report["top_overall_drivers"]
+def test_analyze_anomaly_windows_detects_cpu_spike_timing_pressure() -> None:
+    events = [
+        {
+            "timestamp_ms": 0,
+            "event_type": "task_completed",
+            "severity": "info",
+            "observed_duration_ms": 20,
+            "deadline_missed": False,
+        },
+        {
+            "timestamp_ms": 5000,
+            "event_type": "fault_injected",
+            "severity": "warning",
+            "fault_type": "cpu_spike",
+            "target_task": "NetworkTask",
+            "extra_execution_time_ms": 220,
+        },
+        {
+            "timestamp_ms": 5100,
+            "event_type": "task_completed",
+            "severity": "warning",
+            "task": "NetworkTask",
+            "observed_duration_ms": 240,
+            "deadline_missed": True,
+        },
+        {
+            "timestamp_ms": 5350,
+            "event_type": "task_completed",
+            "severity": "warning",
+            "task": "NetworkTask",
+            "observed_duration_ms": 240,
+            "deadline_missed": True,
+        },
+        {
+            "timestamp_ms": 5600,
+            "event_type": "task_completed",
+            "severity": "warning",
+            "task": "NetworkTask",
+            "observed_duration_ms": 240,
+            "deadline_missed": True,
+        },
+    ]
+
+    report = analyze_anomaly_windows(events, 5000)
+
+    assert report["overall_classification"] == "UNSTABLE"
+    assert report["anomaly_window_count"] >= 1
+    assert report["highest_score"] > 0
+    assert "deadline_missed_count" in report["top_overall_drivers"]

@@ -43,6 +43,11 @@ run_and_analyze \
     "logs/queue_overflow_runtime_logs.jsonl"
 
 run_and_analyze \
+    "CPU spike fault scenario" \
+    "configs/cpu_spike.json" \
+    "logs/cpu_spike_runtime_logs.jsonl"
+
+run_and_analyze \
     "slow task fault scenario" \
     "configs/slow_task.json" \
     "logs/slow_task_runtime_logs.jsonl"
