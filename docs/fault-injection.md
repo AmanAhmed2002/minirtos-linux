@@ -2,9 +2,9 @@
 
 ## 1. Purpose
 
-MiniRTOS-Linux includes configurable fault injection so unhealthy runtime behavior can be reproduced, logged, analyzed, and benchmarked.
+MiniRTOS-Linux includes configurable fault injection so unhealthy runtime behavior can be reproduced, logged, analyzed, benchmarked, and used as synthetic training data for the ML classifier.
 
-Fault injection is important because it turns the simulator from a basic runtime demo into a resilience and observability project. It allows the runtime to generate meaningful failure telemetry such as deadline misses, dropped messages, watchdog timeouts, and simulated recovery events.
+Fault injection turns the simulator from a basic runtime demo into a resilience and observability project. It generates meaningful telemetry such as deadline misses, dropped messages, watchdog timeouts, simulated recovery events, task failures, and skipped-task events.
 
 ---
 
@@ -24,26 +24,31 @@ cpp-runtime/include/Config.hpp
 cpp-runtime/src/Config.cpp
 cpp-runtime/include/Scheduler.hpp
 cpp-runtime/src/Scheduler.cpp
-configs/priority_scheduler.json
-configs/slow_task.json
-configs/dropped_messages.json
-configs/watchdog_slow_task.json
-scripts/run_fault.sh
-scripts/run_watchdog.sh
+ai-analyzer/app/analyze.py
+ai-analyzer/app/anomaly_detector.py
+ai-analyzer/training/generate_dataset.py
+ai-analyzer/ml/train_model.py
+ai-analyzer/ml/predict_model.py
 ```
 
 ---
 
 ## 3. Supported Fault Types
 
-Fault injection works with the current scheduler modes: `round_robin`, `priority`, and `earliest_deadline_first`. The scheduler mode controls the order of due task execution, while the fault injector controls whether configured runtime faults are applied to matching tasks or messages.
+Fault injection works with the current scheduler modes:
 
-| Fault Type | Description | Main Runtime Impact |
-|---|---|---|
-| `slow_task` | Adds extra execution time to a selected task after a configured time. | Deadline misses, unstable task timing, possible watchdog timeouts. |
-| `cpu_spike` | Adds simulated CPU-load delay to a selected task after a configured time. | Increased task duration, deadline misses, unstable timing windows. |
-| `task_crash` | Simulates a target task entering a failed state after a configured time. | `task_failed`, `task_skipped`, unstable runtime health, and failure telemetry without terminating the real process. |
-| `dropped_messages` | Drops matching messages after a configured time using a configured probability. | Message reliability degradation and `message_dropped` telemetry. |
+```text
+round_robin
+priority
+earliest_deadline_first
+```
+
+| Fault Type | Description | Main Runtime Impact | Dataset/ML Label |
+|---|---|---|---|
+| `slow_task` | Adds extra execution time to a selected task after a configured time. | Deadline misses, unstable task timing, possible watchdog timeouts. | `SLOW_TASK` |
+| `cpu_spike` | Adds simulated CPU-load delay to a selected task after a configured time. | Increased task duration, deadline misses, unstable timing windows. | `CPU_SPIKE` |
+| `task_crash` | Simulates a target task entering a failed state after a configured time. | `task_failed`, `task_skipped`, unstable runtime health. | `TASK_CRASH` |
+| `dropped_messages` | Drops matching messages after a configured time using a configured probability. | Message reliability degradation and `message_dropped` telemetry. | `DROPPED_MESSAGES` |
 
 ---
 
@@ -67,10 +72,10 @@ Common JSON fields:
 | Field | Purpose |
 |---|---|
 | `enabled` | Turns fault injection on or off. |
-| `type` | Selects the fault type, such as `slow_task`, `cpu_spike`, `task_crash`, or `dropped_messages`. |
+| `type` | Selects the fault type. |
 | `target_task` | Selects the affected task or message target. |
 | `start_after_ms` | Delays fault activation until the runtime has passed this timestamp. |
-| `extra_execution_time_ms` | Adds simulated execution time for `slow_task`. |
+| `extra_execution_time_ms` | Adds simulated execution time for timing faults. |
 | `drop_probability_percent` | Controls probability of message drops for `dropped_messages`. |
 
 ---
@@ -79,16 +84,7 @@ Common JSON fields:
 
 The `slow_task` fault simulates a task taking longer than expected.
 
-Example behavior:
-
-1. Runtime starts normally.
-2. The configured start time is reached.
-3. The configured target task begins receiving extra simulated execution time.
-4. Task duration increases.
-5. If duration exceeds deadline, deadline misses are logged.
-6. Analyzer classifies repeated deadline misses as unhealthy.
-
-Example scenario command:
+Command:
 
 ```bash
 ./scripts/run_fault.sh configs/slow_task.json
@@ -102,28 +98,17 @@ task_completed
 runtime_summary
 ```
 
-Expected task-level impact:
+Expected analyzer behavior:
 
 ```text
-ControlTask deadline misses increase
-ControlTask average duration increases
-ControlTask max duration increases
+Runtime status: UNSTABLE
 ```
 
-Expected analyzer classification:
+Expected ML label after dataset generation:
 
 ```text
-UNSTABLE
+SLOW_TASK
 ```
-
-Phase 13 benchmark result:
-
-```text
-ControlTask produced 174 deadline misses in the slow task fault scenario.
-```
-
----
-
 
 ---
 
@@ -131,9 +116,7 @@ ControlTask produced 174 deadline misses in the slow task fault scenario.
 
 The `cpu_spike` fault simulates CPU-load pressure on a selected task.
 
-Unlike `dropped_messages`, this fault affects task timing rather than message reliability. It is similar to `slow_task` in that it increases simulated execution time, but it is logged separately as `fault_type=cpu_spike` so the analyzer and documentation can distinguish CPU-load pressure from a generic slow-task fault.
-
-Example scenario command:
+Command:
 
 ```bash
 ./scripts/run_fault.sh configs/cpu_spike.json
@@ -145,15 +128,7 @@ Equivalent direct command:
 ./cpp-runtime/build/minirtos_runtime --config configs/cpu_spike.json
 ```
 
-Expected event types:
-
-```text
-fault_injected
-task_completed
-runtime_summary
-```
-
-Expected fault telemetry:
+Expected telemetry:
 
 ```text
 fault_type=cpu_spike
@@ -168,29 +143,40 @@ Fault summary:
   cpu_spike: greater than 0
 ```
 
-If the injected CPU spike makes the observed task duration exceed the target task deadline, the run should also produce deadline-miss telemetry and may be classified as `UNSTABLE`.
+If the CPU spike makes the target task exceed its deadline, the run should classify as:
+
+```text
+UNSTABLE
+```
+
+Expected ML label:
+
+```text
+CPU_SPIKE
+```
+
 ---
 
 ## 7. Task Crash Fault
 
 The `task_crash` fault simulates a task failure without crashing the real runtime process.
 
-Example behavior:
-
-1. Runtime starts normally.
-2. The configured start time is reached.
-3. The configured target task enters a failed simulated state.
-4. The runtime logs `fault_injected` with `fault_type=task_crash`.
-5. The runtime logs `task_failed` for the first failure.
-6. Future due runs of that task are logged as `task_skipped`.
-7. The scheduler continues running the remaining tasks until the configured duration ends.
-8. The analyzer classifies the scenario as `UNSTABLE`.
-
-Example scenario command:
+Command:
 
 ```bash
 ./cpp-runtime/build/minirtos_runtime --config configs/task_crash.json
 ```
+
+Expected behavior:
+
+1. Runtime starts normally.
+2. Configured start time is reached.
+3. Target task enters a failed simulated state.
+4. Runtime logs `fault_injected` with `fault_type=task_crash`.
+5. Runtime logs `task_failed`.
+6. Future due runs of that task are logged as `task_skipped`.
+7. Scheduler continues running remaining tasks.
+8. Analyzer classifies the scenario as `UNSTABLE`.
 
 Expected event types:
 
@@ -199,15 +185,6 @@ fault_injected
 task_failed
 task_skipped
 runtime_summary
-```
-
-Expected fault telemetry:
-
-```text
-fault_type=task_crash
-task=NetworkTask
-reason=simulated_task_crash
-reason=task_in_failed_state
 ```
 
 Expected analyzer behavior:
@@ -221,21 +198,19 @@ Task failure summary:
   task_skips: greater than 0
 ```
 
+Expected ML label:
+
+```text
+TASK_CRASH
+```
+
+---
 
 ## 8. Dropped Messages Fault
 
 The `dropped_messages` fault simulates message-level reliability failures.
 
-Example behavior:
-
-1. Runtime starts normally.
-2. The configured start time is reached.
-3. Matching messages are evaluated by the fault injector.
-4. Some messages are dropped instead of being enqueued.
-5. The runtime logs fault injection and message-drop events.
-6. Analyzer reports message reliability degradation.
-
-Example scenario command:
+Command:
 
 ```bash
 ./scripts/run_fault.sh configs/dropped_messages.json
@@ -260,50 +235,41 @@ Expected analyzer classification:
 WARNING
 ```
 
-Reason:
+Expected ML label:
 
 ```text
-The system can remain schedulable while message reliability is degraded.
-```
-
-Phase 13 benchmark result:
-
-```text
-The dropped messages scenario produced 176 fault-injected message drops.
+DROPPED_MESSAGES
 ```
 
 ---
 
 ## 9. Queue-Full Drops vs Fault-Injected Drops
 
-MiniRTOS-Linux can produce two important message-drop categories.
+MiniRTOS-Linux separates two message-drop categories.
 
 | Drop Type | Cause | Meaning |
 |---|---|---|
 | `queue_full` | Target task queue reached its configured limit. | Bounded queue pressure. |
 | `fault_injected_drop` | Fault injector intentionally dropped a matching message. | Simulated message reliability fault. |
 
-This distinction is important because a queue-full drop is a capacity/throughput issue, while a fault-injected drop is a simulated reliability failure.
-
-The analyzer reports these separately.
+This distinction is important because queue pressure is a capacity issue, while fault-injected drops are reliability failures.
 
 ---
 
-
 ## 10. Dedicated Queue Overflow Scenario
 
-Phase 18 adds a dedicated queue-overflow scenario:
+Phase 18 added:
 
 ```text
 configs/queue_overflow.json
 ```
 
-This scenario is different from the `dropped_messages` fault. It does not intentionally drop messages through the fault injector. Instead, it stresses the bounded message bus by making producer tasks send messages faster than `LoggerTask` can consume them.
+This scenario does not intentionally drop messages through the fault injector. It stresses the bounded message bus by making producer tasks send messages faster than `LoggerTask` can consume them.
 
 Expected behavior:
 
 ```text
-message_dropped events appear with reason=queue_full
+message_dropped events with reason=queue_full
 fault_injected events remain 0
 fault_injected_drop events remain 0
 deadline misses should remain low or 0
@@ -315,32 +281,19 @@ Expected analyzer classification:
 WARNING
 ```
 
-Observed Phase 18 result:
+Expected ML label:
 
 ```text
-queue_full_drops: 958
-fault_injected_drops: 0
-deadline_misses: 0
-watchdog_timeouts: 0
+QUEUE_PRESSURE
 ```
 
-Reason:
-
-```text
-The runtime remains schedulable, but bounded queue capacity is exceeded.
-```
+---
 
 ## 11. Watchdog Fault Scenario
 
 The watchdog scenario combines slow-task behavior with watchdog monitoring.
 
 Command:
-
-```bash
-./scripts/run_watchdog.sh
-```
-
-Equivalent command:
 
 ```bash
 ./cpp-runtime/build/minirtos_runtime --config configs/watchdog_slow_task.json
@@ -363,55 +316,23 @@ watchdog_timeout
 task_recovered
 ```
 
-Phase 13 benchmark result:
+Expected ML label:
 
 ```text
-The watchdog scenario produced 22 watchdog timeout events and 22 task recovery events.
+WATCHDOG_RECOVERY
 ```
 
 ---
 
 ## 12. Run Fault Scenarios
 
-### Build First
-
 ```bash
 ./scripts/build_cpp.sh
-```
-
-### Run Slow Task Fault
-
-```bash
 ./scripts/run_fault.sh configs/slow_task.json
-```
-
-### Run CPU Spike Fault
-
-```bash
 ./scripts/run_fault.sh configs/cpu_spike.json
-```
-
-### Run Task Crash Fault
-
-```bash
 ./cpp-runtime/build/minirtos_runtime --config configs/task_crash.json
-```
-
-### Run Dropped Messages Fault
-
-```bash
 ./scripts/run_fault.sh configs/dropped_messages.json
-```
-
-### Run Watchdog Scenario
-
-```bash
-./scripts/run_watchdog.sh
-```
-
-### Analyze Latest Log
-
-```bash
+./cpp-runtime/build/minirtos_runtime --config configs/watchdog_slow_task.json
 ./scripts/run_analyzer.sh logs/runtime_logs.jsonl
 ```
 
@@ -448,62 +369,51 @@ logs/watchdog_runtime_logs.jsonl
 
 ---
 
-## 14. Expected Analyzer Results
+## 14. Fault Scenarios as ML Data Sources
 
-| Scenario | Expected Status | Reason |
-|---|---|---|
-| Normal | `WARNING` | Queue pressure causes queue-full message drops. |
-| Queue overflow | `WARNING` | Dedicated bounded-queue pressure causes queue-full drops without fault injection. |
-| Slow task | `UNSTABLE` | Repeated deadline misses from `slow_task`. |
-| CPU spike | `UNSTABLE` expected if deadline misses occur | Simulated CPU-load pressure increases target-task duration. |
-| Task crash | `UNSTABLE` | Simulated task failure creates `task_failed` and `task_skipped` telemetry. |
-| Dropped messages | `WARNING` | Message reliability degraded without deadline misses. |
-| Watchdog slow task | `UNSTABLE` | Repeated deadline misses trigger watchdog timeout and recovery telemetry. |
+After Phase 21 and Phase 22, fault scenarios also serve as labeled data sources.
+
+Dataset generation:
+
+```bash
+docker compose run --rm training-dataset
+```
+
+ML training:
+
+```bash
+docker compose run --rm ml-train
+```
+
+ML prediction:
+
+```bash
+docker compose run --rm ml-predict
+```
+
+Pipeline:
+
+```text
+fault scenario logs
+  -> synthetic_dataset.csv
+  -> RandomForestClassifier training
+  -> model artifact
+  -> prediction labels and confidence
+```
 
 ---
 
-## 15. Fault Logging Events
+## 15. Expected Analyzer Results
 
-### `fault_injected`
-
-Indicates a configured fault was applied.
-
-Useful metadata may include:
-
-- Fault type
-- Target task
-- Source task
-- Target task/message
-- Runtime timestamp
-- Extra execution time
-- Drop probability
-
-### `message_dropped`
-
-Indicates a message was dropped.
-
-Important reasons:
-
-```text
-queue_full
-fault_injected_drop
-```
-
-### `task_failed`
-
-Indicates a simulated task crash/failure was triggered for a target task.
-
-### `task_skipped`
-
-Indicates a previously failed simulated task was skipped instead of being executed.
-
-### `watchdog_timeout`
-
-Indicates repeated deadline misses reached the watchdog threshold.
-
-### `task_recovered`
-
-Indicates simulated recovery was logged after watchdog timeout.
+| Scenario | Expected Status | Expected ML Label |
+|---|---|---|
+| Normal | `WARNING` if queue pressure occurs | `NORMAL` |
+| Queue overflow | `WARNING` | `QUEUE_PRESSURE` |
+| Slow task | `UNSTABLE` | `SLOW_TASK` |
+| CPU spike | `UNSTABLE` expected if deadline misses occur | `CPU_SPIKE` |
+| Task crash | `UNSTABLE` | `TASK_CRASH` |
+| Dropped messages | `WARNING` | `DROPPED_MESSAGES` |
+| Watchdog slow task | `UNSTABLE` | `WATCHDOG_RECOVERY` |
 
 ---
 
@@ -513,11 +423,11 @@ Current fault injection is simulation-based.
 
 Limitations:
 
-- `task_crash` simulates a task failure but does not crash real threads or processes.
+- `task_crash` simulates failure but does not crash real threads or processes.
 - It does not simulate memory corruption.
 - It does not simulate corrupted message payloads yet.
-- Recovery is currently logged rather than implemented as a true process restart.
-- The scheduler currently supports round-robin, priority, and earliest-deadline-first modes.
+- Recovery is logged rather than implemented as a real process restart.
+- ML labels are scenario-derived from synthetic logs.
 
 ---
 
@@ -525,12 +435,14 @@ Limitations:
 
 Recommended future fault modes:
 
-1. `corrupted_message`
-5. `missed_heartbeat`
-6. `random_latency`
-7. `network_partition`
+```text
+corrupted_message
+missed_heartbeat
+random_latency
+network_partition
+```
 
-Recommended future configs:
+Recommended future config:
 
 ```text
 configs/corrupted_message.json
@@ -544,42 +456,7 @@ configs/corrupted_message.json
 - `slow_task` validates deadline-miss detection and watchdog escalation.
 - `cpu_spike` validates simulated CPU-load pressure as a distinct timing fault.
 - `task_crash` validates simulated task failure handling without terminating the real runtime process.
-- `dropped_messages` validates message reliability analysis without affecting task execution timing.
+- `dropped_messages` validates message reliability analysis without affecting task timing.
 - Queue-full drops and fault-injected drops are intentionally separated in telemetry.
-- Fault scenarios can be run under the existing scheduler modes, including priority and earliest-deadline-first scheduling, without changing the analyzer event schema.
-- Watchdog scenarios demonstrate embedded-style health monitoring and simulated recovery behavior.
-
-
----
-
-## 19. Synthetic Dataset Labels
-
-Phase 21 maps scenario logs to labels for future model training:
-
-| Scenario | Dataset Label |
-|---|---|
-| Normal, priority scheduler, deadline scheduler | `NORMAL` |
-| Queue overflow | `QUEUE_PRESSURE` |
-| CPU spike | `CPU_SPIKE` |
-| Task crash | `TASK_CRASH` |
-| Slow task | `SLOW_TASK` |
-| Dropped messages | `DROPPED_MESSAGES` |
-| Watchdog slow task | `WATCHDOG_RECOVERY` |
-
-The labels are scenario-level labels. Future trained-model work may refine this into per-window or per-event labels.
-
----
-
-## 20. Phase 21 Note
-
-Fault scenarios are now not only analyzer inputs; they are also data sources for the synthetic training dataset generator. After running the Docker demo, generate the dataset with:
-
-```bash
-docker compose run --rm training-dataset
-```
-
-Expected output:
-
-```text
-reports/generated/synthetic_dataset.csv
-```
+- Fault scenarios can be converted into labeled feature rows for supervised ML training.
+- The trained model adds prediction confidence on top of the existing explainable analyzer.

@@ -8,6 +8,7 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./reports/generated:/app/reports/generated
+      - ./models:/app/models
 
   runtime-normal:
     build:
@@ -118,3 +119,32 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./reports/generated:/app/reports/generated 
+  ml-train:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.runtime
+    container_name: minirtos-ml-train
+    command: >
+      python3 ai-analyzer/ml/train_model.py
+      --dataset reports/generated/synthetic_dataset.csv
+      --model-output models/anomaly_classifier.joblib
+      --label-encoder-output models/label_encoder.joblib
+      --metrics-output reports/generated/model_metrics.json
+    volumes:
+      - ./reports/generated:/app/reports/generated
+      - ./models:/app/models
+
+  ml-predict:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.runtime
+    container_name: minirtos-ml-predict
+    command: >
+      python3 ai-analyzer/ml/predict_model.py
+      --model models/anomaly_classifier.joblib
+      --label-encoder models/label_encoder.joblib
+      --dataset reports/generated/synthetic_dataset.csv
+      --limit 20
+    volumes:
+      - ./reports/generated:/app/reports/generated
+      - ./models:/app/models

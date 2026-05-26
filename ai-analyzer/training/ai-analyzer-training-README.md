@@ -4,9 +4,9 @@
 
 This folder contains tooling for converting MiniRTOS-Linux scenario logs into labeled window-level feature datasets.
 
-This is Phase 21 groundwork for a stronger AI layer.
+This was added in Phase 21 as groundwork for the stronger AI layer and is now used by the Phase 22 trained ML classifier.
 
-The project does not claim to have a trained production machine-learning model yet. The current analyzer is an explainable AI-style, rule-scored anomaly detector. This dataset generator creates labeled feature rows that can later be used to train and evaluate a lightweight model.
+The dataset generator creates labeled feature rows that can be used to train and evaluate a lightweight model.
 
 ---
 
@@ -20,6 +20,14 @@ Related test file:
 
 ```text
 ai-analyzer/tests/test_training_dataset.py
+```
+
+Related ML files:
+
+```text
+ai-analyzer/ml/train_model.py
+ai-analyzer/ml/predict_model.py
+ai-analyzer/tests/test_ml_model.py
 ```
 
 ---
@@ -67,18 +75,7 @@ This folder is ignored by Git because the CSV is generated output.
 Run this after scenario logs exist:
 
 ```bash
-python3 ai-analyzer/training/generate_dataset.py \
-  --output reports/generated/synthetic_dataset.csv \
-  --window-ms 5000 \
-  --scenario normal=logs/normal_runtime_logs.jsonl \
-  --scenario priority_scheduler=logs/priority_scheduler_runtime_logs.jsonl \
-  --scenario deadline_scheduler=logs/deadline_scheduler_runtime_logs.jsonl \
-  --scenario queue_overflow=logs/queue_overflow_runtime_logs.jsonl \
-  --scenario cpu_spike=logs/cpu_spike_runtime_logs.jsonl \
-  --scenario task_crash=logs/task_crash_runtime_logs.jsonl \
-  --scenario slow_task=logs/slow_task_runtime_logs.jsonl \
-  --scenario dropped_messages=logs/dropped_messages_runtime_logs.jsonl \
-  --scenario watchdog=logs/watchdog_runtime_logs.jsonl
+python3 ai-analyzer/training/generate_dataset.py   --output reports/generated/synthetic_dataset.csv   --window-ms 5000   --scenario normal=logs/normal_runtime_logs.jsonl   --scenario priority_scheduler=logs/priority_scheduler_runtime_logs.jsonl   --scenario deadline_scheduler=logs/deadline_scheduler_runtime_logs.jsonl   --scenario queue_overflow=logs/queue_overflow_runtime_logs.jsonl   --scenario cpu_spike=logs/cpu_spike_runtime_logs.jsonl   --scenario task_crash=logs/task_crash_runtime_logs.jsonl   --scenario slow_task=logs/slow_task_runtime_logs.jsonl   --scenario dropped_messages=logs/dropped_messages_runtime_logs.jsonl   --scenario watchdog=logs/watchdog_runtime_logs.jsonl
 ```
 
 ---
@@ -91,7 +88,7 @@ After the full demo has generated scenario logs:
 docker compose run --rm training-dataset
 ```
 
-The service writes the CSV to:
+The service writes:
 
 ```text
 reports/generated/synthetic_dataset.csv
@@ -113,7 +110,7 @@ DROPPED_MESSAGES
 WATCHDOG_RECOVERY
 ```
 
-Current scenario-to-label mapping:
+Scenario-to-label mapping:
 
 | Scenario | Label |
 |---|---|
@@ -128,7 +125,7 @@ Current scenario-to-label mapping:
 | `watchdog` | `WATCHDOG_RECOVERY` |
 | `watchdog_slow_task` | `WATCHDOG_RECOVERY` |
 
-Note: labels are scenario-level labels. Some windows in a fault scenario may be mostly normal before the configured fault start time.
+Labels are scenario-level labels. Some windows in a fault scenario may be mostly normal before the configured fault start time.
 
 ---
 
@@ -161,7 +158,7 @@ error_event_count
 warning_event_count
 ```
 
-These columns are intentionally aligned with the feature names used by the AI-style anomaly detector.
+These columns are intentionally aligned with the anomaly detector and ML classifier feature schema.
 
 ---
 
@@ -178,7 +175,7 @@ scenario JSONL logs
   -> write CSV rows
 ```
 
-The generator reuses the analyzer code where possible:
+The generator reuses analyzer code where possible:
 
 ```text
 load_events
@@ -187,7 +184,7 @@ extract_features
 FEATURE_NAMES
 ```
 
-This keeps the dataset and anomaly detector consistent.
+This keeps the dataset, anomaly detector, and ML classifier consistent.
 
 ---
 
@@ -196,12 +193,7 @@ This keeps the dataset and anomaly detector consistent.
 Run the generator with missing logs skipped:
 
 ```bash
-python3 ai-analyzer/training/generate_dataset.py \
-  --output reports/generated/synthetic_dataset.csv \
-  --window-ms 5000 \
-  --skip-missing \
-  --scenario normal=logs/normal_runtime_logs.jsonl \
-  --scenario task_crash=logs/task_crash_runtime_logs.jsonl
+python3 ai-analyzer/training/generate_dataset.py   --output reports/generated/synthetic_dataset.csv   --window-ms 5000   --skip-missing   --scenario normal=logs/normal_runtime_logs.jsonl   --scenario task_crash=logs/task_crash_runtime_logs.jsonl
 ```
 
 Preview generated output:
@@ -214,6 +206,7 @@ Check generated file size:
 
 ```bash
 ls -lh reports/generated/synthetic_dataset.csv
+wc -l reports/generated/synthetic_dataset.csv
 ```
 
 Run dataset generator tests:
@@ -222,10 +215,27 @@ Run dataset generator tests:
 python3 -m pytest ai-analyzer/tests/test_training_dataset.py -q
 ```
 
-Run all Python tests:
+---
+
+## Phase 22 ML Usage
+
+After generating the dataset, train the ML model:
 
 ```bash
-python3 -m pytest ai-analyzer/tests -q
+python3 ai-analyzer/ml/train_model.py   --dataset reports/generated/synthetic_dataset.csv   --model-output models/anomaly_classifier.joblib   --label-encoder-output models/label_encoder.joblib   --metrics-output reports/generated/model_metrics.json
+```
+
+Run predictions:
+
+```bash
+python3 ai-analyzer/ml/predict_model.py   --model models/anomaly_classifier.joblib   --label-encoder models/label_encoder.joblib   --dataset reports/generated/synthetic_dataset.csv   --limit 20
+```
+
+Docker equivalents:
+
+```bash
+docker compose run --rm ml-train
+docker compose run --rm ml-predict
 ```
 
 ---
@@ -244,9 +254,10 @@ Do not commit:
 
 ```text
 reports/generated/synthetic_dataset.csv
+reports/generated/model_metrics.json
 ```
 
-The generated reports folder should be ignored by `.gitignore`:
+The generated reports folder should be ignored:
 
 ```gitignore
 reports/generated/
@@ -256,11 +267,10 @@ reports/generated/
 
 ## Current Limitations
 
-- This does not train a model yet.
 - Labels are based on scenario names, not human-reviewed per-window labels.
-- Generated data quality depends on the quality and variety of scenario logs.
+- Generated data quality depends on the variety of scenario logs.
 - The current feature set is based on runtime telemetry, not raw system performance counters.
-- The output CSV is designed for future model experiments, not production inference.
+- The dataset is suitable for portfolio ML experiments, not production inference.
 
 ---
 
@@ -268,11 +278,8 @@ reports/generated/
 
 Recommended future work:
 
-1. Add a training script such as `ai-analyzer/training/train_model.py`.
-2. Train a lightweight classifier using the generated CSV.
-3. Add train/test splitting.
-4. Report accuracy, precision, recall, F1 score, and confusion matrix.
-5. Compare trained-model output against the current rule-based anomaly detector.
-6. Export a model artifact.
-7. Add CI smoke tests for dataset generation.
-8. Add charts or a notebook for exploring feature distributions.
+1. Generate larger datasets from repeated runs.
+2. Add per-window label refinement.
+3. Add confusion matrix charts.
+4. Add CI smoke tests for dataset generation.
+5. Add charts or a notebook for feature distributions.

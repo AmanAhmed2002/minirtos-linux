@@ -1,28 +1,19 @@
-# MiniRTOS-Linux AI-Style Anomaly Detector
+# MiniRTOS-Linux AI-Style Anomaly Detector and ML Classifier
 
 ## 1. Purpose
 
 MiniRTOS-Linux includes a Python analysis layer that reads structured JSONL runtime logs and reports system health.
 
-The analyzer has three related pieces after Phase 21:
+After Phase 22, the analyzer has four related pieces:
 
 1. A deterministic health analyzer.
-2. An AI-style time-windowed anomaly detector.
+2. An explainable AI-style time-windowed anomaly detector.
 3. A synthetic training-dataset generator.
+4. A trained lightweight ML anomaly classifier.
 
-The anomaly detector is currently feature-based and rule-scored. It is called "AI-style" because it follows the structure of a machine-learning pipeline:
+The anomaly detector remains feature-based and rule-scored. It is useful because it explains unhealthy behavior through concrete telemetry drivers.
 
-```text
-runtime logs -> scheduler/task/message/fault/watchdog events -> time windows -> feature extraction -> anomaly score -> classification -> top drivers
-```
-
-Phase 21 extends this into:
-
-```text
-runtime logs -> time windows -> feature extraction -> scenario labels -> CSV dataset
-```
-
-It is not yet a trained machine learning model.
+The ML classifier is trained on the synthetic dataset generated from runtime scenarios. It predicts scenario-style labels and confidence values from the same window-level feature schema.
 
 ---
 
@@ -32,6 +23,8 @@ It is not yet a trained machine learning model.
 ai-analyzer/app/analyze.py
 ai-analyzer/app/anomaly_detector.py
 ai-analyzer/training/generate_dataset.py
+ai-analyzer/ml/train_model.py
+ai-analyzer/ml/predict_model.py
 scripts/run_analyzer.sh
 ```
 
@@ -41,11 +34,12 @@ Related tests:
 ai-analyzer/tests/test_analyzer.py
 ai-analyzer/tests/test_anomaly_detector.py
 ai-analyzer/tests/test_training_dataset.py
+ai-analyzer/tests/test_ml_model.py
 ```
 
 ---
 
-## 3. Analyzer Command
+## 3. Analyzer Commands
 
 Analyze the latest runtime log:
 
@@ -56,26 +50,16 @@ Analyze the latest runtime log:
 Analyze with a custom window size:
 
 ```bash
-./scripts/run_analyzer.sh logs/runtime_logs.jsonl 1000
+./scripts/run_analyzer.sh logs/runtime_logs.jsonl 5000
 ```
 
-Analyze Docker demo logs:
+Analyze with optional ML output:
 
 ```bash
-./scripts/run_analyzer.sh logs/normal_runtime_logs.jsonl 5000
-./scripts/run_analyzer.sh logs/slow_task_runtime_logs.jsonl 5000
-./scripts/run_analyzer.sh logs/dropped_messages_runtime_logs.jsonl 5000
-./scripts/run_analyzer.sh logs/watchdog_runtime_logs.jsonl 5000
+python3 ai-analyzer/app/analyze.py   --log logs/task_crash_runtime_logs.jsonl   --window-ms 5000   --ml-model models/anomaly_classifier.joblib   --ml-label-encoder models/label_encoder.joblib
 ```
 
-Current script behavior:
-
-```bash
-LOG_PATH="${1:-logs/runtime_logs.jsonl}"
-WINDOW_MS="${2:-5000}"
-
-python3 ai-analyzer/app/analyze.py --log "$LOG_PATH" --window-ms "$WINDOW_MS"
-```
+When `--ml-model` is omitted, the analyzer keeps its original behavior.
 
 ---
 
@@ -89,9 +73,7 @@ Default log path:
 logs/runtime_logs.jsonl
 ```
 
-Each line is one structured event.
-
-Important event types include the following. These event types are stable across `round_robin`, `priority`, and `earliest_deadline_first` scheduler modes:
+Important event types:
 
 ```text
 runtime_started
@@ -111,7 +93,7 @@ runtime_summary
 runtime_finished
 ```
 
-Important severity levels include:
+Important severity levels:
 
 ```text
 info
@@ -158,17 +140,19 @@ WARNING
 UNSTABLE
 ```
 
-### 6.1 `NORMAL`
+### `NORMAL`
 
 A run is normal when there are no major unhealthy signals:
 
 - No watchdog timeouts
 - No task recoveries
+- No task failures
+- No skipped failed tasks
 - No deadline misses
 - No fault injections
 - No message drops
 
-### 6.2 `WARNING`
+### `WARNING`
 
 A run is a warning when there are moderate unhealthy signals:
 
@@ -176,19 +160,20 @@ A run is a warning when there are moderate unhealthy signals:
 - Deadline misses exist
 - Message drops exist
 
-### 6.3 `UNSTABLE`
+### `UNSTABLE`
 
-A run is unstable when there are serious unhealthy signals:
+A run is unstable when serious unhealthy signals exist:
 
-- Watchdog timeout events exist
-- Task recovery events exist
-- Task failure or repeated skipped-task events exist
-- Total deadline misses are high
-- Slow-task faults exist with deadline misses
+- Watchdog timeout events
+- Task recovery events
+- Task failure events
+- Repeated skipped-task events
+- High deadline misses
+- Slow-task faults with deadline misses
 
 ---
 
-## 7. Time-Windowed Anomaly Detection
+## 7. Time-Windowed Rule-Based Anomaly Detection
 
 The anomaly detector splits the event stream into fixed-size windows.
 
@@ -206,15 +191,13 @@ Window 2: 5000 ms - 9999 ms
 Window 3: 10000 ms - 14999 ms
 ```
 
-Each window becomes a feature dictionary.
-
-This allows the analyzer to identify when during the runtime the system became unhealthy, not just whether the overall run was unhealthy.
+Each window becomes a feature dictionary. This allows the analyzer to identify when the runtime became unhealthy.
 
 ---
 
-## 8. Current Feature Set
+## 8. Feature Set
 
-Per-window features include:
+Per-window features:
 
 ```text
 task_completed_count
@@ -235,19 +218,25 @@ error_event_count
 warning_event_count
 ```
 
+The ML classifier also uses:
+
+```text
+event_count
+```
+
 These features represent:
 
 - Task execution behavior
 - Deadline health
 - Message bus pressure
-- Fault injection activity, including `cpu_spike` and `task_crash` events
+- Fault injection activity
 - Task failure and skipped-task telemetry
 - Watchdog activity
 - Runtime severity level
 
 ---
 
-## 9. Anomaly Scoring
+## 9. Rule-Based Anomaly Scoring
 
 Each window receives an anomaly score.
 
@@ -266,11 +255,11 @@ The score increases when unhealthy features appear, such as:
 - Warning events
 - Error events
 
-Current scoring is intentionally explainable. This makes it easier to show why a window was classified as unhealthy.
+This scoring is intentionally explainable. The analyzer reports top anomaly drivers for each window.
 
 ---
 
-## 10. Window Classification
+## 10. Rule-Based Window Classification
 
 Current classifications:
 
@@ -280,9 +269,7 @@ WARNING
 UNSTABLE
 ```
 
-### 10.1 Direct Unstable Signals
-
-A window is considered unstable if it contains severe signals such as:
+Direct unstable signals include:
 
 ```text
 task_failed_count > 0
@@ -293,76 +280,34 @@ deadline_missed_count >= 3
 score >= 0.70
 ```
 
-### 10.2 Warning Signals
-
-A window is considered a warning if:
+Warning signal:
 
 ```text
 score >= 0.25
 ```
 
-### 10.3 Normal Signals
-
-A window is normal when:
+Normal signal:
 
 ```text
 score < 0.25
 ```
 
-and no direct unstable signals are present.
-
 ---
 
-## 11. Top Anomaly Drivers
+## 11. Synthetic Training Dataset Generation
 
-The analyzer reports top anomaly drivers so the classification is explainable.
-
-Example drivers:
-
-```text
-deadline_missed_count
-max_task_duration_ms
-message_dropped_count
-queue_full_drop_count
-fault_injected_drop_count
-fault_injected_count
-task_failed_count
-task_skipped_count
-watchdog_timeout_count
-task_recovered_count
-warning_event_count
-error_event_count
-```
-
-This helps connect the final classification to concrete runtime behavior.
-
----
-
-## 12. Synthetic Training Dataset Generation
-
-Phase 21 adds a training dataset generator:
+Phase 21 added:
 
 ```text
 ai-analyzer/training/generate_dataset.py
 ```
 
-The generator reuses the same window splitting and feature extraction logic from the anomaly detector. This keeps the training dataset aligned with the same feature schema used for anomaly scoring.
+The generator reuses the same window splitting and feature extraction logic from the anomaly detector. This keeps the dataset aligned with the runtime anomaly pipeline.
 
-### 12.1 Dataset Command
+Dataset command:
 
 ```bash
-python3 ai-analyzer/training/generate_dataset.py \
-  --output reports/generated/synthetic_dataset.csv \
-  --window-ms 5000 \
-  --scenario normal=logs/normal_runtime_logs.jsonl \
-  --scenario priority_scheduler=logs/priority_scheduler_runtime_logs.jsonl \
-  --scenario deadline_scheduler=logs/deadline_scheduler_runtime_logs.jsonl \
-  --scenario queue_overflow=logs/queue_overflow_runtime_logs.jsonl \
-  --scenario cpu_spike=logs/cpu_spike_runtime_logs.jsonl \
-  --scenario task_crash=logs/task_crash_runtime_logs.jsonl \
-  --scenario slow_task=logs/slow_task_runtime_logs.jsonl \
-  --scenario dropped_messages=logs/dropped_messages_runtime_logs.jsonl \
-  --scenario watchdog=logs/watchdog_runtime_logs.jsonl
+python3 ai-analyzer/training/generate_dataset.py   --output reports/generated/synthetic_dataset.csv   --window-ms 5000   --scenario normal=logs/normal_runtime_logs.jsonl   --scenario priority_scheduler=logs/priority_scheduler_runtime_logs.jsonl   --scenario deadline_scheduler=logs/deadline_scheduler_runtime_logs.jsonl   --scenario queue_overflow=logs/queue_overflow_runtime_logs.jsonl   --scenario cpu_spike=logs/cpu_spike_runtime_logs.jsonl   --scenario task_crash=logs/task_crash_runtime_logs.jsonl   --scenario slow_task=logs/slow_task_runtime_logs.jsonl   --scenario dropped_messages=logs/dropped_messages_runtime_logs.jsonl   --scenario watchdog=logs/watchdog_runtime_logs.jsonl
 ```
 
 Docker command:
@@ -371,19 +316,17 @@ Docker command:
 docker compose run --rm training-dataset
 ```
 
-### 12.2 Dataset Output
-
-Default output:
+Output:
 
 ```text
 reports/generated/synthetic_dataset.csv
 ```
 
-This file is generated output and should not be committed.
+---
 
-### 12.3 Dataset Labels
+## 12. Dataset Labels
 
-Current scenario labels:
+Current labels:
 
 ```text
 NORMAL
@@ -395,88 +338,159 @@ DROPPED_MESSAGES
 WATCHDOG_RECOVERY
 ```
 
-### 12.4 Dataset Columns
+Scenario-to-label mapping:
 
-Expected columns include scenario metadata, window bounds, event count, and all anomaly feature names such as `deadline_missed_count`, `message_dropped_count`, `fault_injected_count`, `task_failed_count`, `task_skipped_count`, `watchdog_timeout_count`, and `warning_event_count`.
+| Scenario | Label |
+|---|---|
+| Normal, priority scheduler, deadline scheduler | `NORMAL` |
+| Queue overflow | `QUEUE_PRESSURE` |
+| CPU spike | `CPU_SPIKE` |
+| Task crash | `TASK_CRASH` |
+| Slow task | `SLOW_TASK` |
+| Dropped messages | `DROPPED_MESSAGES` |
+| Watchdog slow task | `WATCHDOG_RECOVERY` |
 
-### 12.5 Why This Matters
-
-The dataset generator creates the foundation for a future trained anomaly model. It does not claim to train a model yet. It turns reproducible runtime scenarios into labeled feature data that can later be used by logistic regression, random forest, gradient boosting, or another lightweight classifier.
+Labels are scenario-derived. Some early windows in a fault scenario may appear normal before the configured fault start time.
 
 ---
 
-## 13. Scenario Expectations
+## 13. ML Classifier
 
-| Scenario | Expected Classification | Main Drivers |
+Phase 22 added:
+
+```text
+ai-analyzer/ml/train_model.py
+ai-analyzer/ml/predict_model.py
+```
+
+The classifier uses a lightweight supervised learning pipeline:
+
+```text
+synthetic_dataset.csv
+  -> event_count + anomaly feature columns
+  -> LabelEncoder
+  -> RandomForestClassifier
+  -> anomaly_classifier.joblib
+  -> label_encoder.joblib
+  -> model_metrics.json
+```
+
+### Train the Model
+
+```bash
+python3 ai-analyzer/ml/train_model.py   --dataset reports/generated/synthetic_dataset.csv   --model-output models/anomaly_classifier.joblib   --label-encoder-output models/label_encoder.joblib   --metrics-output reports/generated/model_metrics.json
+```
+
+Docker:
+
+```bash
+docker compose run --rm ml-train
+```
+
+### Predict From Dataset
+
+```bash
+python3 ai-analyzer/ml/predict_model.py   --model models/anomaly_classifier.joblib   --label-encoder models/label_encoder.joblib   --dataset reports/generated/synthetic_dataset.csv   --limit 20
+```
+
+Docker:
+
+```bash
+docker compose run --rm ml-predict
+```
+
+### Predict From Runtime Log
+
+```bash
+python3 ai-analyzer/ml/predict_model.py   --model models/anomaly_classifier.joblib   --label-encoder models/label_encoder.joblib   --log logs/task_crash_runtime_logs.jsonl   --window-ms 5000
+```
+
+---
+
+## 14. Analyzer ML Integration
+
+`analyze.py` supports optional ML output:
+
+```bash
+python3 ai-analyzer/app/analyze.py   --log logs/task_crash_runtime_logs.jsonl   --window-ms 5000   --ml-model models/anomaly_classifier.joblib   --ml-label-encoder models/label_encoder.joblib
+```
+
+Expected ML section:
+
+```text
+ML Anomaly Classifier
+=====================
+
+Windows predicted: ...
+Highest-confidence prediction: ...
+Prediction counts:
+  ...
+Window ML summary:
+  ...
+```
+
+If no ML model is passed, this section is skipped.
+
+If the model path is passed but the file is missing, the analyzer prints a clean skipped message instead of failing.
+
+---
+
+## 15. Scenario Expectations
+
+| Scenario | Rule-Based Classification | ML Label |
 |---|---|---|
-| Normal runtime | `WARNING` | Queue-full message drops. |
-| Priority scheduler runtime | `WARNING` expected if using the same message rates as normal runtime | Queue-full message drops, with task ordering controlled by priority mode. |
-| Earliest-deadline-first scheduler runtime | `WARNING` expected if using the same message rates as normal runtime | Queue-full message drops, with task ordering controlled by EDF mode. |
-| Queue overflow | `WARNING` | High queue-full message drops caused by bounded queue pressure. |
-| CPU spike fault | `UNSTABLE` expected if deadline misses occur | CPU-spike fault events, high task duration, and deadline misses. |
-| Task crash fault | `UNSTABLE` | Task-crash fault events, task failure, and skipped-task telemetry. |
-| Slow task fault | `UNSTABLE` | Slow-task fault events and deadline misses. |
-| Dropped messages fault | `WARNING` | Fault-injected message drops. |
-| Watchdog slow task | `UNSTABLE` | Deadline misses, watchdog timeouts, and recovery events. |
+| Normal runtime | `WARNING` if queue pressure occurs | `NORMAL` |
+| Priority scheduler runtime | `WARNING` if queue pressure occurs | `NORMAL` |
+| EDF scheduler runtime | `WARNING` if queue pressure occurs | `NORMAL` |
+| Queue overflow | `WARNING` | `QUEUE_PRESSURE` |
+| CPU spike fault | `UNSTABLE` expected if deadline misses occur | `CPU_SPIKE` |
+| Task crash fault | `UNSTABLE` | `TASK_CRASH` |
+| Slow task fault | `UNSTABLE` | `SLOW_TASK` |
+| Dropped messages fault | `WARNING` | `DROPPED_MESSAGES` |
+| Watchdog slow task | `UNSTABLE` | `WATCHDOG_RECOVERY` |
 
 ---
 
-## 13. How This Supports the Project
+## 16. How This Supports the Project
 
-The anomaly detector adds an AI/data-analysis layer to the runtime simulator.
-
-It demonstrates:
+The anomaly/ML layer demonstrates:
 
 - Log parsing
 - Feature engineering
 - Time-window analysis
 - Explainable anomaly scoring
-- Health classification
 - Root-cause reporting
-- Separation between runtime generation and analysis
+- Scenario-derived labeled dataset generation
+- Supervised ML training
+- Prediction confidence output
+- Optional model integration into an existing CLI analyzer
 
-This is useful for resumes and interviews because it connects low-level runtime telemetry to higher-level health analysis.
+This connects low-level runtime telemetry to higher-level health analysis.
 
 ---
 
-## 14. Limitations
+## 17. Limitations
 
 Current limitations:
 
-- The detector is feature/rule-based, not trained.
-- It does not use historical baseline learning yet.
-- It now supports scenario-derived synthetic labels, but it does not use manually annotated production labels yet.
-- It does not persist model artifacts.
-- It does not export ONNX or pickle models.
-- It does not include visualization yet.
-- Thresholds are manually defined.
-- Results depend on the simulated scenarios and event schema.
+- Rule-based thresholds are manually defined.
+- Dataset labels are scenario-derived, not manually annotated per-window labels.
+- The ML model is trained on synthetic scenario telemetry.
+- The trained classifier is not production-validated.
+- Generated model artifacts are ignored by Git by default.
+- Accuracy can look high on small synthetic datasets, so results should be described carefully.
 
 ---
 
-## 15. Future Improvements
+## 18. Future Improvements
 
 Recommended improvements:
 
-1. Train a lightweight model using `reports/generated/synthetic_dataset.csv`.
-2. Compare trained-model classifications against current rule-based classifications.
-3. Train a lightweight model such as logistic regression, random forest, or gradient boosting.
-4. Compare trained-model classifications against current rule-based classifications.
-5. Export model artifacts.
-6. Add confidence scores.
-7. Add visualizations for anomaly scores over time.
-8. Add a FastAPI endpoint for log upload and analysis.
-9. Add a React dashboard for runtime health.
-10. Extend GitHub Actions CI with analyzer smoke tests on sample logs and optional Docker image builds.
-
----
-
-## 16. Interview Talking Points
-
-- The runtime emits structured JSONL telemetry that becomes analyzer input.
-- The analyzer separates deterministic health reporting from AI-style anomaly scoring.
-- The anomaly detector uses fixed time windows, feature extraction, and explainable scoring.
-- The system can distinguish between dedicated queue pressure, CPU-spike timing pressure, task-crash failure behavior, slow-task timing faults, dropped-message reliability faults, and watchdog recovery behavior.
-- Scheduler mode changes such as priority and earliest-deadline-first scheduling preserve the same event schema, so the analyzer can continue processing logs without special-case parsing.
-- Phase 21 adds a synthetic dataset generator that exports labeled feature rows for future model training.
-- The design is intentionally extensible toward a trained machine learning model, while the current system remains AI-style rather than trained ML.
+1. Generate larger datasets from repeated scenario runs.
+2. Add per-window labels instead of only scenario-derived labels.
+3. Compare random forest against logistic regression or gradient boosting.
+4. Add confusion matrix visualization.
+5. Export an ONNX model.
+6. Add CI smoke tests for ML training and prediction.
+7. Add FastAPI endpoint for log upload and ML prediction.
+8. Add React dashboard for runtime health and anomaly windows.

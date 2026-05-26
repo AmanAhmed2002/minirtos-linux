@@ -88,4 +88,27 @@ python3 ai-analyzer/training/generate_dataset.py \
     --scenario slow_task=logs/slow_task_runtime_logs.jsonl \
     --scenario dropped_messages=logs/dropped_messages_runtime_logs.jsonl \
     --scenario watchdog=logs/watchdog_runtime_logs.jsonl
+echo
+echo "========================================"
+echo "[DEMO] Training ML anomaly classifier"
+echo "========================================"
+
+mkdir -p models
+
+python3 ai-analyzer/ml/train_model.py \
+    --dataset reports/generated/synthetic_dataset.csv \
+    --model-output models/anomaly_classifier.joblib \
+    --label-encoder-output models/label_encoder.joblib \
+    --metrics-output reports/generated/model_metrics.json
+
+echo
+echo "========================================"
+echo "[DEMO] Running ML predictions"
+echo "========================================"
+
+python3 ai-analyzer/ml/predict_model.py \
+    --model models/anomaly_classifier.joblib \
+    --label-encoder models/label_encoder.joblib \
+    --dataset reports/generated/synthetic_dataset.csv \
+    --limit 20
 ls -1 logs/*runtime_logs.jsonl

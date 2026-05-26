@@ -31,6 +31,24 @@ def parse_args() -> argparse.Namespace:
         help="Anomaly detection window size in milliseconds. Default: 5000",
     )
 
+    parser.add_argument(
+        "--ml-model",
+        default=None,
+        help=(
+            "Optional trained ML model artifact path. "
+            "If omitted, ML prediction output is skipped."
+        ),
+    )
+
+    parser.add_argument(
+        "--ml-label-encoder",
+        default="models/label_encoder.joblib",
+        help=(
+            "Optional label encoder artifact path used with --ml-model. "
+            "Default: models/label_encoder.joblib"
+        ),
+    )
+
     return parser.parse_args()
 
 
@@ -463,6 +481,88 @@ def print_report(log_path: Path, events: list[Event], report: dict[str, Any]) ->
         print(f"  - {cause}")
 
 
+def print_ml_prediction_report(
+    events: list[Event],
+    window_ms: int,
+    model_path: Path | None,
+    label_encoder_path: Path,
+) -> None:
+    if model_path is None:
+        return
+
+    print()
+    print("ML Anomaly Classifier")
+    print("=====================")
+    print()
+
+    if not model_path.exists():
+        print(f"Skipped: model artifact not found at {model_path}")
+        return
+
+    if not label_encoder_path.exists():
+        print(f"Skipped: label encoder artifact not found at {label_encoder_path}")
+        return
+
+    ml_dir = Path(__file__).resolve().parents[1] / "ml"
+
+    if str(ml_dir) not in sys.path:
+        sys.path.insert(0, str(ml_dir))
+
+    try:
+        from predict_model import predict_windows_from_events  # noqa: WPS433
+    except ModuleNotFoundError as exc:
+        print(f"Skipped: could not import ML predictor: {exc}")
+        return
+
+    predictions = predict_windows_from_events(
+        events=events,
+        window_ms=window_ms,
+        model_path=model_path,
+        label_encoder_path=label_encoder_path,
+    )
+
+    if not predictions:
+        print("No windows available for ML prediction.")
+        return
+
+    label_counts: Counter[str] = Counter(
+        str(prediction["prediction"])
+        for prediction in predictions
+    )
+
+    highest_confidence_prediction = max(
+        predictions,
+        key=lambda prediction: float(prediction.get("confidence", 0.0)),
+    )
+
+    print(f"Windows predicted: {len(predictions)}")
+    print(
+        "Highest-confidence prediction: "
+        f"{highest_confidence_prediction['prediction']} "
+        f"confidence={highest_confidence_prediction['confidence']:.3f}"
+    )
+    print()
+
+    print("Prediction counts:")
+
+    for label, count in sorted(label_counts.items()):
+        print(f"  {label}: {count}")
+
+    print()
+    print("Window ML summary:")
+
+    for prediction in predictions:
+        features = prediction["features"]
+        window_start_ms = features.get("window_start_ms", "unknown")
+        window_end_ms = features.get("window_end_ms", "unknown")
+
+        print(
+            f"  {window_start_ms}-{window_end_ms} ms: "
+            f"{prediction['prediction']} "
+            f"confidence={prediction['confidence']:.3f}"
+        )
+
+
 def main() -> int:
     args = parse_args()
     log_path = Path(args.log)
@@ -473,6 +573,12 @@ def main() -> int:
         print_report(log_path, events, report)
         anomaly_report = analyze_anomaly_windows(events, args.window_ms)
         print_anomaly_report(anomaly_report)
+        print_ml_prediction_report(
+            events=events,
+            window_ms=args.window_ms,
+            model_path=Path(args.ml_model) if args.ml_model else None,
+            label_encoder_path=Path(args.ml_label_encoder),
+        )
     except (FileNotFoundError, ValueError) as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
         return 1

@@ -47,3 +47,8 @@ docker-compose.override.yml
 .DS_Store
 .vscode/
 .idea/
+# Generated ML artifacts
+models/*
+!models/.gitkeep
+*.joblib
+*.pkl

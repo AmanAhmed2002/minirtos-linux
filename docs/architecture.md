@@ -14,15 +14,16 @@ The architecture is intentionally modular so each system concept is represented 
   - Earliest-deadline-first mode
 - Message bus
 - Fault injector
-  - slow_task
-  - dropped_messages
-  - cpu_spike
-  - task_crash
+  - `slow_task`
+  - `dropped_messages`
+  - `cpu_spike`
+  - `task_crash`
 - Watchdog
 - Structured logger
-- Python analyzer
+- Python deterministic analyzer
 - AI-style anomaly detector
 - Synthetic training-dataset generator
+- Trained lightweight ML anomaly classifier
 - Dockerized demonstration workflow
 
 ---
@@ -38,12 +39,15 @@ The architecture is intentionally modular so each system concept is represented 
 | runtime-priority         |
 | runtime-deadline         |
 | runtime-queue-overflow   |
-| runtime-cpu-spike       |
-| runtime-task-crash      |
+| runtime-cpu-spike        |
+| runtime-task-crash       |
 | runtime-slow-task        |
 | runtime-dropped-messages |
 | runtime-watchdog         |
 | analyzer                 |
+| training-dataset         |
+| ml-train                 |
+| ml-predict               |
 +------------+-------------+
              |
              v
@@ -68,13 +72,21 @@ The architecture is intentionally modular so each system concept is represented 
 | Task/Message/Fault Metrics    |
 | Root-Cause Reporting          |
 | AI-Style Anomaly Detector     |
+| Optional ML Prediction Report |
 +------------+------------------+
              |
+             | windowed features
              v
 +-------------------------------+
-| Docs and Benchmarks           |
+| Dataset + ML Layer            |
 |-------------------------------|
-| performance-results.md        |
+| generate_dataset.py           |
+| synthetic_dataset.csv         |
+| train_model.py                |
+| predict_model.py              |
+| anomaly_classifier.joblib     |
+| label_encoder.joblib          |
+| model_metrics.json            |
 +-------------------------------+
 ```
 
@@ -125,27 +137,17 @@ Current config areas:
 - Optional fault configuration
 - Optional watchdog configuration
 
-Example task config:
-
-```json
-{
-  "name": "ControlTask",
-  "period_ms": 100,
-  "deadline_ms": 80,
-  "priority": 1,
-  "execution_time_ms": 10,
-  "queue_limit": 10
-}
-```
-
-The runtime currently uses config files such as:
+Current config files include:
 
 ```text
 configs/normal.json
-configs/slow_task.json
-configs/dropped_messages.json
+configs/priority_scheduler.json
+configs/deadline_scheduler.json
+configs/queue_overflow.json
 configs/cpu_spike.json
 configs/task_crash.json
+configs/slow_task.json
+configs/dropped_messages.json
 configs/watchdog_slow_task.json
 ```
 
@@ -171,8 +173,7 @@ Each simulated task contains:
 - Run count
 - Deadline miss count
 - Next scheduled run time
-
-The task model allows the scheduler to determine when a task is due and to simulate task execution.
+- Failure/skipped state for simulated task-crash behavior
 
 Current simulated task roles:
 
@@ -193,86 +194,27 @@ cpp-runtime/include/Scheduler.hpp
 cpp-runtime/src/Scheduler.cpp
 ```
 
-The scheduler is responsible for driving the simulated runtime.
-
 Current scheduler modes:
-
-```text
-round_robin
-priority
-earliest_deadline_first
-```
-
-Core behavior:
-
-1. Start the scheduler loop.
-2. Check which tasks are due.
-3. Run due tasks.
-4. Apply fault injection if configured, including slow-task, dropped-message, CPU-spike, or task-crash behavior.
-5. Log task start and completion events.
-6. Inspect task health using the watchdog.
-7. Send or receive messages based on task role.
-8. Continue until configured duration expires.
-9. Log scheduler completion and runtime summaries.
-
-
-### 3.4.1 Scheduler Modes
-
-MiniRTOS-Linux currently supports three scheduler modes.
 
 | Mode | Config Value | Behavior |
 |---|---|---|
-| Round robin | `round_robin` | Runs due tasks in the order they appear in the runtime task list. |
+| Round robin | `round_robin` | Runs due tasks in config/task-list order. |
 | Priority | `priority` | Runs due tasks by ascending priority number. Lower number means higher priority. |
-| Earliest deadline first | `earliest_deadline_first` | Runs due tasks by nearest absolute deadline first, then priority, then stable config order. |
+| Earliest deadline first | `earliest_deadline_first` | Runs due tasks by nearest absolute deadline, then priority, then stable config order. |
 
-The priority scheduler reuses the same execution path as round robin: task start/completion logging, fault injection, watchdog inspection, and message bus handling remain consistent across scheduler modes.
+Core behavior:
 
-Example priority config:
-
-```json
-{
-  "simulation_name": "priority_scheduler",
-  "duration_seconds": 30,
-  "scheduler_mode": "priority",
-  "tasks": [
-    { "name": "LoggerTask", "period_ms": 500, "deadline_ms": 400, "priority": 3, "execution_time_ms": 15, "queue_limit": 20 },
-    { "name": "NetworkTask", "period_ms": 250, "deadline_ms": 200, "priority": 2, "execution_time_ms": 20, "queue_limit": 10 },
-    { "name": "ControlTask", "period_ms": 100, "deadline_ms": 80, "priority": 1, "execution_time_ms": 10, "queue_limit": 10 }
-  ]
-}
-```
-
-Although the config lists `LoggerTask` first, priority mode should run due tasks in priority order, with `ControlTask` before `NetworkTask` before `LoggerTask` when all are due.
-
-
-
-Example earliest-deadline-first config:
-
-```json
-{
-  "simulation_name": "deadline_scheduler",
-  "duration_seconds": 30,
-  "scheduler_mode": "earliest_deadline_first",
-  "tasks": [
-    { "name": "LoggerTask", "period_ms": 500, "deadline_ms": 400, "priority": 3, "execution_time_ms": 15, "queue_limit": 20 },
-    { "name": "NetworkTask", "period_ms": 250, "deadline_ms": 200, "priority": 2, "execution_time_ms": 20, "queue_limit": 10 },
-    { "name": "ControlTask", "period_ms": 100, "deadline_ms": 80, "priority": 1, "execution_time_ms": 10, "queue_limit": 10 }
-  ]
-}
-```
-
-When several tasks are due at the same time, `earliest_deadline_first` runs the task with the nearest deadline first. If two due tasks have the same deadline, the scheduler uses ascending numeric priority as the next tie-breaker. If both deadline and priority match, the original task/config order is preserved.
-
-Important scheduler events:
-
-```text
-scheduler_started
-task_started
-task_completed
-scheduler_finished
-runtime_summary
-```
+1. Start scheduler loop.
+2. Check which tasks are due.
+3. Order due tasks based on scheduler mode.
+4. Apply task-crash fault state if configured.
+5. Apply slow-task or CPU-spike timing faults if configured.
+6. Log task start/completion/failure/skipped events.
+7. Inspect task health using the watchdog.
+8. Send or receive messages based on task role.
+9. Apply dropped-message fault behavior if configured.
+10. Continue until configured duration expires.
+11. Log scheduler completion and runtime summaries.
 
 ---
 
@@ -285,15 +227,11 @@ cpp-runtime/include/Logger.hpp
 cpp-runtime/src/Logger.cpp
 ```
 
-The logger writes structured runtime telemetry to JSONL.
-
-Default log path:
+The logger writes structured runtime telemetry to:
 
 ```text
 logs/runtime_logs.jsonl
 ```
-
-Each line is a JSON event. This makes the output easy to parse with Python, command-line tools, or future dashboards.
 
 Important event types:
 
@@ -337,19 +275,7 @@ cpp-runtime/src/MessageBus.cpp
 
 The message bus simulates bounded task-to-task communication.
 
-Message structure:
-
-```cpp
-struct Message {
-    std::string source_task;
-    std::string target_task;
-    std::string type;
-    std::string payload;
-    int sequence_id;
-};
-```
-
-Message bus behavior:
+Behavior:
 
 - Registers one bounded queue per task.
 - Enqueues messages when the target queue has capacity.
@@ -357,27 +283,6 @@ Message bus behavior:
 - Rejects messages to unknown task queues.
 - Supports FIFO receive behavior.
 - Exposes queue depth and queue limit telemetry.
-
-Current simulated communication:
-
-| Source Task | Target Task | Message Type |
-|---|---|---|
-| `ControlTask` | `LoggerTask` | `control_status` |
-| `NetworkTask` | `LoggerTask` | `network_packet` |
-
-`LoggerTask` receives at most one message each time it runs.
-
-
-
-Phase 18 adds a dedicated queue-overflow scenario through `configs/queue_overflow.json`. This scenario intentionally makes producer tasks run faster than `LoggerTask` can consume messages and lowers the `LoggerTask` queue limit. The result is repeatable `queue_full` telemetry without using the `dropped_messages` fault injector.
-
-Important message events:
-
-```text
-message_sent
-message_received
-message_dropped
-```
 
 Common message drop reasons:
 
@@ -397,8 +302,6 @@ cpp-runtime/include/FaultInjector.hpp
 cpp-runtime/src/FaultInjector.cpp
 ```
 
-The fault injector creates reproducible unhealthy runtime scenarios.
-
 Current fault types:
 
 | Fault | Description |
@@ -408,29 +311,11 @@ Current fault types:
 | `cpu_spike` | Adds simulated CPU-load delay to a target task after a configured start time. |
 | `task_crash` | Simulates a target task entering a failed state without terminating the runtime process. |
 
-Example fault config fields:
-
-```json
-"faults": {
-  "enabled": true,
-  "type": "slow_task",
-  "target_task": "ControlTask",
-  "start_after_ms": 5000,
-  "extra_execution_time_ms": 120
-}
-```
-
-The fault injector logs:
-
-```text
-fault_injected
-```
-
 Fault-specific impact:
 
 - `slow_task` creates task timing pressure and deadline misses.
-- `cpu_spike` creates simulated CPU-load pressure and can produce deadline misses for the targeted task.
-- `task_crash` logs task failure and skipped-task telemetry while allowing the overall runtime process to continue.
+- `cpu_spike` creates simulated CPU-load pressure and can produce deadline misses.
+- `task_crash` logs task failure and skipped-task telemetry while the runtime continues.
 - `dropped_messages` creates message reliability issues without necessarily affecting task timing.
 
 ---
@@ -446,32 +331,13 @@ cpp-runtime/src/Watchdog.cpp
 
 The watchdog monitors repeated task deadline misses.
 
-Config fields:
-
-```json
-"watchdog": {
-  "enabled": true,
-  "check_interval_ms": 100,
-  "max_consecutive_deadline_misses": 3,
-  "recovery_enabled": true,
-  "recovery_cooldown_ms": 1000
-}
-```
-
-Watchdog behavior:
+Behavior:
 
 1. Track new deadline misses by task.
 2. Count consecutive misses.
 3. Log `watchdog_timeout` when a task exceeds the configured threshold.
 4. Log `task_recovered` when simulated recovery is enabled.
-5. Apply a cooldown to avoid excessive repeated alerts.
-
-Important watchdog events:
-
-```text
-watchdog_timeout
-task_recovered
-```
+5. Apply cooldown to avoid excessive repeated alerts.
 
 ---
 
@@ -487,7 +353,7 @@ main.cpp
   |-- construct Task objects
   |-- construct Scheduler
   |-- Scheduler initializes MessageBus queues
-  |-- Scheduler selects round_robin or priority mode
+  |-- Scheduler selects scheduler strategy
   |-- Scheduler constructs FaultInjector
   |-- Scheduler constructs Watchdog
   |-- log scheduler_started
@@ -534,6 +400,7 @@ Analyzer responsibilities:
 - Classify deterministic system health.
 - Identify likely root causes.
 - Run AI-style time-windowed anomaly detection.
+- Optionally load a trained model and print ML window predictions.
 
 Default command:
 
@@ -541,17 +408,17 @@ Default command:
 ./scripts/run_analyzer.sh logs/runtime_logs.jsonl 5000
 ```
 
+ML-enabled command:
+
+```bash
+python3 ai-analyzer/app/analyze.py   --log logs/task_crash_runtime_logs.jsonl   --window-ms 5000   --ml-model models/anomaly_classifier.joblib   --ml-label-encoder models/label_encoder.joblib
+```
+
 ---
 
 ## 6. AI-Style Anomaly Detector
 
 The anomaly detector converts event streams into fixed time windows.
-
-Default window size:
-
-```text
-5000 ms
-```
 
 Feature examples:
 
@@ -582,13 +449,11 @@ WARNING
 UNSTABLE
 ```
 
-The detector is intentionally feature/rule-based right now. It provides an AI-style anomaly pipeline without requiring a trained model yet.
+The detector remains explainable and rule-based. It provides anomaly scores and top drivers.
 
 ---
 
-## 6.1 Synthetic Training Dataset Generator
-
-Phase 21 adds a synthetic dataset generator.
+## 7. Synthetic Training Dataset Generator
 
 Main files:
 
@@ -604,12 +469,10 @@ Generated output:
 reports/generated/synthetic_dataset.csv
 ```
 
-The generator uses scenario-specific logs and creates labeled feature rows. It reuses the anomaly detector's windowing and feature-extraction logic so the CSV columns stay aligned with the runtime anomaly pipeline.
-
 Pipeline:
 
 ```text
-scenario logs -> fixed time windows -> extracted anomaly features -> scenario label assignment -> synthetic_dataset.csv
+scenario logs -> fixed time windows -> extracted anomaly features -> scenario labels -> synthetic_dataset.csv
 ```
 
 Supported labels:
@@ -624,11 +487,48 @@ DROPPED_MESSAGES
 WATCHDOG_RECOVERY
 ```
 
-The generated CSV is ignored by Git because it is generated output.
+The generated CSV is ignored by Git.
 
 ---
 
-## 7. Docker Architecture
+## 8. ML Classifier Architecture
+
+Phase 22 adds:
+
+```text
+ai-analyzer/ml/train_model.py
+ai-analyzer/ml/predict_model.py
+ai-analyzer/ml/README.md
+ai-analyzer/tests/test_ml_model.py
+models/.gitkeep
+```
+
+Generated artifacts:
+
+```text
+models/anomaly_classifier.joblib
+models/label_encoder.joblib
+reports/generated/model_metrics.json
+```
+
+ML pipeline:
+
+```text
+synthetic_dataset.csv
+  -> load feature columns
+  -> encode labels
+  -> train RandomForestClassifier
+  -> save model artifact
+  -> save label encoder
+  -> write metrics JSON
+  -> predict from dataset or runtime log windows
+```
+
+The ML model is trained on synthetic scenario-derived telemetry. It is useful as a portfolio AI/ML layer, but it is not a production safety classifier.
+
+---
+
+## 9. Docker Architecture
 
 Docker files:
 
@@ -642,116 +542,102 @@ Docker Compose services:
 
 | Service | Purpose |
 |---|---|
-| `demo` | Runs all scenarios and analyzes each scenario log. |
+| `demo` | Runs all scenarios, analyzes logs, generates dataset, trains ML model, and prints predictions. |
 | `runtime-normal` | Runs the normal scenario. |
 | `runtime-priority` | Runs the priority scheduler scenario. |
 | `runtime-deadline` | Runs the earliest-deadline-first scheduler scenario. |
-| `runtime-queue-overflow` | Runs the dedicated queue-overflow scenario using `configs/queue_overflow.json`. |
-| `runtime-cpu-spike` | Runs the CPU spike fault scenario using `configs/cpu_spike.json`. |
-| `runtime-task-crash` | Runs the task crash fault scenario using `configs/task_crash.json`. |
-| `runtime-slow-task` | Runs the slow-task fault scenario. |
-| `runtime-dropped-messages` | Runs the dropped-message fault scenario. |
-| `runtime-watchdog` | Runs the watchdog scenario. |
-| `runtime-priority-scheduler` | Optional service for the priority scheduler scenario. |
-| `runtime-deadline-scheduler` | Optional service for the earliest-deadline-first scheduler scenario. |
-| `analyzer` | Runs the analyzer against `logs/runtime_logs.jsonl`. |
-| `training-dataset` | Generates `reports/generated/synthetic_dataset.csv` from scenario logs. |
+| `runtime-queue-overflow` | Runs dedicated queue-overflow scenario. |
+| `runtime-cpu-spike` | Runs CPU-spike fault scenario. |
+| `runtime-task-crash` | Runs task-crash fault scenario. |
+| `runtime-slow-task` | Runs slow-task fault scenario. |
+| `runtime-dropped-messages` | Runs dropped-message fault scenario. |
+| `runtime-watchdog` | Runs watchdog scenario. |
+| `analyzer` | Runs analyzer against `logs/runtime_logs.jsonl`. |
+| `training-dataset` | Generates `reports/generated/synthetic_dataset.csv`. |
+| `ml-train` | Trains the ML classifier. |
+| `ml-predict` | Runs predictions using the trained classifier. |
 
-The local `logs/` folder is mounted into the container:
+Mounted host folders:
 
 ```yaml
 volumes:
   - ./logs:/app/logs
+  - ./reports/generated:/app/reports/generated
+  - ./models:/app/models
 ```
-
-This makes generated logs visible on the host machine after Docker runs.
 
 ---
 
-## 8. Benchmark Flow
+## 10. Benchmark Flow
 
 ```text
 docker compose up --build demo
   |
   v
-logs/normal_runtime_logs.jsonl
-logs/priority_scheduler_runtime_logs.jsonl
-logs/deadline_scheduler_runtime_logs.jsonl
-logs/queue_overflow_runtime_logs.jsonl
-logs/cpu_spike_runtime_logs.jsonl
-logs/task_crash_runtime_logs.jsonl
-logs/slow_task_runtime_logs.jsonl
-logs/dropped_messages_runtime_logs.jsonl
-logs/watchdog_runtime_logs.jsonl
+logs/*runtime_logs.jsonl
   |
   v
 Python analyzer metrics
   |
   v
-Python synthetic dataset generator
-  |
-  v
 reports/generated/synthetic_dataset.csv
   |
   v
-docs/performance-results.md
+models/anomaly_classifier.joblib
+models/label_encoder.joblib
+reports/generated/model_metrics.json
+  |
+  v
+ML prediction output
 ```
-
-The benchmark report compares:
-
-- Normal runtime behavior
-- Priority scheduler behavior
-- Earliest-deadline-first scheduler behavior
-- Queue-overflow behavior
-- CPU-spike timing-pressure behavior
-- Task-crash failure behavior
-- Slow-task fault behavior
-- Dropped-message fault behavior
-- Watchdog timeout and recovery behavior
 
 ---
 
-## 9. Design Notes
+## 11. Design Notes
 
-### 9.1 Why JSONL?
+### 11.1 Why JSONL?
 
-JSONL is simple, append-friendly, and easy to analyze. Each runtime event is one JSON object on one line. This makes logs compatible with Python scripts, shell tools, and future dashboards.
+JSONL is simple, append-friendly, and easy to analyze. Each runtime event is one JSON object on one line.
 
-### 9.2 Why Bounded Queues?
+### 11.2 Why Bounded Queues?
 
 Embedded systems often use bounded queues to prevent uncontrolled memory growth. The message bus models this by rejecting messages once a queue reaches its limit.
 
-### 9.3 Why Fault Injection?
+### 11.3 Why Fault Injection?
 
-Fault injection proves the runtime can produce meaningful telemetry under unhealthy conditions. It also gives the Python analyzer realistic signals to classify.
+Fault injection proves the runtime can produce meaningful telemetry under unhealthy conditions.
 
-### 9.4 Why Watchdog Recovery?
+### 11.4 Why Keep the Rule-Based Detector?
 
-Watchdogs are common in embedded systems. This simulator logs timeout and recovery events to demonstrate fault-response behavior without requiring actual process restarts.
+The rule-based anomaly detector remains useful because it is explainable. It shows why a window is considered abnormal.
 
-### 9.5 Why Docker?
+### 11.5 Why Add ML?
 
-Docker makes the project easier to review. A recruiter or engineer can run the demo without manually configuring the full local toolchain.
+The ML layer demonstrates a real supervised-learning workflow using the synthetic telemetry dataset generated by the simulator.
+
+### 11.6 Why Random Forest?
+
+A random forest is a practical first model for tabular telemetry because it can learn nonlinear feature interactions and expose class probabilities without requiring a large deep-learning pipeline.
 
 ---
 
-## 10. Current Limitations
+## 12. Current Limitations
 
 - Timing is simulated on Linux rather than hard real-time hardware.
-- Recovery and task-crash behavior are simulated through logs and scheduler state rather than real thread/process restart.
-- The anomaly detector is feature/rule-based rather than a trained ML model.
-- The synthetic dataset generator labels windows based on scenario identity rather than manual human annotation.
-- Normal runtime and the dedicated queue-overflow scenario can produce queue-full drops when message production exceeds logger consumption.
+- Recovery and task-crash behavior are simulated through logs and scheduler state.
+- The synthetic dataset labels are scenario-derived, not human-annotated per-window labels.
+- The model is trained on synthetic scenario telemetry and is not production-validated.
+- Generated model artifacts are intentionally excluded from Git unless intentionally added later for demo convenience.
 
 ---
 
-## 11. Future Architecture Improvements
+## 13. Future Architecture Improvements
 
 Potential next improvements:
 
 1. Corrupted-message simulation.
-4. FastAPI analyzer endpoint.
-5. React dashboard.
-6. Synthetic training-data generator.
-7. Trained anomaly detection model.
-8. Final documentation and CI refresh after advanced features.
+2. FastAPI analyzer endpoint.
+3. React dashboard.
+4. ONNX model export.
+5. Visualization for anomaly scores and ML predictions.
+6. CI smoke tests for Docker, dataset generation, and ML training.

@@ -8,11 +8,11 @@ The project uses:
 
 - GoogleTest for C++ runtime component tests
 - CTest through CMake for running C++ tests
-- pytest for Python analyzer, anomaly-detector, and training-dataset tests
+- pytest for Python analyzer, anomaly-detector, training-dataset, and ML tests
 - `scripts/run_tests.sh` as the one-command local test workflow
 - GitHub Actions CI for automated build and test verification on `main` pushes and pull requests
 
-The goal is to prove that core runtime components and analyzer logic continue working as the project grows.
+The goal is to prove that core runtime components, analyzer logic, dataset generation, and ML training/prediction continue working as the project grows.
 
 ---
 
@@ -31,14 +31,6 @@ This script performs the full test workflow:
 3. Run C++ tests through CTest.
 4. Check that pytest is installed.
 5. Run Python tests.
-
-Expected output after Phase 20 includes the expanded scheduler, CPU-spike, and task-crash tests:
-
-```text
-100% tests passed, 0 tests failed out of 34
-17 passed
-[INFO] All tests passed
-```
 
 ---
 
@@ -102,12 +94,6 @@ cpp-runtime/tests/test_watchdog.cpp
 
 ### 4.1 Message Bus Tests
 
-File:
-
-```text
-cpp-runtime/tests/test_message_bus.cpp
-```
-
 Expected coverage:
 
 | Behavior | Purpose |
@@ -122,12 +108,6 @@ Expected coverage:
 
 ### 4.2 Fault Injector Tests
 
-File:
-
-```text
-cpp-runtime/tests/test_fault_injector.cpp
-```
-
 Expected coverage:
 
 | Behavior | Purpose |
@@ -135,23 +115,13 @@ Expected coverage:
 | Disabled faults | Confirms inactive faults do not affect runtime behavior. |
 | Slow-task timing | Confirms slow-task faults activate only after configured start time. |
 | Target matching | Confirms slow-task faults apply only to matching target tasks. |
-| Dropped-message 100% drop | Confirms configured message drops can always occur. |
-| Source/target matching | Confirms message drop faults apply to matching messages only. |
-| Zero-percent drop | Confirms 0% probability does not drop messages. |
-| CPU-spike activation timing | Confirms CPU-spike faults activate only after the configured start time. |
+| Dropped-message behavior | Confirms configured message drops can occur. |
+| CPU-spike timing | Confirms CPU-spike faults activate only after configured start time. |
 | CPU-spike target matching | Confirms CPU-spike faults apply only to the configured target task. |
-| CPU-spike disabled behavior | Confirms disabled CPU-spike faults do not affect task timing. |
-| Task-crash activation timing | Confirms task-crash faults activate only after the configured start time. |
+| Task-crash timing | Confirms task-crash faults activate only after configured start time. |
 | Task-crash target matching | Confirms task-crash faults apply only to the configured target task. |
-| Task-crash disabled behavior | Confirms disabled task-crash faults do not fail tasks. |
 
 ### 4.3 Scheduler Tests
-
-File:
-
-```text
-cpp-runtime/tests/test_scheduler.cpp
-```
 
 Expected coverage:
 
@@ -160,18 +130,12 @@ Expected coverage:
 | Round-robin ordering | Confirms due tasks run in config/vector order under `round_robin`. |
 | Priority ordering | Confirms due tasks run by ascending priority number under `priority`. |
 | Earliest-deadline-first ordering | Confirms due tasks run by nearest absolute deadline under `earliest_deadline_first`. |
-| Earliest-deadline-first priority tie-break | Confirms priority breaks ties when due tasks have the same deadline. |
-| Earliest-deadline-first stable-order tie-break | Confirms original task order is preserved when deadline and priority are tied. |
-| Invalid scheduler mode | Confirms unsupported scheduler modes still raise an error. |
-| Task-crash scheduler handling | Confirms task-crash faults log failure/skipped-task telemetry while allowing the scheduler to continue. |
+| EDF priority tie-break | Confirms priority breaks ties when due tasks have the same deadline. |
+| EDF stable-order tie-break | Confirms original order is preserved when deadline and priority are tied. |
+| Invalid scheduler mode | Confirms unsupported scheduler modes raise an error. |
+| Task-crash handling | Confirms task-crash faults log failure/skipped-task telemetry while scheduler continues. |
 
 ### 4.4 Watchdog Tests
-
-File:
-
-```text
-cpp-runtime/tests/test_watchdog.cpp
-```
 
 Expected coverage:
 
@@ -198,15 +162,10 @@ Current Python test files:
 ai-analyzer/tests/test_analyzer.py
 ai-analyzer/tests/test_anomaly_detector.py
 ai-analyzer/tests/test_training_dataset.py
+ai-analyzer/tests/test_ml_model.py
 ```
 
 ### 5.1 Analyzer Tests
-
-File:
-
-```text
-ai-analyzer/tests/test_analyzer.py
-```
 
 Expected coverage:
 
@@ -218,17 +177,10 @@ Expected coverage:
 | Normal health classification | Confirms clean logs classify correctly. |
 | Watchdog unstable classification | Confirms watchdog events classify as unstable. |
 | Message drop reason counting | Confirms queue-full and fault-injected drops are counted separately. |
-| CPU-spike root cause reporting | Confirms CPU-spike faults are counted separately and reported in root causes. |
-| Task-crash root cause reporting | Confirms task-crash faults, task failures, and skipped tasks are counted and reported as unstable. |
+| CPU-spike root cause reporting | Confirms CPU-spike faults are counted separately and reported. |
+| Task-crash root cause reporting | Confirms task-crash faults, failures, and skipped tasks are counted. |
 
 ### 5.2 Anomaly Detector Tests
-
-File:
-
-```text
-ai-analyzer/tests/test_anomaly_detector.py
-ai-analyzer/tests/test_training_dataset.py
-```
 
 Expected coverage:
 
@@ -240,18 +192,10 @@ Expected coverage:
 | Clean-window classification | Confirms normal windows classify as normal. |
 | Watchdog unstable classification | Confirms watchdog events classify as unstable. |
 | Deadline-miss unstable classification | Confirms repeated deadline misses classify as unstable. |
-| Overall anomaly report | Confirms summary report generation works. |
 | CPU-spike timing pressure | Confirms CPU-spike windows can classify as unstable when deadline misses occur. |
 | Task-crash failure windows | Confirms task-failure and skipped-task windows classify as unstable. |
 
-
 ### 5.3 Training Dataset Tests
-
-File:
-
-```text
-ai-analyzer/tests/test_training_dataset.py
-```
 
 Expected coverage:
 
@@ -259,11 +203,30 @@ Expected coverage:
 |---|---|
 | Scenario label inference | Confirms known scenario names map to expected labels. |
 | Unknown label rejection | Confirms unknown scenario labels fail safely. |
-| Scenario argument parsing | Confirms `NAME=PATH` command arguments are parsed correctly. |
+| Scenario argument parsing | Confirms `NAME=PATH` arguments are parsed correctly. |
 | Invalid scenario argument rejection | Confirms bad CLI-style input fails safely. |
 | CSV generation | Confirms dataset rows and headers are written correctly. |
 | Missing log failure | Confirms missing logs fail when `skip_missing=False`. |
 | Missing log skip mode | Confirms missing logs can be skipped when `skip_missing=True`. |
+
+### 5.4 ML Model Tests
+
+File:
+
+```text
+ai-analyzer/tests/test_ml_model.py
+```
+
+Expected coverage:
+
+| Behavior | Purpose |
+|---|---|
+| Training artifact generation | Confirms model, label encoder, and metrics files are written. |
+| Dataset loading | Confirms CSV feature rows can be loaded for training. |
+| Label encoding | Confirms labels are encoded and preserved in metrics. |
+| Model prediction | Confirms dataset prediction returns labels and confidence values. |
+| Log-window prediction | Confirms runtime event windows can be converted into prediction input. |
+| Confidence range | Confirms confidence values stay between 0.0 and 1.0. |
 
 ---
 
@@ -308,8 +271,9 @@ Run one file:
 
 ```bash
 python3 -m pytest ai-analyzer/tests/test_analyzer.py -q
-python3 -m pytest ai-analyzer/tests/test_anomaly_detector.py
-ai-analyzer/tests/test_training_dataset.py -q
+python3 -m pytest ai-analyzer/tests/test_anomaly_detector.py -q
+python3 -m pytest ai-analyzer/tests/test_training_dataset.py -q
+python3 -m pytest ai-analyzer/tests/test_ml_model.py -q
 ```
 
 ---
@@ -325,18 +289,7 @@ docker compose up --build demo
 Generate the dataset locally:
 
 ```bash
-python3 ai-analyzer/training/generate_dataset.py \
-  --output reports/generated/synthetic_dataset.csv \
-  --window-ms 5000 \
-  --scenario normal=logs/normal_runtime_logs.jsonl \
-  --scenario priority_scheduler=logs/priority_scheduler_runtime_logs.jsonl \
-  --scenario deadline_scheduler=logs/deadline_scheduler_runtime_logs.jsonl \
-  --scenario queue_overflow=logs/queue_overflow_runtime_logs.jsonl \
-  --scenario cpu_spike=logs/cpu_spike_runtime_logs.jsonl \
-  --scenario task_crash=logs/task_crash_runtime_logs.jsonl \
-  --scenario slow_task=logs/slow_task_runtime_logs.jsonl \
-  --scenario dropped_messages=logs/dropped_messages_runtime_logs.jsonl \
-  --scenario watchdog=logs/watchdog_runtime_logs.jsonl
+python3 ai-analyzer/training/generate_dataset.py   --output reports/generated/synthetic_dataset.csv   --window-ms 5000   --scenario normal=logs/normal_runtime_logs.jsonl   --scenario priority_scheduler=logs/priority_scheduler_runtime_logs.jsonl   --scenario deadline_scheduler=logs/deadline_scheduler_runtime_logs.jsonl   --scenario queue_overflow=logs/queue_overflow_runtime_logs.jsonl   --scenario cpu_spike=logs/cpu_spike_runtime_logs.jsonl   --scenario task_crash=logs/task_crash_runtime_logs.jsonl   --scenario slow_task=logs/slow_task_runtime_logs.jsonl   --scenario dropped_messages=logs/dropped_messages_runtime_logs.jsonl   --scenario watchdog=logs/watchdog_runtime_logs.jsonl
 ```
 
 Or use Docker:
@@ -352,48 +305,77 @@ ls -lh reports/generated
 head -n 5 reports/generated/synthetic_dataset.csv
 ```
 
-The CSV is generated output and should remain ignored by Git.
+---
+
+## 9. Validate ML Training and Prediction
+
+Train locally:
+
+```bash
+python3 ai-analyzer/ml/train_model.py   --dataset reports/generated/synthetic_dataset.csv   --model-output models/anomaly_classifier.joblib   --label-encoder-output models/label_encoder.joblib   --metrics-output reports/generated/model_metrics.json
+```
+
+Predict from dataset:
+
+```bash
+python3 ai-analyzer/ml/predict_model.py   --model models/anomaly_classifier.joblib   --label-encoder models/label_encoder.joblib   --dataset reports/generated/synthetic_dataset.csv   --limit 20
+```
+
+Predict from log:
+
+```bash
+python3 ai-analyzer/ml/predict_model.py   --model models/anomaly_classifier.joblib   --label-encoder models/label_encoder.joblib   --log logs/task_crash_runtime_logs.jsonl   --window-ms 5000
+```
+
+Analyzer integration:
+
+```bash
+python3 ai-analyzer/app/analyze.py   --log logs/task_crash_runtime_logs.jsonl   --window-ms 5000   --ml-model models/anomaly_classifier.joblib   --ml-label-encoder models/label_encoder.joblib
+```
+
+Docker:
+
+```bash
+docker compose run --rm ml-train
+docker compose run --rm ml-predict
+```
 
 ---
 
-## 9. What Passing Tests Prove
+## 10. What Passing Tests Prove
 
 Passing tests show that:
 
 - The bounded message bus respects queue limits.
-- FIFO message behavior is stable.
-- Invalid message-bus inputs are rejected.
+- Scheduler modes preserve expected ordering.
 - Fault injection activates only under intended conditions.
-- Round-robin scheduling preserves task-list order for due tasks.
-- Priority scheduling runs higher-priority due tasks first, where lower numeric priority means higher priority.
-- Earliest-deadline-first scheduling runs due tasks by nearest absolute deadline, then priority, then stable task order.
-- Slow-task, CPU-spike, task-crash, and dropped-message fault logic behaves predictably.
 - Watchdog threshold and cooldown behavior works.
-- Analyzer log parsing handles normal and bad inputs.
-- Health classification detects unstable watchdog scenarios.
+- Analyzer log parsing handles valid and invalid inputs.
+- Health classification detects warning and unstable scenarios.
 - Message drop reasons are counted correctly.
-- Anomaly detector windowing, feature extraction, and classification are stable.
-- The dataset generator can map scenario logs into labeled CSV rows.
+- Anomaly detector windowing and feature extraction are stable.
+- Dataset generation maps scenario logs into labeled CSV rows.
+- ML scripts can train a model, write artifacts, and produce predictions.
+- Optional ML prediction can run without replacing the existing analyzer workflow.
 
 ---
 
-## 9. What Tests Do Not Prove Yet
+## 11. What Tests Do Not Prove Yet
 
 Current tests do not fully prove:
 
 - Real hardware timing correctness.
 - Hard real-time scheduling guarantees.
-- Real process/thread crash recovery behavior. The project currently simulates task crash behavior inside the scheduler.
-- Performance under very large logs.
-- Accuracy of a trained ML model.
-
-Phase 18 adds a config-driven queue-overflow scenario. Phase 19 adds CPU-spike unit/analyzer tests and a Docker/demo scenario. Phase 20 adds task-crash unit/analyzer tests and a Docker/demo scenario. Phase 21 adds synthetic dataset generator tests. This scenario does not require a new unit test because it exercises existing bounded queue behavior already covered by the Message Bus tests. The scenario is validated through runtime execution, analyzer output, and Docker demo coverage.
+- Real process/thread crash recovery behavior.
+- Model accuracy on production or real embedded data.
+- Robustness to very large datasets.
+- Correctness of scenario-derived labels at the per-window level.
 
 Those areas are future enhancement opportunities.
 
 ---
 
-## 10. GitHub Actions CI
+## 12. GitHub Actions CI
 
 GitHub Actions CI was added in Phase 15.
 
@@ -407,12 +389,16 @@ Current CI tasks:
 
 1. Checkout repository.
 2. Install Linux C++ build dependencies.
-3. Install Python and pytest.
+3. Install Python dependencies.
 4. Configure CMake with Ninja.
 5. Build runtime and tests.
 6. Run C++ tests with CTest.
 7. Run Python tests with pytest.
 
-The existing CI workflow should continue to work after Phase 17 because it builds the CMake test target and runs all discovered C++ tests automatically.
+Future CI improvements can optionally add:
 
-Future CI improvements can optionally add Docker image builds, analyzer smoke tests on sample logs, and script permission checks.
+- Docker image builds
+- Dataset generator smoke test
+- ML training smoke test
+- Analyzer ML prediction smoke test
+- Script permission checks

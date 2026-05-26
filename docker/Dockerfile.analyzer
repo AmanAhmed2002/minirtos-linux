@@ -2,10 +2,12 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+RUN pip install --no-cache-dir scikit-learn joblib
+
 COPY ai-analyzer ./ai-analyzer
 COPY scripts ./scripts
 
 RUN chmod +x scripts/*.sh \
-    && mkdir -p logs
+    && mkdir -p logs reports/generated models
 
 CMD ["./scripts/run_analyzer.sh", "logs/runtime_logs.jsonl", "5000"]
