@@ -1,0 +1,19 @@
+# Count C++ runtime files correctly
+cpp-runtime/**/*.cpp linguist-language=C++
+cpp-runtime/**/*.hpp linguist-language=C++
+cpp-runtime/**/*.h linguist-language=C++
+cpp-runtime/**/*.cc linguist-language=C++
+cpp-runtime/**/*.cxx linguist-language=C++
+
+# Count Python analyzer files correctly
+ai-analyzer/**/*.py linguist-language=Python
+
+# Do not count generated/vendor/build/demo output files
+logs/** linguist-generated=true
+reports/generated/** linguist-generated=true
+models/** linguist-generated=true
+cpp-runtime/build/** linguist-generated=true
+**/build/** linguist-generated=true
+*.jsonl linguist-generated=true
+*.joblib linguist-generated=true
+*.pkl linguist-generated=true
