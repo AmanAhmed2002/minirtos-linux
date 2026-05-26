@@ -71,4 +71,21 @@ echo "========================================"
 echo "[DEMO] Docker demo completed successfully"
 echo "========================================"
 echo "[DEMO] Generated logs:"
+echo
+echo "========================================"
+echo "[DEMO] Generating synthetic training dataset"
+echo "========================================"
+
+python3 ai-analyzer/training/generate_dataset.py \
+    --output reports/generated/synthetic_dataset.csv \
+    --window-ms 5000 \
+    --scenario normal=logs/normal_runtime_logs.jsonl \
+    --scenario priority_scheduler=logs/priority_scheduler_runtime_logs.jsonl \
+    --scenario deadline_scheduler=logs/deadline_scheduler_runtime_logs.jsonl \
+    --scenario queue_overflow=logs/queue_overflow_runtime_logs.jsonl \
+    --scenario cpu_spike=logs/cpu_spike_runtime_logs.jsonl \
+    --scenario task_crash=logs/task_crash_runtime_logs.jsonl \
+    --scenario slow_task=logs/slow_task_runtime_logs.jsonl \
+    --scenario dropped_messages=logs/dropped_messages_runtime_logs.jsonl \
+    --scenario watchdog=logs/watchdog_runtime_logs.jsonl
 ls -1 logs/*runtime_logs.jsonl

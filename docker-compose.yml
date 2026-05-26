@@ -7,6 +7,7 @@ services:
     command: ./scripts/run_docker_demo.sh
     volumes:
       - ./logs:/app/logs
+      - ./reports/generated:/app/reports/generated
 
   runtime-normal:
     build:
@@ -96,3 +97,24 @@ services:
     command: ./scripts/run_analyzer.sh logs/runtime_logs.jsonl 5000
     volumes:
       - ./logs:/app/logs
+  training-dataset:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.runtime
+    container_name: minirtos-training-dataset
+    command: >
+      python3 ai-analyzer/training/generate_dataset.py
+      --output reports/generated/synthetic_dataset.csv
+      --window-ms 5000
+      --scenario normal=logs/normal_runtime_logs.jsonl
+      --scenario priority_scheduler=logs/priority_scheduler_runtime_logs.jsonl
+      --scenario deadline_scheduler=logs/deadline_scheduler_runtime_logs.jsonl
+      --scenario queue_overflow=logs/queue_overflow_runtime_logs.jsonl
+      --scenario cpu_spike=logs/cpu_spike_runtime_logs.jsonl
+      --scenario task_crash=logs/task_crash_runtime_logs.jsonl
+      --scenario slow_task=logs/slow_task_runtime_logs.jsonl
+      --scenario dropped_messages=logs/dropped_messages_runtime_logs.jsonl
+      --scenario watchdog=logs/watchdog_runtime_logs.jsonl
+    volumes:
+      - ./logs:/app/logs
+      - ./reports/generated:/app/reports/generated 
