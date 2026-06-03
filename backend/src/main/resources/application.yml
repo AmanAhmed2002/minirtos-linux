@@ -14,3 +14,13 @@ management:
     health:
       probes:
         enabled: true
+
+minirtos:
+  project-root: ${MINIRTOS_PROJECT_ROOT:..}
+  runtime-binary: ${MINIRTOS_RUNTIME_BINARY:cpp-runtime/build/minirtos_runtime}
+  python-command: ${MINIRTOS_PYTHON_COMMAND:python3}
+  analyzer-script: ${MINIRTOS_ANALYZER_SCRIPT:ai-analyzer/app/analyze.py}
+  logs-dir: ${MINIRTOS_LOGS_DIR:logs}
+  runs-dir: ${MINIRTOS_RUNS_DIR:runs}
+  window-ms: ${MINIRTOS_WINDOW_MS:5000}
+  process-timeout-seconds: ${MINIRTOS_PROCESS_TIMEOUT_SECONDS:120}

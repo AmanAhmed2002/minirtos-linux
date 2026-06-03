@@ -1,19 +1,17 @@
 package com.minirtos.playground.controller;
 
-import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.minirtos.playground.MiniRtosPlaygroundApplication;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest(classes = MiniRtosPlaygroundApplication.class)
-@AutoConfigureMockMvc
+@WebMvcTest(HealthController.class)
 class HealthControllerTest {
 
     @Autowired
@@ -23,7 +21,8 @@ class HealthControllerTest {
     void healthReturnsOk() throws Exception {
         mockMvc.perform(get("/api/health"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.status", is("OK")))
-            .andExpect(jsonPath("$.service", is("minirtos-playground-backend")));
+            .andExpect(jsonPath("$.status", equalTo("OK")))
+            .andExpect(jsonPath("$.service", equalTo("minirtos-playground-backend")))
+            .andExpect(jsonPath("$.timestamp", notNullValue()));
     }
 }

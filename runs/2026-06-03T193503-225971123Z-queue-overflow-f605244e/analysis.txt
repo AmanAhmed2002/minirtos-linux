@@ -1,0 +1,90 @@
+MiniRTOS-Linux Runtime Health Analyzer
+======================================
+
+Log file: /home/aahmed/projects/minirtos-linux/runs/2026-06-03T193503-225971123Z-queue-overflow-f605244e/runtime_logs.jsonl
+Events loaded: 3064
+Runtime status: WARNING
+Simulation: queue_overflow
+Scheduler mode: round_robin
+Configured duration: 30 seconds
+Observed log duration: 30001 ms
+
+Event counts:
+  message_dropped: 956
+  message_received: 30
+  message_sent: 33
+  runtime_finished: 1
+  runtime_started: 1
+  runtime_summary: 3
+  scheduler_finished: 1
+  scheduler_started: 1
+  task_completed: 1019
+  task_started: 1019
+
+Severity counts:
+  info: 2108
+  warning: 956
+
+Task summary:
+  ControlTask:
+    runs: 593
+    deadline_misses: 0
+    deadline_missed_events: 0
+    avg_duration_ms: 5.0
+    max_duration_ms: 5
+  LoggerTask:
+    runs: 30
+    deadline_misses: 0
+    deadline_missed_events: 0
+    avg_duration_ms: 15.0
+    max_duration_ms: 15
+  NetworkTask:
+    runs: 396
+    deadline_misses: 0
+    deadline_missed_events: 0
+    avg_duration_ms: 8.0
+    max_duration_ms: 8
+
+Message summary:
+  sent: 33
+  received: 30
+  dropped: 956
+  queue_full_drops: 956
+  fault_injected_drops: 0
+
+Fault summary:
+  none
+
+Watchdog summary:
+  watchdog_timeouts: 0
+  task_recoveries: 0
+
+Task failure summary:
+  task_failures: 0
+  task_skips: 0
+
+Likely root causes:
+  - One or more task queues became full, causing queue_full message drops.
+
+AI Anomaly Detection Summary
+============================
+
+Window size: 5000 ms
+Overall classification: WARNING
+Anomaly windows: 6 / 7
+Highest anomaly score: 0.39
+
+Top anomaly drivers:
+  - max_task_duration_ms
+  - message_dropped_count
+  - queue_full_drop_count
+  - warning_event_count
+
+Window summary:
+  0-4999 ms: WARNING score=0.39 drivers=message_dropped_count, queue_full_drop_count, warning_event_count, max_task_duration_ms
+  5000-9999 ms: WARNING score=0.39 drivers=message_dropped_count, queue_full_drop_count, warning_event_count, max_task_duration_ms
+  10000-14999 ms: WARNING score=0.39 drivers=message_dropped_count, queue_full_drop_count, warning_event_count, max_task_duration_ms
+  15000-19999 ms: WARNING score=0.39 drivers=message_dropped_count, queue_full_drop_count, warning_event_count, max_task_duration_ms
+  20000-24999 ms: WARNING score=0.39 drivers=message_dropped_count, queue_full_drop_count, warning_event_count, max_task_duration_ms
+  25000-29999 ms: WARNING score=0.39 drivers=message_dropped_count, queue_full_drop_count, warning_event_count, max_task_duration_ms
+  30000-34999 ms: NORMAL score=0.00 drivers=none

@@ -1,404 +1,365 @@
-# MiniRTOS-Linux Testing Guide
+# MiniRTOS-Linux / MiniRTOS Playground Testing Guide
 
-## 1. Purpose
+## Current Status After This Chat
 
-This document explains the automated testing setup for MiniRTOS-Linux.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 is now complete for the local backend MVP.
 
-The project uses:
+Phase 26 added the Run Orchestration API:
 
-- GoogleTest for C++ runtime component tests
-- CTest through CMake for running C++ tests
-- pytest for Python analyzer, anomaly-detector, training-dataset, and ML tests
-- `scripts/run_tests.sh` as the one-command local test workflow
-- GitHub Actions CI for automated build and test verification on `main` pushes and pull requests
+- `POST /api/runs`
+- `GET /api/runs`
+- `GET /api/runs/{runId}`
+- `GET /api/runs/{runId}/analysis`
+- trusted scenario-ID validation
+- C++ runtime execution from Spring Boot
+- unique per-run output folders under `runs/<runId>/`
+- runtime log copying from `logs/runtime_logs.jsonl`
+- Python analyzer execution from Spring Boot
+- analyzer text saved as `analysis.txt`
+- structured analysis JSON returned by the backend
+- backend process timeout handling
+- safe subprocess output draining to avoid hanging processes
 
-The goal is to prove that core runtime components, analyzer logic, dataset generation, and ML training/prediction continue working as the project grows.
+Verified behavior:
+
+- Spring Boot backend runs locally on port `8081`.
+- `GET /api/health` works.
+- `GET /api/scenarios` works.
+- `POST /api/runs` successfully runs `queue_overflow`.
+- A successful `queue_overflow` run returned `status=COMPLETED`, `runtimeHealth=WARNING`, and `errorMessage=null`.
+- `WARNING` is expected for `queue_overflow` because the scenario intentionally creates bounded queue pressure and dropped messages.
+- Backend generated `runs/<runId>/runtime_logs.jsonl` and `runs/<runId>/analysis.txt`.
+- Existing C++/Python/analyzer/ML Docker workflow remains intact.
+
+Important implementation notes:
+
+- Backend uses Java 17.
+- Backend runs on port `8081` because Nginx is already using `8080` locally.
+- Phase 26 stores run metadata in memory only. Run history resets when the backend restarts.
+- Phase 27 should add PostgreSQL persistence.
+- The backend accepts only known scenario IDs and never accepts arbitrary user-provided config paths.
+
 
 ---
 
-## 2. Run All Tests
+## 1. Core C++/Python Test Workflow
 
-From the repository root:
+From repo root:
 
 ```bash
 ./scripts/run_tests.sh
 ```
 
-This script performs the full test workflow:
+This runs:
 
-1. Configure C++ build with CMake and Ninja.
-2. Build the C++ runtime and C++ test targets.
-3. Run C++ tests through CTest.
-4. Check that pytest is installed.
-5. Run Python tests.
-
----
-
-## 3. Test Script
-
-Current intended `scripts/run_tests.sh`:
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-echo "[INFO] Configuring C++ build"
-cmake -S cpp-runtime -B cpp-runtime/build -G Ninja
-
-echo "[INFO] Building C++ runtime and tests"
-cmake --build cpp-runtime/build
-
-echo "[INFO] Running C++ tests"
-ctest --test-dir cpp-runtime/build --output-on-failure
-
-echo "[INFO] Checking Python test dependency"
-python3 - <<'PY'
-try:
-    import pytest  # noqa: F401
-except ModuleNotFoundError:
-    raise SystemExit(
-        "[ERROR] pytest is not installed. Install it with: python3 -m pip install pytest"
-    )
-PY
-
-echo "[INFO] Running Python tests"
-python3 -m pytest ai-analyzer/tests -q
-
-echo "[INFO] All tests passed"
-```
-
-Make sure the script is executable:
-
-```bash
-chmod +x scripts/run_tests.sh
-```
+1. CMake configure.
+2. C++ build.
+3. CTest.
+4. pytest dependency check.
+5. Python tests.
 
 ---
 
-## 4. C++ Test Coverage
+## 2. Backend Test Workflow
 
-C++ tests are located in:
+From repo root:
+
+```bash
+./scripts/build_cpp.sh
+cd backend
+mvn clean test
+```
+
+Expected:
 
 ```text
-cpp-runtime/tests/
+BUILD SUCCESS
 ```
 
-Current C++ test files:
-
-```text
-cpp-runtime/tests/test_message_bus.cpp
-cpp-runtime/tests/test_fault_injector.cpp
-cpp-runtime/tests/test_scheduler.cpp
-cpp-runtime/tests/test_watchdog.cpp
-```
-
-### 4.1 Message Bus Tests
-
-Expected coverage:
-
-| Behavior | Purpose |
-|---|---|
-| Queue registration | Confirms task queues can be created. |
-| FIFO send/receive | Confirms messages are received in send order. |
-| Full queue rejection | Confirms bounded queues reject messages when full. |
-| Empty receive | Confirms receiving from an empty queue is handled safely. |
-| Unknown target rejection | Confirms messages to unregistered queues are rejected. |
-| Invalid queue limit | Confirms invalid queue configuration is rejected. |
-| Empty task name | Confirms invalid task names are rejected. |
-
-### 4.2 Fault Injector Tests
-
-Expected coverage:
-
-| Behavior | Purpose |
-|---|---|
-| Disabled faults | Confirms inactive faults do not affect runtime behavior. |
-| Slow-task timing | Confirms slow-task faults activate only after configured start time. |
-| Target matching | Confirms slow-task faults apply only to matching target tasks. |
-| Dropped-message behavior | Confirms configured message drops can occur. |
-| CPU-spike timing | Confirms CPU-spike faults activate only after configured start time. |
-| CPU-spike target matching | Confirms CPU-spike faults apply only to the configured target task. |
-| Task-crash timing | Confirms task-crash faults activate only after configured start time. |
-| Task-crash target matching | Confirms task-crash faults apply only to the configured target task. |
-
-### 4.3 Scheduler Tests
-
-Expected coverage:
-
-| Behavior | Purpose |
-|---|---|
-| Round-robin ordering | Confirms due tasks run in config/vector order under `round_robin`. |
-| Priority ordering | Confirms due tasks run by ascending priority number under `priority`. |
-| Earliest-deadline-first ordering | Confirms due tasks run by nearest absolute deadline under `earliest_deadline_first`. |
-| EDF priority tie-break | Confirms priority breaks ties when due tasks have the same deadline. |
-| EDF stable-order tie-break | Confirms original order is preserved when deadline and priority are tied. |
-| Invalid scheduler mode | Confirms unsupported scheduler modes raise an error. |
-| Task-crash handling | Confirms task-crash faults log failure/skipped-task telemetry while scheduler continues. |
-
-### 4.4 Watchdog Tests
-
-Expected coverage:
-
-| Behavior | Purpose |
-|---|---|
-| Disabled watchdog | Confirms disabled watchdog does not alert. |
-| Threshold alert | Confirms repeated deadline misses trigger watchdog timeout. |
-| Recovery disabled | Confirms timeout can occur without recovery event. |
-| Recovery cooldown | Confirms cooldown limits repeated recovery events. |
-
----
-
-## 5. Python Test Coverage
-
-Python tests are located in:
-
-```text
-ai-analyzer/tests/
-```
-
-Current Python test files:
-
-```text
-ai-analyzer/tests/test_analyzer.py
-ai-analyzer/tests/test_anomaly_detector.py
-ai-analyzer/tests/test_training_dataset.py
-ai-analyzer/tests/test_ml_model.py
-```
-
-### 5.1 Analyzer Tests
-
-Expected coverage:
-
-| Behavior | Purpose |
-|---|---|
-| Valid JSONL loading | Confirms normal log files can be parsed. |
-| Missing log handling | Confirms missing files are handled correctly. |
-| Invalid JSONL handling | Confirms malformed logs are handled safely. |
-| Normal health classification | Confirms clean logs classify correctly. |
-| Watchdog unstable classification | Confirms watchdog events classify as unstable. |
-| Message drop reason counting | Confirms queue-full and fault-injected drops are counted separately. |
-| CPU-spike root cause reporting | Confirms CPU-spike faults are counted separately and reported. |
-| Task-crash root cause reporting | Confirms task-crash faults, failures, and skipped tasks are counted. |
-
-### 5.2 Anomaly Detector Tests
-
-Expected coverage:
-
-| Behavior | Purpose |
-|---|---|
-| Window splitting | Confirms event streams are split into time windows. |
-| Invalid window size | Confirms invalid settings are rejected. |
-| Feature extraction | Confirms event windows become feature dictionaries. |
-| Clean-window classification | Confirms normal windows classify as normal. |
-| Watchdog unstable classification | Confirms watchdog events classify as unstable. |
-| Deadline-miss unstable classification | Confirms repeated deadline misses classify as unstable. |
-| CPU-spike timing pressure | Confirms CPU-spike windows can classify as unstable when deadline misses occur. |
-| Task-crash failure windows | Confirms task-failure and skipped-task windows classify as unstable. |
-
-### 5.3 Training Dataset Tests
-
-Expected coverage:
-
-| Behavior | Purpose |
-|---|---|
-| Scenario label inference | Confirms known scenario names map to expected labels. |
-| Unknown label rejection | Confirms unknown scenario labels fail safely. |
-| Scenario argument parsing | Confirms `NAME=PATH` arguments are parsed correctly. |
-| Invalid scenario argument rejection | Confirms bad CLI-style input fails safely. |
-| CSV generation | Confirms dataset rows and headers are written correctly. |
-| Missing log failure | Confirms missing logs fail when `skip_missing=False`. |
-| Missing log skip mode | Confirms missing logs can be skipped when `skip_missing=True`. |
-
-### 5.4 ML Model Tests
-
-File:
-
-```text
-ai-analyzer/tests/test_ml_model.py
-```
-
-Expected coverage:
-
-| Behavior | Purpose |
-|---|---|
-| Training artifact generation | Confirms model, label encoder, and metrics files are written. |
-| Dataset loading | Confirms CSV feature rows can be loaded for training. |
-| Label encoding | Confirms labels are encoded and preserved in metrics. |
-| Model prediction | Confirms dataset prediction returns labels and confidence values. |
-| Log-window prediction | Confirms runtime event windows can be converted into prediction input. |
-| Confidence range | Confirms confidence values stay between 0.0 and 1.0. |
-
----
-
-## 6. Run C++ Tests Manually
-
-Configure and build:
+Run backend:
 
 ```bash
-cmake -S cpp-runtime -B cpp-runtime/build -G Ninja
-cmake --build cpp-runtime/build
+mvn spring-boot:run
 ```
 
-Run all C++ tests:
+Test:
 
 ```bash
-ctest --test-dir cpp-runtime/build --output-on-failure
+curl http://localhost:8081/api/health
+curl http://localhost:8081/api/scenarios
 ```
 
-Run with verbose output:
+Run a scenario:
 
 ```bash
-ctest --test-dir cpp-runtime/build --output-on-failure --verbose
+curl -X POST http://localhost:8081/api/runs \
+  -H "Content-Type: application/json" \
+  -d '{"scenarioId":"queue_overflow"}'
+```
+
+Expected:
+
+```text
+status=COMPLETED
+runtimeHealth=WARNING
+errorMessage=null
 ```
 
 ---
 
-## 7. Run Python Tests Manually
+## 3. Docker Verification
 
-Run all Python tests:
-
-```bash
-python3 -m pytest ai-analyzer/tests -q
-```
-
-Run with verbose output:
+Validate Compose:
 
 ```bash
-python3 -m pytest ai-analyzer/tests -v
+docker compose config
 ```
 
-Run one file:
+Run backend:
 
 ```bash
-python3 -m pytest ai-analyzer/tests/test_analyzer.py -q
-python3 -m pytest ai-analyzer/tests/test_anomaly_detector.py -q
-python3 -m pytest ai-analyzer/tests/test_training_dataset.py -q
-python3 -m pytest ai-analyzer/tests/test_ml_model.py -q
+docker compose up --build backend
 ```
 
----
+Test:
 
-## 8. Validate Dataset Generation
+```bash
+curl http://localhost:8081/api/health
+curl http://localhost:8081/api/scenarios
+curl -X POST http://localhost:8081/api/runs \
+  -H "Content-Type: application/json" \
+  -d '{"scenarioId":"queue_overflow"}'
+```
 
-Generate scenario logs first:
+Run full existing demo:
 
 ```bash
 docker compose up --build demo
-```
-
-Generate the dataset locally:
-
-```bash
-python3 ai-analyzer/training/generate_dataset.py   --output reports/generated/synthetic_dataset.csv   --window-ms 5000   --scenario normal=logs/normal_runtime_logs.jsonl   --scenario priority_scheduler=logs/priority_scheduler_runtime_logs.jsonl   --scenario deadline_scheduler=logs/deadline_scheduler_runtime_logs.jsonl   --scenario queue_overflow=logs/queue_overflow_runtime_logs.jsonl   --scenario cpu_spike=logs/cpu_spike_runtime_logs.jsonl   --scenario task_crash=logs/task_crash_runtime_logs.jsonl   --scenario slow_task=logs/slow_task_runtime_logs.jsonl   --scenario dropped_messages=logs/dropped_messages_runtime_logs.jsonl   --scenario watchdog=logs/watchdog_runtime_logs.jsonl
-```
-
-Or use Docker:
-
-```bash
-docker compose run --rm training-dataset
-```
-
-Verify output:
-
-```bash
-ls -lh reports/generated
-head -n 5 reports/generated/synthetic_dataset.csv
-```
-
----
-
-## 9. Validate ML Training and Prediction
-
-Train locally:
-
-```bash
-python3 ai-analyzer/ml/train_model.py   --dataset reports/generated/synthetic_dataset.csv   --model-output models/anomaly_classifier.joblib   --label-encoder-output models/label_encoder.joblib   --metrics-output reports/generated/model_metrics.json
-```
-
-Predict from dataset:
-
-```bash
-python3 ai-analyzer/ml/predict_model.py   --model models/anomaly_classifier.joblib   --label-encoder models/label_encoder.joblib   --dataset reports/generated/synthetic_dataset.csv   --limit 20
-```
-
-Predict from log:
-
-```bash
-python3 ai-analyzer/ml/predict_model.py   --model models/anomaly_classifier.joblib   --label-encoder models/label_encoder.joblib   --log logs/task_crash_runtime_logs.jsonl   --window-ms 5000
-```
-
-Analyzer integration:
-
-```bash
-python3 ai-analyzer/app/analyze.py   --log logs/task_crash_runtime_logs.jsonl   --window-ms 5000   --ml-model models/anomaly_classifier.joblib   --ml-label-encoder models/label_encoder.joblib
-```
-
-Docker:
-
-```bash
 docker compose run --rm ml-train
 docker compose run --rm ml-predict
 ```
 
 ---
 
-## 10. What Passing Tests Prove
+## 4. C++ Test Coverage
 
-Passing tests show that:
+C++ tests live in:
 
-- The bounded message bus respects queue limits.
-- Scheduler modes preserve expected ordering.
-- Fault injection activates only under intended conditions.
-- Watchdog threshold and cooldown behavior works.
-- Analyzer log parsing handles valid and invalid inputs.
-- Health classification detects warning and unstable scenarios.
-- Message drop reasons are counted correctly.
-- Anomaly detector windowing and feature extraction are stable.
-- Dataset generation maps scenario logs into labeled CSV rows.
-- ML scripts can train a model, write artifacts, and produce predictions.
-- Optional ML prediction can run without replacing the existing analyzer workflow.
+```text
+cpp-runtime/tests/
+```
+
+Current coverage:
+
+- Message bus queue registration.
+- FIFO send/receive.
+- Full queue rejection.
+- Unknown target rejection.
+- Fault injector activation timing.
+- Fault target matching.
+- Scheduler ordering for round-robin, priority, and EDF.
+- Invalid scheduler mode handling.
+- Task-crash scheduler handling.
+- Watchdog threshold and recovery cooldown.
 
 ---
 
-## 11. What Tests Do Not Prove Yet
+## 5. Python Test Coverage
+
+Python tests live in:
+
+```text
+ai-analyzer/tests/
+```
+
+Current coverage:
+
+- Analyzer JSONL loading.
+- Missing/invalid log handling.
+- Health classification.
+- Message drop reason counting.
+- CPU-spike root cause reporting.
+- Task-crash root cause reporting.
+- Anomaly window splitting.
+- Feature extraction.
+- Dataset label inference.
+- CSV dataset generation.
+- ML training artifact generation.
+- ML prediction and confidence range.
+
+---
+
+## 6. Backend Test Coverage
+
+Backend tests live in:
+
+```text
+backend/src/test/java/com/minirtos/playground/
+```
+
+Current tests should cover:
+
+```text
+HealthControllerTest.java
+ScenarioControllerTest.java
+```
+
+They verify:
+
+- `/api/health` returns 200.
+- `/api/health` returns `status=OK`.
+- `/api/health` returns correct service name.
+- `/api/scenarios` returns 200.
+- `/api/scenarios` includes the expected scenario IDs.
+- `/api/scenarios` exposes at least 9 scenarios.
+
+Phase 26 added logic that should be tested next:
+
+- `POST /api/runs` accepts valid scenario IDs.
+- Unknown scenario IDs are rejected.
+- Arbitrary config paths are not accepted.
+- Runtime subprocess timeout behavior.
+- Analyzer subprocess error handling.
+- Unique run log path creation.
+- `AnalyzerReportParser` parses analyzer reports.
+- `ProcessRunner` drains output without hanging.
+
+---
+
+## 7. Manual Phase 26 Verification
+
+Start backend:
+
+```bash
+cd backend
+mvn spring-boot:run
+```
+
+Run queue overflow:
+
+```bash
+curl -X POST http://localhost:8081/api/runs \
+  -H "Content-Type: application/json" \
+  -d '{"scenarioId":"queue_overflow"}'
+```
+
+Expected successful result:
+
+```text
+status=COMPLETED
+runtimeHealth=WARNING
+errorMessage=null
+```
+
+List runs:
+
+```bash
+curl http://localhost:8081/api/runs
+```
+
+Inspect one run:
+
+```bash
+curl http://localhost:8081/api/runs/<runId>
+curl http://localhost:8081/api/runs/<runId>/analysis
+```
+
+Inspect generated files:
+
+```bash
+ls -R runs/<runId>
+```
+
+Expected:
+
+```text
+runtime_logs.jsonl
+analysis.txt
+```
+
+Safety check:
+
+```bash
+curl -X POST http://localhost:8081/api/runs \
+  -H "Content-Type: application/json" \
+  -d '{"scenarioId":"../../bad/path"}'
+```
+
+Expected:
+
+```text
+Rejected as an unknown scenario ID.
+```
+
+---
+
+## 8. Dataset and ML Verification
+
+```bash
+docker compose up --build demo
+docker compose run --rm training-dataset
+docker compose run --rm ml-train
+docker compose run --rm ml-predict
+```
+
+Local ML commands:
+
+```bash
+python3 ai-analyzer/ml/train_model.py \
+  --dataset reports/generated/synthetic_dataset.csv \
+  --model-output models/anomaly_classifier.joblib \
+  --label-encoder-output models/label_encoder.joblib \
+  --metrics-output reports/generated/model_metrics.json
+
+python3 ai-analyzer/ml/predict_model.py \
+  --model models/anomaly_classifier.joblib \
+  --label-encoder models/label_encoder.joblib \
+  --dataset reports/generated/synthetic_dataset.csv \
+  --limit 20
+```
+
+---
+
+## 9. What Passing Tests Prove
+
+Passing tests prove:
+
+- Runtime components compile and work.
+- Scheduler modes preserve expected ordering.
+- Message bus respects bounded queues.
+- Fault injection works under configured conditions.
+- Watchdog threshold/cooldown behavior works.
+- Analyzer parsing and health classification work.
+- Dataset generation works.
+- ML training/prediction workflows work.
+- Spring Boot health and scenario APIs work.
+- Phase 26 local backend orchestration can run the simulator and analyzer successfully.
+
+---
+
+## 10. What Tests Do Not Prove Yet
 
 Current tests do not fully prove:
 
+- Hard real-time behavior.
 - Real hardware timing correctness.
-- Hard real-time scheduling guarantees.
-- Real process/thread crash recovery behavior.
-- Model accuracy on production or real embedded data.
-- Robustness to very large datasets.
-- Correctness of scenario-derived labels at the per-window level.
-
-Those areas are future enhancement opportunities.
+- Real process/thread crash recovery.
+- Production ML accuracy.
+- PostgreSQL persistence.
+- React frontend behavior.
+- Kubernetes deployment.
+- Full async job execution under concurrent users.
 
 ---
 
-## 12. GitHub Actions CI
+## 11. Recommended CI Updates
 
-GitHub Actions CI was added in Phase 15.
+Future GitHub Actions improvements:
 
-Target file:
-
-```text
-.github/workflows/ci.yml
-```
-
-Current CI tasks:
-
-1. Checkout repository.
-2. Install Linux C++ build dependencies.
-3. Install Python dependencies.
-4. Configure CMake with Ninja.
-5. Build runtime and tests.
-6. Run C++ tests with CTest.
-7. Run Python tests with pytest.
-
-Future CI improvements can optionally add:
-
-- Docker image builds
-- Dataset generator smoke test
-- ML training smoke test
-- Analyzer ML prediction smoke test
-- Script permission checks
+- Add backend Maven test job.
+- Add backend Docker build smoke test.
+- Add Docker Compose config validation.
+- Add dataset-generation smoke test.
+- Add ML-training smoke test.
+- Add backend orchestration smoke test with a short-duration test config.
+- Add frontend test job once React exists.

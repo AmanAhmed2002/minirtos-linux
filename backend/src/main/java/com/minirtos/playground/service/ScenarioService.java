@@ -1,5 +1,7 @@
 package com.minirtos.playground.service;
 
+import java.util.Optional;
+
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -201,4 +203,14 @@ public class ScenarioService {
             )
         );
     }
+    public Optional<ScenarioResponse> findById(String scenarioId) {
+      if (scenarioId == null || scenarioId.isBlank()) {
+        return Optional.empty();
+    }
+
+      return getScenarios().stream()
+        .filter(scenario -> scenario.id().equals(scenarioId))
+        .findFirst();
+    }
 }
+
