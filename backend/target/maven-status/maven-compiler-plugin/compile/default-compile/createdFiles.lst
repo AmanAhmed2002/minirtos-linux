@@ -1,0 +1,5 @@
+com/minirtos/playground/controller/ScenarioController.class
+com/minirtos/playground/controller/HealthController.class
+com/minirtos/playground/dto/ScenarioResponse.class
+com/minirtos/playground/MiniRtosPlaygroundApplication.class
+com/minirtos/playground/service/ScenarioService.class

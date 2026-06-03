@@ -54,7 +54,7 @@ services:
     command: ./cpp-runtime/build/minirtos_runtime --config configs/cpu_spike.json
     volumes:
       - ./logs:/app/logs
-    
+
   runtime-task-crash:
     build:
       context: .
@@ -63,6 +63,7 @@ services:
     command: ./cpp-runtime/build/minirtos_runtime --config configs/task_crash.json
     volumes:
       - ./logs:/app/logs
+
   runtime-slow-task:
     build:
       context: .
@@ -98,6 +99,7 @@ services:
     command: ./scripts/run_analyzer.sh logs/runtime_logs.jsonl 5000
     volumes:
       - ./logs:/app/logs
+
   training-dataset:
     build:
       context: .
@@ -148,3 +150,11 @@ services:
     volumes:
       - ./reports/generated:/app/reports/generated
       - ./models:/app/models
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    container_name: minirtos-playground-backend
+    ports:
+      - "8081:8081"
