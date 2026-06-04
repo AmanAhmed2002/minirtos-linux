@@ -8,6 +8,7 @@ import {
 } from "./api/minirtosApi";
 import { AnalysisPanel } from "./components/AnalysisPanel";
 import { DashboardHeader } from "./components/DashboardHeader";
+import { LearningModulePanel } from "./components/LearningModulePanel";
 import { RunHistory } from "./components/RunHistory";
 import { RunResultCard } from "./components/RunResultCard";
 import { ScenarioSelector } from "./components/ScenarioSelector";
@@ -33,6 +34,12 @@ function App() {
   const selectedRun = useMemo(
     () => runs.find((run) => run.runId === selectedRunId) ?? null,
     [runs, selectedRunId]
+  );
+
+  const selectedScenario = useMemo(
+    () =>
+      scenarios.find((scenario) => scenario.id === selectedScenarioId) ?? null,
+    [scenarios, selectedScenarioId]
   );
 
   async function refreshRuns() {
@@ -179,6 +186,8 @@ function App() {
             onSelectScenario={setSelectedScenarioId}
             onRunScenario={handleRunScenario}
           />
+
+          <LearningModulePanel scenario={selectedScenario} />
 
           <RunResultCard run={latestRun} />
         </div>

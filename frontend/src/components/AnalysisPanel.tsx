@@ -1,4 +1,7 @@
 import type { AnalysisResponse } from "../types/api";
+import { FaultExplanationPanel } from "./FaultExplanationPanel";
+import { QueuePressureChart } from "./QueuePressureChart";
+import { TaskTimeline } from "./TaskTimeline";
 
 interface AnalysisPanelProps {
   analysis: AnalysisResponse | null;
@@ -26,7 +29,8 @@ export function AnalysisPanel({ analysis, isLoading }: AnalysisPanelProps) {
         <h2>No analysis selected</h2>
         <p>
           Select a completed run from the history list to inspect task metrics,
-          event counts, message drops, root causes, and the raw analyzer report.
+          event counts, message drops, root causes, visual explanations, and the
+          raw analyzer report.
         </p>
       </section>
     );
@@ -61,6 +65,13 @@ export function AnalysisPanel({ analysis, isLoading }: AnalysisPanelProps) {
           <strong>{renderValue(analysis.observedDurationMs)} ms</strong>
         </div>
       </div>
+
+      <div className="visual-grid">
+        <QueuePressureChart messageSummary={messageSummary} />
+        <TaskTimeline taskMetrics={analysis.taskMetrics ?? {}} />
+      </div>
+
+      <FaultExplanationPanel analysis={analysis} />
 
       {messageSummary && (
         <>

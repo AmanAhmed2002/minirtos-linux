@@ -1,0 +1,102 @@
+MiniRTOS-Linux Runtime Health Analyzer
+======================================
+
+Log file: /app/runs/2026-06-04T182105-658690557Z-task-crash-61b9bbe0/runtime_logs.jsonl
+Events loaded: 1245
+Runtime status: UNSTABLE
+Simulation: task_crash
+Scheduler mode: round_robin
+Configured duration: 30 seconds
+Observed log duration: 30000 ms
+
+Event counts:
+  fault_injected: 1
+  message_dropped: 239
+  message_received: 60
+  message_sent: 80
+  runtime_finished: 1
+  runtime_started: 1
+  runtime_summary: 3
+  scheduler_finished: 1
+  scheduler_started: 1
+  task_completed: 379
+  task_failed: 1
+  task_skipped: 99
+  task_started: 379
+
+Severity counts:
+  error: 2
+  info: 905
+  warning: 338
+
+Task summary:
+  ControlTask:
+    runs: 299
+    deadline_misses: 0
+    deadline_missed_events: 0
+    avg_duration_ms: 10.0
+    max_duration_ms: 10
+  LoggerTask:
+    runs: 60
+    deadline_misses: 0
+    deadline_missed_events: 0
+    avg_duration_ms: 15.0
+    max_duration_ms: 15
+  NetworkTask:
+    runs: 20
+    deadline_misses: 0
+    deadline_missed_events: 0
+    avg_duration_ms: 20.0
+    max_duration_ms: 20
+
+Message summary:
+  sent: 80
+  received: 60
+  dropped: 239
+  queue_full_drops: 239
+  fault_injected_drops: 0
+
+Fault summary:
+  task_crash: 1
+
+Watchdog summary:
+  watchdog_timeouts: 0
+  task_recoveries: 0
+
+Task failure summary:
+  task_failures: 1
+  task_skips: 99
+  failed_tasks:
+    - NetworkTask: 1
+  skipped_tasks:
+    - NetworkTask: 99
+
+Likely root causes:
+  - Task-crash fault injection was active.
+  - One or more task queues became full, causing queue_full message drops.
+  - NetworkTask failed due to simulated task crash 1 time(s).
+  - NetworkTask was skipped because it remained in a failed state 99 time(s).
+
+AI Anomaly Detection Summary
+============================
+
+Window size: 5000 ms
+Overall classification: UNSTABLE
+Anomaly windows: 6 / 7
+Highest anomaly score: 1.00
+
+Top anomaly drivers:
+  - message_dropped_count
+  - queue_full_drop_count
+  - task_skipped_count
+  - warning_event_count
+  - error_event_count
+
+Window summary:
+  0-4999 ms: WARNING score=0.41 drivers=message_dropped_count, queue_full_drop_count, warning_event_count, max_task_duration_ms
+  5000-9999 ms: UNSTABLE score=1.00 drivers=task_failed_count, task_skipped_count, error_event_count, message_dropped_count
+  10000-14999 ms: UNSTABLE score=0.70 drivers=task_skipped_count, message_dropped_count, queue_full_drop_count, warning_event_count
+  15000-19999 ms: UNSTABLE score=0.70 drivers=task_skipped_count, message_dropped_count, queue_full_drop_count, warning_event_count
+  20000-24999 ms: UNSTABLE score=0.70 drivers=task_skipped_count, message_dropped_count, queue_full_drop_count, warning_event_count
+  25000-29999 ms: UNSTABLE score=0.70 drivers=task_skipped_count, message_dropped_count, queue_full_drop_count, warning_event_count
+  30000-34999 ms: NORMAL score=0.00 drivers=none
