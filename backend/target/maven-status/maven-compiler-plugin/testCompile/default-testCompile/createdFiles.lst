@@ -1,2 +1,3 @@
-com/minirtos/playground/controller/ScenarioControllerTest.class
 com/minirtos/playground/controller/HealthControllerTest.class
+com/minirtos/playground/persistence/RunRepositoryTest.class
+com/minirtos/playground/controller/ScenarioControllerTest.class

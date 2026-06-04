@@ -120,7 +120,8 @@ services:
       --scenario watchdog=logs/watchdog_runtime_logs.jsonl
     volumes:
       - ./logs:/app/logs
-      - ./reports/generated:/app/reports/generated 
+      - ./reports/generated:/app/reports/generated
+
   ml-train:
     build:
       context: .
@@ -151,6 +152,23 @@ services:
       - ./reports/generated:/app/reports/generated
       - ./models:/app/models
 
+  postgres:
+    image: postgres:16
+    container_name: minirtos-postgres
+    environment:
+      POSTGRES_DB: minirtos_playground
+      POSTGRES_USER: minirtos
+      POSTGRES_PASSWORD: minirtos
+    ports:
+      - "5432:5432"
+    volumes:
+      - minirtos-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U minirtos -d minirtos_playground"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   backend:
     build:
       context: .
@@ -158,6 +176,24 @@ services:
     container_name: minirtos-playground-backend
     ports:
       - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/minirtos_playground
+      SPRING_DATASOURCE_USERNAME: minirtos
+      SPRING_DATASOURCE_PASSWORD: minirtos
+      MINIRTOS_PROJECT_ROOT: /app
+      MINIRTOS_RUNTIME_BINARY: cpp-runtime/build/minirtos_runtime
+      MINIRTOS_PYTHON_COMMAND: python3
+      MINIRTOS_ANALYZER_SCRIPT: ai-analyzer/app/analyze.py
+      MINIRTOS_LOGS_DIR: logs
+      MINIRTOS_RUNS_DIR: runs
+      MINIRTOS_WINDOW_MS: 5000
+      MINIRTOS_PROCESS_TIMEOUT_SECONDS: 120
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - ./logs:/app/logs
       - ./runs:/app/runs
+
+volumes:
+  minirtos-postgres-data:

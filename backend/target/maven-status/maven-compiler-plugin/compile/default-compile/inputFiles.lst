@@ -10,8 +10,10 @@
 /home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/dto/RunSummaryResponse.java
 /home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/dto/ScenarioResponse.java
 /home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/dto/TaskMetricResponse.java
-/home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/model/RunRecord.java
 /home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/model/RunStatus.java
+/home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/persistence/RunEntity.java
+/home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/persistence/RunRepository.java
+/home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/persistence/TaskMetricEntity.java
 /home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/service/AnalyzerExecutionService.java
 /home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/service/AnalyzerReportParser.java
 /home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/service/ProcessRunner.java

@@ -5,15 +5,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.minirtos.playground.config.MiniRtosProperties;
@@ -22,7 +19,8 @@ import com.minirtos.playground.dto.CommandResult;
 import com.minirtos.playground.dto.CreateRunRequest;
 import com.minirtos.playground.dto.RunSummaryResponse;
 import com.minirtos.playground.dto.ScenarioResponse;
-import com.minirtos.playground.model.RunRecord;
+import com.minirtos.playground.persistence.RunEntity;
+import com.minirtos.playground.persistence.RunRepository;
 
 @Service
 public class RunService {
@@ -31,18 +29,20 @@ public class RunService {
     private final RuntimeExecutionService runtimeExecutionService;
     private final AnalyzerExecutionService analyzerExecutionService;
     private final MiniRtosProperties properties;
-    private final Map<String, RunRecord> runs = new ConcurrentHashMap<>();
+    private final RunRepository runRepository;
 
     public RunService(
         ScenarioService scenarioService,
         RuntimeExecutionService runtimeExecutionService,
         AnalyzerExecutionService analyzerExecutionService,
-        MiniRtosProperties properties
+        MiniRtosProperties properties,
+        RunRepository runRepository
     ) {
         this.scenarioService = scenarioService;
         this.runtimeExecutionService = runtimeExecutionService;
         this.analyzerExecutionService = analyzerExecutionService;
         this.properties = properties;
+        this.runRepository = runRepository;
     }
 
     public RunSummaryResponse createRun(CreateRunRequest request) {
@@ -63,7 +63,7 @@ public class RunService {
             .relativize(runDirectory.resolve("analysis.txt"))
             .toString();
 
-        RunRecord record = new RunRecord(
+        RunEntity runEntity = new RunEntity(
             runId,
             scenario.id(),
             scenario.name(),
@@ -72,7 +72,7 @@ public class RunService {
             Instant.now()
         );
 
-        runs.put(runId, record);
+        runEntity = runRepository.save(runEntity);
 
         try {
             Files.createDirectories(runDirectory);
@@ -88,8 +88,8 @@ public class RunService {
                     + ". "
                     + runtimeResult.stderr();
 
-                record.markFailed(error.strip());
-                return record.toSummaryResponse();
+                runEntity.markFailed(error.strip());
+                return runRepository.save(runEntity).toSummaryResponse();
             }
 
             AnalysisResponse analysis = analyzerExecutionService.analyzeRun(
@@ -98,53 +98,51 @@ public class RunService {
                 runDirectory
             );
 
-            record.markCompleted(analysis);
-            return record.toSummaryResponse();
+            runEntity.markCompleted(analysis);
+            return runRepository.save(runEntity).toSummaryResponse();
         } catch (IOException | InterruptedException exc) {
             if (exc instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
 
-            record.markFailed(exc.getMessage());
-            return record.toSummaryResponse();
+            runEntity.markFailed(exc.getMessage());
+            return runRepository.save(runEntity).toSummaryResponse();
         }
     }
 
+    @Transactional(readOnly = true)
     public List<RunSummaryResponse> getRuns() {
-        return new ArrayList<>(runs.values()).stream()
-            .sorted(Comparator.comparing(RunRecord::getRunId).reversed())
-            .map(RunRecord::toSummaryResponse)
+        return runRepository.findAllByOrderByCreatedAtDesc()
+            .stream()
+            .map(RunEntity::toSummaryResponse)
             .toList();
     }
 
+    @Transactional(readOnly = true)
     public RunSummaryResponse getRun(String runId) {
-        return getRecord(runId).toSummaryResponse();
+        return getEntity(runId).toSummaryResponse();
     }
 
+    @Transactional(readOnly = true)
     public AnalysisResponse getAnalysis(String runId) {
-        RunRecord record = getRecord(runId);
+        RunEntity entity = getEntity(runId);
 
-        if (record.getAnalysis() == null) {
+        if (entity.getRawReport() == null || entity.getRawReport().isBlank()) {
             throw new ResponseStatusException(
                 HttpStatus.NOT_FOUND,
                 "Analysis is not available for runId: " + runId
             );
         }
 
-        return record.getAnalysis();
+        return entity.toAnalysisResponse();
     }
 
-    private RunRecord getRecord(String runId) {
-        RunRecord record = runs.get(runId);
-
-        if (record == null) {
-            throw new ResponseStatusException(
+    private RunEntity getEntity(String runId) {
+        return runRepository.findByRunId(runId)
+            .orElseThrow(() -> new ResponseStatusException(
                 HttpStatus.NOT_FOUND,
                 "Run not found: " + runId
-            );
-        }
-
-        return record;
+            ));
     }
 
     private String createRunId(String scenarioId) {

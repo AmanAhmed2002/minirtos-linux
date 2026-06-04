@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="com.minirtos.playground.controller.ScenarioControllerTest" time="1.556" tests="1" errors="0" skipped="0" failures="0">
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="com.minirtos.playground.persistence.RunRepositoryTest" time="1.322" tests="2" errors="0" skipped="0" failures="0">
   <properties>
     <property name="java.specification.version" value="17"/>
     <property name="sun.jnu.encoding" value="UTF-8"/>
@@ -59,9 +59,9 @@
     <property name="java.class.version" value="61.0"/>
     <property name="LOGGED_APPLICATION_NAME" value="[minirtos-playground-backend] "/>
   </properties>
-  <testcase name="scenariosReturnExpectedMetadata" classname="com.minirtos.playground.controller.ScenarioControllerTest" time="0.557">
-    <system-out><![CDATA[21:28:48.203 [main] INFO org.springframework.test.context.support.AnnotationConfigContextLoaderUtils -- Could not detect default configuration classes for test class [com.minirtos.playground.controller.ScenarioControllerTest]: ScenarioControllerTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
-21:28:48.279 [main] INFO org.springframework.boot.test.context.SpringBootTestContextBootstrapper -- Found @SpringBootConfiguration com.minirtos.playground.MiniRtosPlaygroundApplication for test class com.minirtos.playground.controller.ScenarioControllerTest
+  <testcase name="returnsRunsNewestFirst" classname="com.minirtos.playground.persistence.RunRepositoryTest" time="0.138">
+    <system-out><![CDATA[2026-06-03T21:28:49.840-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.minirtos.playground.persistence.RunRepositoryTest]: RunRepositoryTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2026-06-03T21:28:49.852-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.minirtos.playground.MiniRtosPlaygroundApplication for test class com.minirtos.playground.persistence.RunRepositoryTest
 
   .   ____          _            __ _ _
  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
@@ -72,12 +72,187 @@
 
  :: Spring Boot ::                (v3.3.5)
 
-2026-06-03T21:28:48.505-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] c.m.p.controller.ScenarioControllerTest  : Starting ScenarioControllerTest using Java 17.0.19 with PID 85745 (started by aahmed in /home/aahmed/projects/minirtos-linux/backend)
-2026-06-03T21:28:48.506-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] c.m.p.controller.ScenarioControllerTest  : No active profile set, falling back to 1 default profile: "default"
-2026-06-03T21:28:49.081-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
-2026-06-03T21:28:49.081-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
-2026-06-03T21:28:49.083-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 1 ms
-2026-06-03T21:28:49.098-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] c.m.p.controller.ScenarioControllerTest  : Started ScenarioControllerTest in 0.781 seconds (process running for 1.316)
+2026-06-03T21:28:49.874-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] c.m.p.persistence.RunRepositoryTest      : Starting RunRepositoryTest using Java 17.0.19 with PID 85745 (started by aahmed in /home/aahmed/projects/minirtos-linux/backend)
+2026-06-03T21:28:49.875-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] c.m.p.persistence.RunRepositoryTest      : The following 1 profile is active: "test"
+2026-06-03T21:28:49.953-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-06-03T21:28:49.975-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 18 ms. Found 1 JPA repository interface.
+2026-06-03T21:28:49.995-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] beddedDataSourceBeanFactoryPostProcessor : Replacing 'dataSource' DataSource bean with embedded version
+2026-06-03T21:28:50.021-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] o.s.j.d.e.EmbeddedDatabaseFactory        : Starting embedded database: url='jdbc:h2:mem:d5ce1134-60bb-47f3-8d7a-c8d335834118;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=false', username='sa'
+2026-06-03T21:28:50.166-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-06-03T21:28:50.196-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.5.3.Final
+2026-06-03T21:28:50.217-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-06-03T21:28:50.285-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-06-03T21:28:50.782-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+Hibernate: 
+    drop table if exists run_event_counts cascade 
+Hibernate: 
+    drop table if exists run_root_causes cascade 
+Hibernate: 
+    drop table if exists run_severity_counts cascade 
+Hibernate: 
+    drop table if exists run_task_metrics cascade 
+Hibernate: 
+    drop table if exists runs cascade 
+Hibernate: 
+    create table run_event_counts (
+        count_value integer not null,
+        run_db_id bigint not null,
+        count_key varchar(255) not null,
+        primary key (run_db_id, count_key)
+    )
+Hibernate: 
+    create table run_root_causes (
+        position integer not null,
+        run_db_id bigint not null,
+        root_cause text not null,
+        primary key (position, run_db_id)
+    )
+Hibernate: 
+    create table run_severity_counts (
+        count_value integer not null,
+        run_db_id bigint not null,
+        count_key varchar(255) not null,
+        primary key (run_db_id, count_key)
+    )
+Hibernate: 
+    create table run_task_metrics (
+        avg_duration_ms float(53) not null,
+        deadline_missed_events integer not null,
+        deadline_misses integer not null,
+        max_duration_ms integer not null,
+        runs integer not null,
+        run_db_id bigint not null,
+        task_name varchar(255) not null,
+        primary key (run_db_id, task_name)
+    )
+Hibernate: 
+    create table runs (
+        configured_duration_seconds integer,
+        events_loaded integer,
+        message_dropped integer,
+        message_fault_injected_drops integer,
+        message_queue_full_drops integer,
+        message_received integer,
+        message_sent integer,
+        observed_duration_ms integer,
+        completed_at timestamp(6) with time zone,
+        created_at timestamp(6) with time zone not null,
+        id bigint generated by default as identity,
+        runtime_health varchar(64),
+        scenario_id varchar(120) not null,
+        run_id varchar(160) not null unique,
+        analysis_path text not null,
+        error_message text,
+        log_path text not null,
+        raw_report text,
+        scenario_name varchar(255) not null,
+        scheduler_mode varchar(255),
+        simulation_name varchar(255),
+        status enum ('COMPLETED','FAILED','RUNNING') not null,
+        primary key (id)
+    )
+Hibernate: 
+    alter table if exists run_event_counts 
+       add constraint FK635u3uoqo6egsy374ect7km83 
+       foreign key (run_db_id) 
+       references runs
+Hibernate: 
+    alter table if exists run_root_causes 
+       add constraint FK7g5pkbxgx526jbenfcd77c6lb 
+       foreign key (run_db_id) 
+       references runs
+Hibernate: 
+    alter table if exists run_severity_counts 
+       add constraint FKnk11ie2pg3ed55e9tnwk61d33 
+       foreign key (run_db_id) 
+       references runs
+Hibernate: 
+    alter table if exists run_task_metrics 
+       add constraint FKbegsamyerqckax89qq5fgprop 
+       foreign key (run_db_id) 
+       references runs
+2026-06-03T21:28:50.815-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-06-03T21:28:51.003-04:00  INFO 85745 --- [minirtos-playground-backend] [           main] c.m.p.persistence.RunRepositoryTest      : Started RunRepositoryTest in 1.149 seconds (process running for 3.221)
+Hibernate: 
+    insert 
+    into
+        runs
+        (analysis_path, completed_at, configured_duration_seconds, created_at, error_message, events_loaded, log_path, message_dropped, message_fault_injected_drops, message_queue_full_drops, message_received, message_sent, observed_duration_ms, raw_report, run_id, runtime_health, scenario_id, scenario_name, scheduler_mode, simulation_name, status, id) 
+    values
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, default)
+Hibernate: 
+    insert 
+    into
+        runs
+        (analysis_path, completed_at, configured_duration_seconds, created_at, error_message, events_loaded, log_path, message_dropped, message_fault_injected_drops, message_queue_full_drops, message_received, message_sent, observed_duration_ms, raw_report, run_id, runtime_health, scenario_id, scenario_name, scheduler_mode, simulation_name, status, id) 
+    values
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, default)
+Hibernate: 
+    select
+        re1_0.id,
+        re1_0.analysis_path,
+        re1_0.completed_at,
+        re1_0.configured_duration_seconds,
+        re1_0.created_at,
+        re1_0.error_message,
+        re1_0.events_loaded,
+        re1_0.log_path,
+        re1_0.message_dropped,
+        re1_0.message_fault_injected_drops,
+        re1_0.message_queue_full_drops,
+        re1_0.message_received,
+        re1_0.message_sent,
+        re1_0.observed_duration_ms,
+        re1_0.raw_report,
+        re1_0.run_id,
+        re1_0.runtime_health,
+        re1_0.scenario_id,
+        re1_0.scenario_name,
+        re1_0.scheduler_mode,
+        re1_0.simulation_name,
+        re1_0.status 
+    from
+        runs re1_0 
+    order by
+        re1_0.created_at desc
+]]></system-out>
+  </testcase>
+  <testcase name="savesAndFindsRunByRunId" classname="com.minirtos.playground.persistence.RunRepositoryTest" time="0.016">
+    <system-out><![CDATA[Hibernate: 
+    insert 
+    into
+        runs
+        (analysis_path, completed_at, configured_duration_seconds, created_at, error_message, events_loaded, log_path, message_dropped, message_fault_injected_drops, message_queue_full_drops, message_received, message_sent, observed_duration_ms, raw_report, run_id, runtime_health, scenario_id, scenario_name, scheduler_mode, simulation_name, status, id) 
+    values
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, default)
+Hibernate: 
+    select
+        re1_0.id,
+        re1_0.analysis_path,
+        re1_0.completed_at,
+        re1_0.configured_duration_seconds,
+        re1_0.created_at,
+        re1_0.error_message,
+        re1_0.events_loaded,
+        re1_0.log_path,
+        re1_0.message_dropped,
+        re1_0.message_fault_injected_drops,
+        re1_0.message_queue_full_drops,
+        re1_0.message_received,
+        re1_0.message_sent,
+        re1_0.observed_duration_ms,
+        re1_0.raw_report,
+        re1_0.run_id,
+        re1_0.runtime_health,
+        re1_0.scenario_id,
+        re1_0.scenario_name,
+        re1_0.scheduler_mode,
+        re1_0.simulation_name,
+        re1_0.status 
+    from
+        runs re1_0 
+    where
+        re1_0.run_id=?
 ]]></system-out>
   </testcase>
 </testsuite>

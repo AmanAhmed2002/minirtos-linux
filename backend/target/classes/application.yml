@@ -2,6 +2,24 @@ spring:
   application:
     name: minirtos-playground-backend
 
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/minirtos_playground}
+    username: ${SPRING_DATASOURCE_USERNAME:minirtos}
+    password: ${SPRING_DATASOURCE_PASSWORD:minirtos}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
 server:
   port: 8081
 
