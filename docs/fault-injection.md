@@ -1,44 +1,10 @@
 # MiniRTOS-Linux Fault Injection Guide
 
-## Current Status After This Chat
+## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 is now complete for the local backend MVP.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React Dashboard MVP for running and inspecting scenarios from the browser.
 
-Phase 26 added the Run Orchestration API:
-
-- `POST /api/runs`
-- `GET /api/runs`
-- `GET /api/runs/{runId}`
-- `GET /api/runs/{runId}/analysis`
-- trusted scenario-ID validation
-- C++ runtime execution from Spring Boot
-- unique per-run output folders under `runs/<runId>/`
-- runtime log copying from `logs/runtime_logs.jsonl`
-- Python analyzer execution from Spring Boot
-- analyzer text saved as `analysis.txt`
-- structured analysis JSON returned by the backend
-- backend process timeout handling
-- safe subprocess output draining to avoid hanging processes
-
-Verified behavior:
-
-- Spring Boot backend runs locally on port `8081`.
-- `GET /api/health` works.
-- `GET /api/scenarios` works.
-- `POST /api/runs` successfully runs `queue_overflow`.
-- A successful `queue_overflow` run returned `status=COMPLETED`, `runtimeHealth=WARNING`, and `errorMessage=null`.
-- `WARNING` is expected for `queue_overflow` because the scenario intentionally creates bounded queue pressure and dropped messages.
-- Backend generated `runs/<runId>/runtime_logs.jsonl` and `runs/<runId>/analysis.txt`.
-- Existing C++/Python/analyzer/ML Docker workflow remains intact.
-
-Important implementation notes:
-
-- Backend uses Java 17.
-- Backend runs on port `8081` because Nginx is already using `8080` locally.
-- Phase 26 stores run metadata in memory only. Run history resets when the backend restarts.
-- Phase 27 should add PostgreSQL persistence.
-- The backend accepts only known scenario IDs and never accepts arbitrary user-provided config paths.
-
+The backend can execute fault and queue-pressure scenarios through `POST /api/runs`, persist the resulting run summaries/analysis in PostgreSQL, and expose them to the React dashboard.
 
 ---
 
@@ -57,7 +23,7 @@ It generates telemetry such as:
 - Task failures.
 - Skipped-task events.
 
-In MiniRTOS Playground, these scenarios are now exposed through backend metadata and can be executed through the Phase 26 Run Orchestration API.
+In MiniRTOS Playground, these scenarios are exposed through backend metadata, can be executed through the Run Orchestration API, are persisted through PostgreSQL run storage, and can be inspected from the React dashboard.
 
 ---
 
@@ -152,12 +118,10 @@ Analyze:
 
 ## 5. Backend API Commands
 
-Phase 26 allows scenarios to be executed through Spring Boot:
+Run a fault or queue scenario through Spring Boot:
 
 ```bash
-curl -X POST http://localhost:8081/api/runs \
-  -H "Content-Type: application/json" \
-  -d '{"scenarioId":"queue_overflow"}'
+curl -X POST http://localhost:8081/api/runs   -H "Content-Type: application/json"   -d '{"scenarioId":"queue_overflow"}'
 ```
 
 Other scenario IDs:
@@ -170,9 +134,10 @@ dropped_messages
 watchdog_slow_task
 ```
 
-Then inspect:
+Then inspect persisted results:
 
 ```bash
+curl http://localhost:8081/api/runs
 curl http://localhost:8081/api/runs/<runId>
 curl http://localhost:8081/api/runs/<runId>/analysis
 ```
@@ -184,9 +149,59 @@ runs/<runId>/runtime_logs.jsonl
 runs/<runId>/analysis.txt
 ```
 
+Persisted database records:
+
+```text
+runs
+run_event_counts
+run_severity_counts
+run_task_metrics
+run_root_causes
+```
+
 ---
 
-## 6. Expected Behavior
+## 6. Frontend Dashboard Usage
+
+Run backend and frontend:
+
+```bash
+docker compose up -d postgres
+cd backend
+mvn spring-boot:run
+```
+
+Then:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+Expected dashboard flow:
+
+1. Select a fault scenario from the scenario dropdown.
+2. Review the scenario explanation and expected telemetry signals.
+3. Click **Run selected scenario**.
+4. Inspect the latest run result card.
+5. Click the completed run in persisted history.
+6. Review the analyzer panel for message drops, deadline misses, root causes, and raw report details.
+
+Important:
+
+```text
+VITE_API_BASE_URL must be http://localhost:8081.
+```
+
+---
+
+## 7. Expected Behavior
 
 ### `slow_task`
 
@@ -245,13 +260,15 @@ fault_injected events remain 0
 Runtime status: WARNING
 ```
 
-Verified through Phase 26 backend orchestration:
+Verified through backend orchestration and persistence:
 
 ```text
 POST /api/runs with scenarioId=queue_overflow
 -> status=COMPLETED
 -> runtimeHealth=WARNING
 -> errorMessage=null
+-> GET /api/runs returns the persisted run
+-> GET /api/runs/{runId}/analysis returns queueFullDrops and faultInjectedDrops
 ```
 
 ### `watchdog_slow_task`
@@ -268,18 +285,18 @@ Runtime status: UNSTABLE
 
 ---
 
-## 7. Queue-Full Drops vs Fault-Injected Drops
+## 8. Queue-Full Drops vs Fault-Injected Drops
 
 | Drop Type | Cause | Meaning |
 |---|---|---|
 | `queue_full` | Target queue reached capacity. | Bounded queue pressure. |
 | `fault_injected_drop` | Fault injector intentionally dropped a message. | Simulated message reliability fault. |
 
-This distinction is important for educational explanations, root-cause analysis, and ML labeling.
+This distinction is important for educational explanations, root-cause analysis, ML labeling, persisted analysis summaries, and the frontend dashboard.
 
 ---
 
-## 8. Docker Fault Scenarios
+## 9. Docker Fault Scenarios
 
 ```bash
 docker compose up --build demo
@@ -295,14 +312,24 @@ Backend orchestration through Docker:
 
 ```bash
 docker compose up --build backend
-curl -X POST http://localhost:8081/api/runs \
-  -H "Content-Type: application/json" \
-  -d '{"scenarioId":"task_crash"}'
+curl -X POST http://localhost:8081/api/runs   -H "Content-Type: application/json"   -d '{"scenarioId":"task_crash"}'
+```
+
+Frontend through Docker:
+
+```bash
+docker compose up --build frontend
+```
+
+Open:
+
+```text
+http://localhost:5173
 ```
 
 ---
 
-## 9. Fault Scenarios as Backend Metadata
+## 10. Fault Scenarios as Backend Metadata
 
 These scenarios are exposed through:
 
@@ -328,20 +355,31 @@ They can now be run through:
 POST /api/runs
 ```
 
+Run results are persisted in PostgreSQL and can be revisited through:
+
+```text
+GET /api/runs
+GET /api/runs/{runId}
+GET /api/runs/{runId}/analysis
+```
+
+The React dashboard consumes all of these APIs.
+
 ---
 
-## 10. Limitations
+## 11. Limitations
 
 - `task_crash` simulates failure but does not crash real threads/processes.
 - It does not simulate memory corruption.
 - It does not simulate corrupted message payloads yet.
 - Recovery is logged rather than implemented as a real restart.
 - ML labels are scenario-derived.
-- Backend run metadata is currently in memory only.
+- PostgreSQL persistence stores run metadata and parsed analysis, but the raw runtime log still lives as a file under `runs/<runId>/runtime_logs.jsonl`.
+- Phase 28 frontend displays fault/analyzer summaries but does not yet include charts or timeline visualizations.
 
 ---
 
-## 11. Recommended Future Faults
+## 12. Recommended Future Faults
 
 ```text
 corrupted_message

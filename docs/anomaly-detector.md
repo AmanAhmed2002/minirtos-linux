@@ -1,44 +1,10 @@
 # MiniRTOS-Linux AI-Style Anomaly Detector and ML Classifier
 
-## Current Status After This Chat
+## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 is now complete for the local backend MVP.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP that can display parsed analyzer summaries from the backend.
 
-Phase 26 added the Run Orchestration API:
-
-- `POST /api/runs`
-- `GET /api/runs`
-- `GET /api/runs/{runId}`
-- `GET /api/runs/{runId}/analysis`
-- trusted scenario-ID validation
-- C++ runtime execution from Spring Boot
-- unique per-run output folders under `runs/<runId>/`
-- runtime log copying from `logs/runtime_logs.jsonl`
-- Python analyzer execution from Spring Boot
-- analyzer text saved as `analysis.txt`
-- structured analysis JSON returned by the backend
-- backend process timeout handling
-- safe subprocess output draining to avoid hanging processes
-
-Verified behavior:
-
-- Spring Boot backend runs locally on port `8081`.
-- `GET /api/health` works.
-- `GET /api/scenarios` works.
-- `POST /api/runs` successfully runs `queue_overflow`.
-- A successful `queue_overflow` run returned `status=COMPLETED`, `runtimeHealth=WARNING`, and `errorMessage=null`.
-- `WARNING` is expected for `queue_overflow` because the scenario intentionally creates bounded queue pressure and dropped messages.
-- Backend generated `runs/<runId>/runtime_logs.jsonl` and `runs/<runId>/analysis.txt`.
-- Existing C++/Python/analyzer/ML Docker workflow remains intact.
-
-Important implementation notes:
-
-- Backend uses Java 17.
-- Backend runs on port `8081` because Nginx is already using `8080` locally.
-- Phase 26 stores run metadata in memory only. Run history resets when the backend restarts.
-- Phase 27 should add PostgreSQL persistence.
-- The backend accepts only known scenario IDs and never accepts arbitrary user-provided config paths.
-
+The backend can run the deterministic analyzer after each simulation, parse the report, return structured JSON, persist the parsed analysis summary in PostgreSQL, and expose it to the React dashboard.
 
 ---
 
@@ -53,7 +19,7 @@ It includes:
 3. Synthetic training-dataset generator.
 4. Lightweight ML anomaly classifier.
 
-Phase 26 connected the Spring Boot backend to the deterministic analyzer. The backend can now run a scenario, run `analyze.py`, save the analyzer report, parse key fields, and return structured JSON.
+Phase 26 connected the Spring Boot backend to the deterministic analyzer. Phase 27 persisted run metadata and parsed analyzer summaries in PostgreSQL. Phase 28 connected those persisted summaries to the frontend dashboard.
 
 ---
 
@@ -74,6 +40,16 @@ AnalyzerExecutionService.java
 AnalyzerReportParser.java
 RunService.java
 RunController.java
+RunEntity.java
+RunRepository.java
+```
+
+Frontend integration files:
+
+```text
+frontend/src/api/minirtosApi.ts
+frontend/src/types/api.ts
+frontend/src/components/AnalysisPanel.tsx
 ```
 
 ---
@@ -88,14 +64,10 @@ RunController.java
 With ML:
 
 ```bash
-python3 ai-analyzer/app/analyze.py \
-  --log logs/task_crash_runtime_logs.jsonl \
-  --window-ms 5000 \
-  --ml-model models/anomaly_classifier.joblib \
-  --ml-label-encoder models/label_encoder.joblib
+python3 ai-analyzer/app/analyze.py   --log logs/task_crash_runtime_logs.jsonl   --window-ms 5000   --ml-model models/anomaly_classifier.joblib   --ml-label-encoder models/label_encoder.joblib
 ```
 
-Backend Phase 26 analyzer command pattern:
+Backend analyzer command pattern:
 
 ```text
 python3 ai-analyzer/app/analyze.py --log runs/<runId>/runtime_logs.jsonl --window-ms 5000
@@ -164,18 +136,7 @@ The rule-based detector reports anomaly scores and top drivers.
 ## 6. Dataset Generation
 
 ```bash
-python3 ai-analyzer/training/generate_dataset.py \
-  --output reports/generated/synthetic_dataset.csv \
-  --window-ms 5000 \
-  --scenario normal=logs/normal_runtime_logs.jsonl \
-  --scenario priority_scheduler=logs/priority_scheduler_runtime_logs.jsonl \
-  --scenario deadline_scheduler=logs/deadline_scheduler_runtime_logs.jsonl \
-  --scenario queue_overflow=logs/queue_overflow_runtime_logs.jsonl \
-  --scenario cpu_spike=logs/cpu_spike_runtime_logs.jsonl \
-  --scenario task_crash=logs/task_crash_runtime_logs.jsonl \
-  --scenario slow_task=logs/slow_task_runtime_logs.jsonl \
-  --scenario dropped_messages=logs/dropped_messages_runtime_logs.jsonl \
-  --scenario watchdog=logs/watchdog_runtime_logs.jsonl
+python3 ai-analyzer/training/generate_dataset.py   --output reports/generated/synthetic_dataset.csv   --window-ms 5000   --scenario normal=logs/normal_runtime_logs.jsonl   --scenario priority_scheduler=logs/priority_scheduler_runtime_logs.jsonl   --scenario deadline_scheduler=logs/deadline_scheduler_runtime_logs.jsonl   --scenario queue_overflow=logs/queue_overflow_runtime_logs.jsonl   --scenario cpu_spike=logs/cpu_spike_runtime_logs.jsonl   --scenario task_crash=logs/task_crash_runtime_logs.jsonl   --scenario slow_task=logs/slow_task_runtime_logs.jsonl   --scenario dropped_messages=logs/dropped_messages_runtime_logs.jsonl   --scenario watchdog=logs/watchdog_runtime_logs.jsonl
 ```
 
 Docker:
@@ -215,21 +176,13 @@ synthetic_dataset.csv
 Train:
 
 ```bash
-python3 ai-analyzer/ml/train_model.py \
-  --dataset reports/generated/synthetic_dataset.csv \
-  --model-output models/anomaly_classifier.joblib \
-  --label-encoder-output models/label_encoder.joblib \
-  --metrics-output reports/generated/model_metrics.json
+python3 ai-analyzer/ml/train_model.py   --dataset reports/generated/synthetic_dataset.csv   --model-output models/anomaly_classifier.joblib   --label-encoder-output models/label_encoder.joblib   --metrics-output reports/generated/model_metrics.json
 ```
 
 Predict:
 
 ```bash
-python3 ai-analyzer/ml/predict_model.py \
-  --model models/anomaly_classifier.joblib \
-  --label-encoder models/label_encoder.joblib \
-  --dataset reports/generated/synthetic_dataset.csv \
-  --limit 20
+python3 ai-analyzer/ml/predict_model.py   --model models/anomaly_classifier.joblib   --label-encoder models/label_encoder.joblib   --dataset reports/generated/synthetic_dataset.csv   --limit 20
 ```
 
 ---
@@ -250,7 +203,7 @@ python3 ai-analyzer/ml/predict_model.py \
 
 ---
 
-## 9. Phase 26 Backend Integration
+## 9. Backend Integration
 
 Current flow:
 
@@ -262,6 +215,7 @@ POST /api/runs
   -> run analyze.py
   -> save runs/<runId>/analysis.txt
   -> parse analyzer text
+  -> persist parsed summary in PostgreSQL
   -> return structured JSON
 ```
 
@@ -281,6 +235,16 @@ Returns:
 - Root causes.
 - Raw analyzer report.
 
+Persisted database tables:
+
+```text
+runs
+run_event_counts
+run_severity_counts
+run_task_metrics
+run_root_causes
+```
+
 Important:
 
 ```text
@@ -290,12 +254,79 @@ It does not accept arbitrary user-supplied config paths.
 
 ---
 
-## 10. Limitations
+## 10. Frontend Integration
+
+Phase 28 dashboard consumes analysis through:
+
+```text
+frontend/src/api/minirtosApi.ts
+frontend/src/components/AnalysisPanel.tsx
+```
+
+Frontend call:
+
+```text
+GET /api/runs/{runId}/analysis
+```
+
+Displayed fields:
+
+```text
+runtimeHealth
+eventsLoaded
+simulationName
+schedulerMode
+configuredDurationSeconds
+observedDurationMs
+messageSummary
+taskMetrics
+rootCauses
+rawReport
+```
+
+Student-facing purpose:
+
+- Show why a run is `NORMAL`, `WARNING`, or `UNSTABLE`.
+- Separate queue-full drops from fault-injected drops.
+- Show which tasks missed deadlines.
+- Show raw analyzer output for transparency.
+- Prepare for future visualizations in Phase 29.
+
+---
+
+## 11. Verified Phase 27/28 Analysis Example
+
+A verified `queue_overflow` analysis returned:
+
+```text
+runtimeHealth=WARNING
+eventsLoaded=3064
+simulationName=queue_overflow
+schedulerMode=round_robin
+configuredDurationSeconds=30
+observedDurationMs=30000
+messageDropped=956
+queueFullDrops=956
+faultInjectedDrops=0
+```
+
+Interpretation:
+
+```text
+The run completed successfully, but the analyzer correctly classified it as WARNING because bounded queue pressure caused queue-full message drops.
+```
+
+In the frontend dashboard, this should appear in the latest run card, persisted history, message summary, and analyzer panel after selecting the completed run.
+
+---
+
+## 12. Limitations
 
 - Rule thresholds are manual.
 - Labels are scenario-derived.
 - ML is trained on synthetic telemetry.
 - The classifier is not production-validated.
-- Phase 26 backend analyzer integration currently uses deterministic analyzer output only.
+- Backend analyzer integration currently uses deterministic analyzer output only.
 - ML prediction is not yet exposed through the backend API.
-- Run metadata is in memory only until Phase 27.
+- Runtime logs are still stored as files; PostgreSQL stores metadata and parsed analysis summaries.
+- Phase 28 frontend displays parsed analyzer summaries but does not yet visualize time windows/charts.

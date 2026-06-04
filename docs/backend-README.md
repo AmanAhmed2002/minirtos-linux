@@ -2,45 +2,43 @@
 
 Java Spring Boot backend for the MiniRTOS Playground educational platform.
 
-## Current Status After This Chat
+---
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 is now complete for the local backend MVP.
+## Current Status
 
-Phase 26 added the Run Orchestration API:
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React Dashboard MVP and required local CORS support for browser API calls.
 
-- `POST /api/runs`
-- `GET /api/runs`
-- `GET /api/runs/{runId}`
-- `GET /api/runs/{runId}/analysis`
-- trusted scenario-ID validation
-- C++ runtime execution from Spring Boot
-- unique per-run output folders under `runs/<runId>/`
-- runtime log copying from `logs/runtime_logs.jsonl`
-- Python analyzer execution from Spring Boot
-- analyzer text saved as `analysis.txt`
-- structured analysis JSON returned by the backend
-- backend process timeout handling
-- safe subprocess output draining to avoid hanging processes
+The backend can now:
+
+- Return health metadata.
+- Return trusted scenario metadata.
+- Run trusted C++ runtime scenarios through HTTP.
+- Run the Python analyzer after each simulation.
+- Save `runtime_logs.jsonl` and `analysis.txt` under `runs/<runId>/`.
+- Parse analyzer text into structured JSON.
+- Persist run metadata and parsed analysis summaries in PostgreSQL.
+- Return run history after backend restarts.
+- Serve APIs consumed by the React frontend running at `http://localhost:5173`.
 
 Verified behavior:
 
-- Spring Boot backend runs locally on port `8081`.
 - `GET /api/health` works.
 - `GET /api/scenarios` works.
 - `POST /api/runs` successfully runs `queue_overflow`.
+- `GET /api/runs` returns HTTP 200 with persisted runs.
+- `GET /api/runs/{runId}` returns HTTP 200 with one persisted run.
+- `GET /api/runs/{runId}/analysis` returns HTTP 200 with parsed persisted analysis.
 - A successful `queue_overflow` run returned `status=COMPLETED`, `runtimeHealth=WARNING`, and `errorMessage=null`.
 - `WARNING` is expected for `queue_overflow` because the scenario intentionally creates bounded queue pressure and dropped messages.
-- Backend generated `runs/<runId>/runtime_logs.jsonl` and `runs/<runId>/analysis.txt`.
-- Existing C++/Python/analyzer/ML Docker workflow remains intact.
 
 Important implementation notes:
 
 - Backend uses Java 17.
-- Backend runs on port `8081` because Nginx is already using `8080` locally.
-- Phase 26 stores run metadata in memory only. Run history resets when the backend restarts.
-- Phase 27 should add PostgreSQL persistence.
+- Backend runs on port `8081` because Nginx uses `8080` locally.
+- PostgreSQL persistence uses Spring Data JPA and Flyway migrations.
+- `rawReport` should be stored as PostgreSQL `TEXT` without `@Lob`.
 - The backend accepts only known scenario IDs and never accepts arbitrary user-provided config paths.
-
+- Local React frontend calls require CORS for `http://localhost:5173` and `http://127.0.0.1:5173`.
 
 ---
 
@@ -49,8 +47,11 @@ Important implementation notes:
 ```text
 Java 17
 Maven 3.9+
+Docker / Docker Compose
+PostgreSQL 16 through Docker Compose
 C++ runtime binary built at ../cpp-runtime/build/minirtos_runtime for local orchestration
 Python 3 available as python3
+React frontend running separately on localhost:5173 for dashboard use
 ```
 
 ---
@@ -61,15 +62,51 @@ Python 3 available as python3
 8081
 ```
 
-The backend uses 8081 because Nginx is using 8080 locally.
-
-Config:
+Local backend URL:
 
 ```text
-src/main/resources/application.yml
+http://localhost:8081
 ```
 
-Key local config:
+Important:
+
+```text
+The local backend uses HTTP, not HTTPS.
+```
+
+If logs show invalid HTTP method bytes such as `0x16 0x03 0x01`, something is trying to call `https://localhost:8081` instead of `http://localhost:8081`.
+
+---
+
+## Key Configuration
+
+Config file:
+
+```text
+backend/src/main/resources/application.yml
+```
+
+Expected database config:
+
+```yaml
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/minirtos_playground}
+    username: ${SPRING_DATASOURCE_USERNAME:minirtos}
+    password: ${SPRING_DATASOURCE_PASSWORD:minirtos}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+```
+
+Expected MiniRTOS config:
 
 ```yaml
 minirtos:
@@ -85,12 +122,34 @@ minirtos:
 
 ---
 
+## CORS Configuration
+
+Phase 28 added CORS for the local dashboard.
+
+Expected file:
+
+```text
+backend/src/main/java/com/minirtos/playground/config/CorsConfig.java
+```
+
+Expected allowed origins:
+
+```text
+http://localhost:5173
+http://127.0.0.1:5173
+```
+
+This allows the Vite frontend to call `/api/**` endpoints from the browser.
+
+---
+
 ## Run Locally
 
 From repo root:
 
 ```bash
 ./scripts/build_cpp.sh
+docker compose up -d postgres
 ```
 
 Then:
@@ -111,9 +170,7 @@ curl http://localhost:8081/api/scenarios
 Run a scenario through the backend:
 
 ```bash
-curl -X POST http://localhost:8081/api/runs \
-  -H "Content-Type: application/json" \
-  -d '{"scenarioId":"queue_overflow"}'
+curl -X POST http://localhost:8081/api/runs   -H "Content-Type: application/json"   -d '{"scenarioId":"queue_overflow"}'
 ```
 
 Expected successful `queue_overflow` result:
@@ -122,6 +179,44 @@ Expected successful `queue_overflow` result:
 status=COMPLETED
 runtimeHealth=WARNING
 errorMessage=null
+```
+
+List persisted runs:
+
+```bash
+curl http://localhost:8081/api/runs
+```
+
+Inspect one persisted run:
+
+```bash
+curl http://localhost:8081/api/runs/<runId>
+curl http://localhost:8081/api/runs/<runId>/analysis
+```
+
+---
+
+## Frontend Integration
+
+Frontend runs at:
+
+```text
+http://localhost:5173
+```
+
+Frontend environment should contain:
+
+```env
+VITE_API_BASE_URL=http://localhost:8081
+```
+
+The frontend calls:
+
+```text
+GET  /api/scenarios
+POST /api/runs
+GET  /api/runs
+GET  /api/runs/{runId}/analysis
 ```
 
 ---
@@ -169,20 +264,79 @@ validate scenario ID
 -> copy logs/runtime_logs.jsonl into runs/<runId>/runtime_logs.jsonl
 -> run Python analyzer
 -> save runs/<runId>/analysis.txt
+-> persist metadata and parsed analysis summary in PostgreSQL
 -> return run summary
 ```
 
 ### `GET /api/runs`
 
-Returns in-memory run summaries for the current backend process.
+Returns persisted run summaries from PostgreSQL.
 
 ### `GET /api/runs/{runId}`
 
-Returns one run summary.
+Returns one persisted run summary.
 
 ### `GET /api/runs/{runId}/analysis`
 
-Returns parsed analyzer JSON plus the raw analyzer report.
+Returns parsed analyzer JSON plus the raw analyzer report from persisted data.
+
+---
+
+## Phase 27 Database Storage
+
+Phase 27 added:
+
+```text
+Spring Data JPA
+PostgreSQL driver
+Flyway
+RunEntity
+TaskMetricEntity
+RunRepository
+V1__create_run_storage.sql
+application-test.yml
+RunRepositoryTest
+```
+
+Database tables:
+
+```text
+runs
+run_event_counts
+run_severity_counts
+run_task_metrics
+run_root_causes
+```
+
+Data persisted:
+
+- Run ID.
+- Scenario ID/name.
+- Run status.
+- Runtime health.
+- Log path.
+- Analysis path.
+- Created/completed timestamps.
+- Error message.
+- Event counts.
+- Severity counts.
+- Task metrics.
+- Message summary fields.
+- Root causes.
+- Raw analyzer report as PostgreSQL `TEXT`.
+
+Important bug fix:
+
+```text
+Do not annotate rawReport with @Lob.
+```
+
+Correct mapping:
+
+```java
+@Column(name = "raw_report", columnDefinition = "text")
+private String rawReport;
+```
 
 ---
 
@@ -197,19 +351,28 @@ backend/
     │   ├── java/com/minirtos/playground/
     │   │   ├── MiniRtosPlaygroundApplication.java
     │   │   ├── config/
-    │   │   │   └── MiniRtosProperties.java
+    │   │   │   ├── MiniRtosProperties.java
+    │   │   │   └── CorsConfig.java
     │   │   ├── controller/
     │   │   │   ├── HealthController.java
     │   │   │   ├── ScenarioController.java
     │   │   │   └── RunController.java
     │   │   ├── dto/
     │   │   ├── model/
+    │   │   ├── persistence/
+    │   │   │   ├── RunEntity.java
+    │   │   │   ├── RunRepository.java
+    │   │   │   └── TaskMetricEntity.java
     │   │   └── service/
-    │   └── resources/application.yml
+    │   └── resources/
+    │       ├── application.yml
+    │       └── db/migration/V1__create_run_storage.sql
     └── test/
+        ├── java/com/minirtos/playground/
+        └── resources/application-test.yml
 ```
 
-Important Phase 26 services:
+Important services:
 
 ```text
 RunService.java
@@ -217,35 +380,27 @@ RuntimeExecutionService.java
 AnalyzerExecutionService.java
 AnalyzerReportParser.java
 ProcessRunner.java
+ScenarioService.java
 ```
 
 ---
 
 ## Docker
 
-Build:
-
-```bash
-docker build -f docker/Dockerfile.backend -t minirtos-playground-backend .
-```
-
-Compose:
+Compose backend:
 
 ```bash
 docker compose up --build backend
 ```
 
-Test:
+This starts:
 
-```bash
-curl http://localhost:8081/api/health
-curl http://localhost:8081/api/scenarios
-curl -X POST http://localhost:8081/api/runs \
-  -H "Content-Type: application/json" \
-  -d '{"scenarioId":"queue_overflow"}'
+```text
+postgres
+backend
 ```
 
-Phase 26 backend Docker image must include:
+Backend Docker image must include:
 
 ```text
 Spring Boot JAR
@@ -255,6 +410,28 @@ ai-analyzer/
 python3
 logs/
 runs/
+```
+
+Backend Compose environment must include database variables:
+
+```text
+SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/minirtos_playground
+SPRING_DATASOURCE_USERNAME=minirtos
+SPRING_DATASOURCE_PASSWORD=minirtos
+```
+
+Full local frontend stack:
+
+```bash
+docker compose up --build frontend
+```
+
+This should start or depend on:
+
+```text
+postgres
+backend
+frontend
 ```
 
 ---
@@ -267,30 +444,15 @@ Do not accept arbitrary config paths, runtime paths, analyzer paths, or shell co
 
 ---
 
-## Known Limitation
-
-Run metadata is currently stored in memory only.
-
-Generated files remain on disk:
-
-```text
-runs/<runId>/runtime_logs.jsonl
-runs/<runId>/analysis.txt
-```
-
-But the API list resets when the backend process restarts.
-
----
-
 ## Next Phase
 
-Phase 27 will add:
+Phase 29 should add:
 
 ```text
-PostgreSQL run storage
-RunEntity
-RunRepository
-persistent run history
-database-backed run lookup
-Docker Compose postgres service
+Educational modules and visualizers
+scheduler timeline
+queue pressure charts
+fault explanation cards
+runtime health explanations
+guided student learning flows
 ```

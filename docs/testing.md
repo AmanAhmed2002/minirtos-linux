@@ -1,44 +1,26 @@
 # MiniRTOS-Linux / MiniRTOS Playground Testing Guide
 
-## Current Status After This Chat
+## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 is now complete for the local backend MVP.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP and frontend Docker integration.
 
-Phase 26 added the Run Orchestration API:
+Verified Phase 27 behavior:
 
-- `POST /api/runs`
-- `GET /api/runs`
-- `GET /api/runs/{runId}`
-- `GET /api/runs/{runId}/analysis`
-- trusted scenario-ID validation
-- C++ runtime execution from Spring Boot
-- unique per-run output folders under `runs/<runId>/`
-- runtime log copying from `logs/runtime_logs.jsonl`
-- Python analyzer execution from Spring Boot
-- analyzer text saved as `analysis.txt`
-- structured analysis JSON returned by the backend
-- backend process timeout handling
-- safe subprocess output draining to avoid hanging processes
-
-Verified behavior:
-
-- Spring Boot backend runs locally on port `8081`.
-- `GET /api/health` works.
-- `GET /api/scenarios` works.
 - `POST /api/runs` successfully runs `queue_overflow`.
-- A successful `queue_overflow` run returned `status=COMPLETED`, `runtimeHealth=WARNING`, and `errorMessage=null`.
-- `WARNING` is expected for `queue_overflow` because the scenario intentionally creates bounded queue pressure and dropped messages.
-- Backend generated `runs/<runId>/runtime_logs.jsonl` and `runs/<runId>/analysis.txt`.
-- Existing C++/Python/analyzer/ML Docker workflow remains intact.
+- `GET /api/runs` returns HTTP 200 with persisted run summaries.
+- `GET /api/runs/{runId}` returns HTTP 200 with one persisted run.
+- `GET /api/runs/{runId}/analysis` returns HTTP 200 with parsed persisted analysis.
+- `queue_overflow` returns `status=COMPLETED`, `runtimeHealth=WARNING`, and `errorMessage=null`.
+- The PostgreSQL `@Lob` issue was fixed by storing `rawReport` as normal `TEXT`.
 
-Important implementation notes:
+Phase 28 verification focus:
 
-- Backend uses Java 17.
-- Backend runs on port `8081` because Nginx is already using `8080` locally.
-- Phase 26 stores run metadata in memory only. Run history resets when the backend restarts.
-- Phase 27 should add PostgreSQL persistence.
-- The backend accepts only known scenario IDs and never accepts arbitrary user-provided config paths.
-
+- React dashboard builds.
+- Frontend can call backend APIs from `http://localhost:5173`.
+- CORS allows local browser API requests.
+- `VITE_API_BASE_URL` uses `http://localhost:8081`.
+- Docker Compose can start the `frontend` service.
+- Dashboard can display scenarios, create runs, show persisted history, and load analysis.
 
 ---
 
@@ -60,12 +42,13 @@ This runs:
 
 ---
 
-## 2. Backend Test Workflow
+## 2. Backend and Database Test Workflow
 
 From repo root:
 
 ```bash
 ./scripts/build_cpp.sh
+docker compose up -d postgres
 cd backend
 mvn clean test
 ```
@@ -82,7 +65,7 @@ Run backend:
 mvn spring-boot:run
 ```
 
-Test:
+Test health and scenarios:
 
 ```bash
 curl http://localhost:8081/api/health
@@ -92,9 +75,7 @@ curl http://localhost:8081/api/scenarios
 Run a scenario:
 
 ```bash
-curl -X POST http://localhost:8081/api/runs \
-  -H "Content-Type: application/json" \
-  -d '{"scenarioId":"queue_overflow"}'
+curl -X POST http://localhost:8081/api/runs   -H "Content-Type: application/json"   -d '{"scenarioId":"queue_overflow"}'
 ```
 
 Expected:
@@ -105,9 +86,113 @@ runtimeHealth=WARNING
 errorMessage=null
 ```
 
+List persisted runs:
+
+```bash
+curl -i http://localhost:8081/api/runs
+```
+
+Expected:
+
+```text
+HTTP/1.1 200
+```
+
+Inspect one persisted run:
+
+```bash
+curl -i http://localhost:8081/api/runs/<runId>
+```
+
+Expected:
+
+```text
+HTTP/1.1 200
+```
+
+Inspect persisted analysis:
+
+```bash
+curl -i http://localhost:8081/api/runs/<runId>/analysis
+```
+
+Expected:
+
+```text
+HTTP/1.1 200
+```
+
+Restart persistence test:
+
+```bash
+# stop backend with CTRL+C
+mvn spring-boot:run
+curl http://localhost:8081/api/runs
+```
+
+Expected:
+
+```text
+the previous run still appears
+```
+
 ---
 
-## 3. Docker Verification
+## 3. Frontend Test Workflow
+
+From repo root:
+
+```bash
+cd frontend
+npm install
+npm run typecheck
+npm run build
+npm run dev
+```
+
+Expected:
+
+```text
+TypeScript typecheck passes.
+Vite production build succeeds.
+Development server runs on http://localhost:5173.
+```
+
+Manual frontend checks:
+
+```text
+Open http://localhost:5173
+Scenario dropdown loads scenarios from backend.
+Run selected scenario button works.
+Latest run card updates.
+Persisted history appears.
+Selecting a completed run loads analyzer summary.
+Message summary, task metrics, root causes, and raw report display correctly.
+```
+
+Troubleshooting API failures:
+
+```bash
+cat frontend/.env
+# expected:
+VITE_API_BASE_URL=http://localhost:8081
+
+curl -i http://localhost:8081/api/scenarios
+# expected:
+HTTP/1.1 200
+```
+
+Do not use:
+
+```text
+https://localhost:8081
+```
+
+Local Spring Boot is running plain HTTP. If backend logs show invalid HTTP method bytes such as `0x16 0x03 0x01`, the browser/frontend is trying HTTPS against the HTTP port.
+
+---
+
+## 4. Docker Verification
 
 Validate Compose:
 
@@ -115,7 +200,7 @@ Validate Compose:
 docker compose config
 ```
 
-Run backend:
+Run backend with PostgreSQL:
 
 ```bash
 docker compose up --build backend
@@ -126,9 +211,20 @@ Test:
 ```bash
 curl http://localhost:8081/api/health
 curl http://localhost:8081/api/scenarios
-curl -X POST http://localhost:8081/api/runs \
-  -H "Content-Type: application/json" \
-  -d '{"scenarioId":"queue_overflow"}'
+curl -X POST http://localhost:8081/api/runs   -H "Content-Type: application/json"   -d '{"scenarioId":"queue_overflow"}'
+curl http://localhost:8081/api/runs
+```
+
+Run frontend:
+
+```bash
+docker compose up --build frontend
+```
+
+Open:
+
+```text
+http://localhost:5173
 ```
 
 Run full existing demo:
@@ -141,7 +237,7 @@ docker compose run --rm ml-predict
 
 ---
 
-## 4. C++ Test Coverage
+## 5. C++ Test Coverage
 
 C++ tests live in:
 
@@ -164,7 +260,7 @@ Current coverage:
 
 ---
 
-## 5. Python Test Coverage
+## 6. Python Test Coverage
 
 Python tests live in:
 
@@ -189,7 +285,7 @@ Current coverage:
 
 ---
 
-## 6. Backend Test Coverage
+## 7. Backend Test Coverage
 
 Backend tests live in:
 
@@ -202,6 +298,7 @@ Current tests should cover:
 ```text
 HealthControllerTest.java
 ScenarioControllerTest.java
+RunRepositoryTest.java
 ```
 
 They verify:
@@ -212,9 +309,12 @@ They verify:
 - `/api/scenarios` returns 200.
 - `/api/scenarios` includes the expected scenario IDs.
 - `/api/scenarios` exposes at least 9 scenarios.
+- `RunRepository` can save and find runs by run ID.
+- `RunRepository` can return newest runs first.
 
-Phase 26 added logic that should be tested next:
+Recommended next backend tests:
 
+- CORS config allows `http://localhost:5173`.
 - `POST /api/runs` accepts valid scenario IDs.
 - Unknown scenario IDs are rejected.
 - Arbitrary config paths are not accepted.
@@ -223,77 +323,80 @@ Phase 26 added logic that should be tested next:
 - Unique run log path creation.
 - `AnalyzerReportParser` parses analyzer reports.
 - `ProcessRunner` drains output without hanging.
+- `RunService` persists completed analysis summaries.
 
 ---
 
-## 7. Manual Phase 26 Verification
+## 8. Frontend Test Coverage To Add
 
-Start backend:
+Current Phase 28 frontend verification is mainly build/typecheck/manual API testing.
+
+Recommended next frontend tests:
+
+```text
+ScenarioSelector renders scenario options.
+Run button calls createRun with selected scenario ID.
+RunHistory renders persisted runs.
+AnalysisPanel renders message summary and task metrics.
+Failed API calls show error banner.
+Empty state displays when there are no runs.
+```
+
+Recommended tools:
+
+```text
+Vitest
+React Testing Library
+jsdom
+```
+
+Potential commands after adding tests:
 
 ```bash
+npm run test
+npm run test:coverage
+```
+
+---
+
+## 9. Manual Phase 28 Verification
+
+Start PostgreSQL and backend:
+
+```bash
+docker compose up -d postgres
 cd backend
 mvn spring-boot:run
 ```
 
-Run queue overflow:
+Start frontend:
 
 ```bash
-curl -X POST http://localhost:8081/api/runs \
-  -H "Content-Type: application/json" \
-  -d '{"scenarioId":"queue_overflow"}'
+cd frontend
+npm run dev
 ```
 
-Expected successful result:
+Open:
 
 ```text
-status=COMPLETED
-runtimeHealth=WARNING
-errorMessage=null
-```
-
-List runs:
-
-```bash
-curl http://localhost:8081/api/runs
-```
-
-Inspect one run:
-
-```bash
-curl http://localhost:8081/api/runs/<runId>
-curl http://localhost:8081/api/runs/<runId>/analysis
-```
-
-Inspect generated files:
-
-```bash
-ls -R runs/<runId>
+http://localhost:5173
 ```
 
 Expected:
 
 ```text
-runtime_logs.jsonl
-analysis.txt
-```
-
-Safety check:
-
-```bash
-curl -X POST http://localhost:8081/api/runs \
-  -H "Content-Type: application/json" \
-  -d '{"scenarioId":"../../bad/path"}'
-```
-
-Expected:
-
-```text
-Rejected as an unknown scenario ID.
+Scenario list loads.
+Run selected scenario button is enabled after scenarios load.
+Clicking queue_overflow creates a run.
+Latest run card shows COMPLETED and WARNING.
+History count increases.
+Clicking the completed run loads analyzer summary.
+Message summary shows queueFullDrops > 0 and faultInjectedDrops = 0.
 ```
 
 ---
 
-## 8. Dataset and ML Verification
+## 10. Dataset and ML Verification
 
 ```bash
 docker compose up --build demo
@@ -305,22 +408,14 @@ docker compose run --rm ml-predict
 Local ML commands:
 
 ```bash
-python3 ai-analyzer/ml/train_model.py \
-  --dataset reports/generated/synthetic_dataset.csv \
-  --model-output models/anomaly_classifier.joblib \
-  --label-encoder-output models/label_encoder.joblib \
-  --metrics-output reports/generated/model_metrics.json
+python3 ai-analyzer/ml/train_model.py   --dataset reports/generated/synthetic_dataset.csv   --model-output models/anomaly_classifier.joblib   --label-encoder-output models/label_encoder.joblib   --metrics-output reports/generated/model_metrics.json
 
-python3 ai-analyzer/ml/predict_model.py \
-  --model models/anomaly_classifier.joblib \
-  --label-encoder models/label_encoder.joblib \
-  --dataset reports/generated/synthetic_dataset.csv \
-  --limit 20
+python3 ai-analyzer/ml/predict_model.py   --model models/anomaly_classifier.joblib   --label-encoder models/label_encoder.joblib   --dataset reports/generated/synthetic_dataset.csv   --limit 20
 ```
 
 ---
 
-## 9. What Passing Tests Prove
+## 11. What Passing Tests Prove
 
 Passing tests prove:
 
@@ -333,11 +428,15 @@ Passing tests prove:
 - Dataset generation works.
 - ML training/prediction workflows work.
 - Spring Boot health and scenario APIs work.
-- Phase 26 local backend orchestration can run the simulator and analyzer successfully.
+- Backend orchestration can run the simulator and analyzer successfully.
+- PostgreSQL can store and return run metadata and parsed analysis summaries.
+- Frontend TypeScript compiles.
+- Frontend production build succeeds.
+- Frontend can consume backend APIs when backend, CORS, and `VITE_API_BASE_URL` are configured correctly.
 
 ---
 
-## 10. What Tests Do Not Prove Yet
+## 12. What Tests Do Not Prove Yet
 
 Current tests do not fully prove:
 
@@ -345,21 +444,23 @@ Current tests do not fully prove:
 - Real hardware timing correctness.
 - Real process/thread crash recovery.
 - Production ML accuracy.
-- PostgreSQL persistence.
-- React frontend behavior.
+- Full frontend automated test coverage.
 - Kubernetes deployment.
 - Full async job execution under concurrent users.
+- Production-grade database migrations beyond the initial schema.
 
 ---
 
-## 11. Recommended CI Updates
+## 13. Recommended CI Updates
 
 Future GitHub Actions improvements:
 
 - Add backend Maven test job.
 - Add backend Docker build smoke test.
 - Add Docker Compose config validation.
+- Add PostgreSQL service container for backend integration tests.
 - Add dataset-generation smoke test.
 - Add ML-training smoke test.
 - Add backend orchestration smoke test with a short-duration test config.
-- Add frontend test job once React exists.
+- Add frontend Node setup, `npm ci`, `npm run typecheck`, and `npm run build`.
+- Add frontend tests once Vitest/React Testing Library are introduced.

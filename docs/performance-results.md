@@ -1,23 +1,24 @@
-# MiniRTOS-Linux Performance, Fault, Dataset, and ML Benchmark Report
-**Updated:** May 26, 2026  
-**Phase:** Phase 23 verification refresh after Phase 22 ML integration  
+# MiniRTOS-Linux Performance, Fault, Dataset, ML, Backend, and Frontend Benchmark Report
+
+**Updated:** June 4, 2026  
+**Phase:** Phase 28 React dashboard update after Phase 27 PostgreSQL/Flyway integration  
 **Project:** MiniRTOS-Linux — Embedded Runtime Simulator with AI-Based Fault Detection
 
 ---
 
 ## 1. Purpose
-This benchmark report summarizes the observed behavior of MiniRTOS-Linux across scheduler, queue-pressure, fault-injected, watchdog, dataset-generation, and ML-classifier workflows.
+
+This benchmark report summarizes the observed behavior of MiniRTOS-Linux across scheduler, queue-pressure, fault-injected, watchdog, dataset-generation, ML-classifier, backend persistence, and frontend dashboard workflows.
 
 MiniRTOS-Linux is a software-only C++20 embedded runtime simulator that models periodic tasks, round-robin scheduling, priority scheduling, earliest-deadline-first scheduling, bounded message queues, structured JSONL telemetry, configurable fault injection, watchdog monitoring, simulated recovery behavior, Python-based runtime analysis, synthetic training-dataset generation, and a trained lightweight ML anomaly classifier.
 
-This Phase 23 refresh uses the uploaded JSONL runtime logs to replace the older placeholder/expected benchmark values with actual observed metrics from the latest verified run.
+Phase 27 added persistent PostgreSQL/Flyway run storage around backend-orchestrated runs. Phase 28 added the React/TypeScript dashboard MVP for scenario selection, run creation, persisted run history, and analyzer summary display.
 
 ---
 
 ## 2. Verification Context
-The user confirmed that the local test and Docker workflows pass. This document focuses on the benchmark evidence available from the uploaded JSONL logs.
 
-Verified by user:
+Previously verified by user:
 
 ```bash
 python3 -m pytest ai-analyzer/tests -q
@@ -29,25 +30,47 @@ docker compose run --rm ml-train
 docker compose run --rm ml-predict
 ```
 
-Uploaded logs parsed for this report:
+Phase 27 verified backend/database behavior:
 
-```text
-normal_runtime_logs.jsonl
-deadline_scheduler_runtime_logs.jsonl
-queue_overflow_runtime_logs.jsonl
-cpu_spike_runtime_logs.jsonl
-task_crash_runtime_logs.jsonl
-slow_task_runtime_logs.jsonl
-dropped_messages_runtime_logs.jsonl
-watchdog_runtime_logs.jsonl
-runtime_logs.jsonl
+```bash
+docker compose up -d postgres
+cd backend
+mvn clean test
+mvn spring-boot:run
+curl http://localhost:8081/api/scenarios
+curl http://localhost:8081/api/runs
+curl -X POST http://localhost:8081/api/runs -H "Content-Type: application/json" -d '{"scenarioId":"queue_overflow"}'
+curl http://localhost:8081/api/runs/<runId>/analysis
 ```
 
-Note: `runtime_logs.jsonl` matched the watchdog slow-task scenario contents. A separate `priority_scheduler_runtime_logs.jsonl` file was not included in this upload, so priority-scheduler measured values are not listed in the refreshed tables below.
+Phase 28 frontend verification checklist:
+
+```bash
+cd frontend
+npm install
+npm run typecheck
+npm run build
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+Important Phase 28 debugging context:
+
+```text
+VITE_API_BASE_URL must be http://localhost:8081.
+The backend is plain HTTP locally, not HTTPS.
+If backend logs show invalid HTTP method bytes such as 0x16 0x03 0x01, the browser/frontend is sending HTTPS/TLS to the HTTP backend port.
+```
 
 ---
 
 ## 3. Scenarios Tested
+
 | Scenario | Config File | Log File | Dataset/ML Label | Purpose |
 |---|---|---|---|---|
 | Normal runtime | `configs/normal.json` | `normal_runtime_logs.jsonl` | `NORMAL` | Baseline round-robin behavior without explicit fault injection. |
@@ -63,6 +86,7 @@ Note: `runtime_logs.jsonl` matched the watchdog slow-task scenario contents. A s
 ---
 
 ## 4. High-Level Runtime Results
+
 | Scenario | Scheduler Mode | Events | Runtime Status | Info | Warnings | Errors | Key Finding |
 |---|---|---:|---|---:|---:|---:|---|
 | Normal runtime | `round_robin` | 1444 | `WARNING` | 1105 | 339 | 0 | Baseline run completed with no deadline misses, no faults, and queue-full drops caused by bounded queue pressure. |
@@ -78,6 +102,7 @@ Note: `runtime_logs.jsonl` matched the watchdog slow-task scenario contents. A s
 ---
 
 ## 5. Message, Fault, Watchdog, and Failure Metrics
+
 | Scenario | Messages Sent | Messages Received | Messages Dropped | Queue-Full Drops | Fault-Injected Drops | Fault Events | Deadline Misses | Watchdog Timeouts | Recoveries | Task Failures | Task Skips |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | Normal runtime | 80 | 60 | 339 | 339 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
@@ -92,6 +117,7 @@ Note: `runtime_logs.jsonl` matched the watchdog slow-task scenario contents. A s
 ---
 
 ## 6. Fault-Type Breakdown
+
 | Scenario | Fault-Type Counts |
 |---|---|
 | Normal runtime | None |
@@ -106,6 +132,7 @@ Note: `runtime_logs.jsonl` matched the watchdog slow-task scenario contents. A s
 ---
 
 ## 7. Per-Task Runtime Metrics
+
 Average and maximum durations are computed from `task_completed` events in the uploaded logs.
 
 | Scenario | Task | Runs | Deadline Misses | Avg Duration ms | Max Duration ms |
@@ -138,41 +165,35 @@ Average and maximum durations are computed from `task_completed` events in the u
 ---
 
 ## 8. Scenario Observations
-### 8.1 Normal Runtime
 
-The normal runtime completed with 1,444 events, no deadline misses, no fault injection, no watchdog events, and 339 queue-full message drops. This means the run is healthy from a task-timing perspective, but still surfaces bounded-queue pressure.
+### 8.1 Normal Runtime
+The normal runtime completed with 1,444 events, no deadline misses, no fault injection, no watchdog events, and 339 queue-full message drops.
 
 ### 8.2 Earliest-Deadline-First Scheduler
-
-The earliest-deadline-first scheduler run completed with the same top-level telemetry profile as the normal run: 1,444 events, 339 queue-full drops, and 0 deadline misses. This confirms that the EDF scheduler mode preserves the same log schema and analyzer compatibility while changing the scheduling strategy.
+The EDF scheduler run completed with the same top-level telemetry profile as the normal run: 1,444 events, 339 queue-full drops, and 0 deadline misses.
 
 ### 8.3 Queue Overflow
-
-The queue-overflow scenario produced 3,070 events and 958 queue-full drops. There were 0 fault-injected drops, 0 deadline misses, 0 watchdog timeouts, and 0 task failures. This remains the clearest benchmark for bounded-queue pressure independent of fault injection.
+The queue-overflow scenario produced 3,070 events and 958 queue-full drops. There were 0 fault-injected drops, 0 deadline misses, 0 watchdog timeouts, and 0 task failures.
 
 ### 8.4 CPU Spike
-
-The CPU-spike scenario produced 97 `cpu_spike` fault events and 193 total deadline misses. `NetworkTask` recorded 97 deadline misses with a maximum observed duration of 240 ms, while `ControlTask` recorded 96 deadline misses due to downstream timing pressure. This scenario is correctly classified as unstable.
+The CPU-spike scenario produced 97 `cpu_spike` fault events and 193 total deadline misses.
 
 ### 8.5 Task Crash
-
-The task-crash scenario produced 1 `task_crash` fault event, 1 `task_failed` event, and 99 `task_skipped` events. `NetworkTask` completed 20 runs before entering the failed state. The runtime process continued, which confirms that the crash behavior is simulated through scheduler state and telemetry rather than a real process crash.
+The task-crash scenario produced 1 `task_crash` fault event, 1 `task_failed` event, and 99 `task_skipped` events.
 
 ### 8.6 Slow Task
-
-The slow-task scenario produced 174 `slow_task` fault events and 174 `ControlTask` deadline misses. `ControlTask` reached a maximum observed duration of 130 ms against an 80 ms deadline. This scenario is correctly classified as unstable.
+The slow-task scenario produced 174 `slow_task` fault events and 174 `ControlTask` deadline misses.
 
 ### 8.7 Dropped Messages
-
-The dropped-message scenario produced 181 fault-injected message drops and 158 queue-full drops. This confirms that the analyzer can separate reliability faults from bounded-queue pressure.
+The dropped-message scenario produced 181 fault-injected message drops and 158 queue-full drops.
 
 ### 8.8 Watchdog Slow Task
-
-The watchdog scenario produced the same slow-task pressure as the slow-task scenario, plus 22 watchdog timeout events and 22 simulated task recovery events. This confirms the watchdog escalation path from repeated deadline misses into timeout and recovery telemetry.
+The watchdog scenario produced 22 watchdog timeout events and 22 simulated task recovery events.
 
 ---
 
 ## 9. Synthetic Dataset Implications
+
 Using a 5,000 ms window size, the uploaded benchmark logs produce **56 derived window rows** across the 8 uploaded non-duplicate scenario logs.
 
 | Scenario | Label | Derived 5s Windows |
@@ -187,36 +208,19 @@ Using a 5,000 ms window size, the uploaded benchmark logs produce **56 derived w
 | Watchdog slow task | `WATCHDOG_RECOVERY` | 7 |
 | **Total from uploaded logs** |  | **56** |
 
-A complete 9-scenario dataset that also includes the priority scheduler log would be expected to add another 7 windows, for a total of approximately **63 rows** with the current 30-second runs and 5,000 ms window size.
+A complete 9-scenario dataset that also includes the priority scheduler log would be expected to add another 7 windows.
 
 ---
 
 ## 10. ML Classifier Benchmark Context
+
 Phase 22 added the trained ML classifier workflow:
 
 ```bash
-python3 ai-analyzer/ml/train_model.py \
-  --dataset reports/generated/synthetic_dataset.csv \
-  --model-output models/anomaly_classifier.joblib \
-  --label-encoder-output models/label_encoder.joblib \
-  --metrics-output reports/generated/model_metrics.json
+python3 ai-analyzer/ml/train_model.py   --dataset reports/generated/synthetic_dataset.csv   --model-output models/anomaly_classifier.joblib   --label-encoder-output models/label_encoder.joblib   --metrics-output reports/generated/model_metrics.json
 
-python3 ai-analyzer/ml/predict_model.py \
-  --model models/anomaly_classifier.joblib \
-  --label-encoder models/label_encoder.joblib \
-  --dataset reports/generated/synthetic_dataset.csv \
-  --limit 20
+python3 ai-analyzer/ml/predict_model.py   --model models/anomaly_classifier.joblib   --label-encoder models/label_encoder.joblib   --dataset reports/generated/synthetic_dataset.csv   --limit 20
 ```
-
-Expected generated artifacts:
-
-```text
-models/anomaly_classifier.joblib
-models/label_encoder.joblib
-reports/generated/model_metrics.json
-```
-
-The user confirmed the ML-related commands pass. Exact accuracy, train/test split, label distribution, and confusion-matrix values should be copied from `reports/generated/model_metrics.json` if this report is refreshed again with the metrics file included.
 
 Correct interpretation:
 
@@ -227,7 +231,73 @@ Correct interpretation:
 
 ---
 
-## 11. Final Measured Summary
+## 11. Phase 27 Backend Persistence Verification
+
+Phase 27 did not change the C++ runtime timing model or the Python analyzer logic. It added persistence around backend-orchestrated runs.
+
+Verified backend/database behavior:
+
+| Check | Result |
+|---|---|
+| `POST /api/runs` with `queue_overflow` | Passed. Returned `status=COMPLETED` and `runtimeHealth=WARNING`. |
+| `GET /api/runs` | Passed. Returned HTTP 200 with persisted run summaries from PostgreSQL. |
+| `GET /api/runs/{runId}` | Passed. Returned HTTP 200 with one persisted run summary. |
+| `GET /api/runs/{runId}/analysis` | Passed. Returned HTTP 200 with parsed persisted analyzer data. |
+| PostgreSQL LOB issue | Fixed by removing `@Lob` from `rawReport` and storing it as normal PostgreSQL `TEXT`. |
+
+Verified example analysis for `queue_overflow`:
+
+```text
+runtimeHealth=WARNING
+eventsLoaded=3064
+simulationName=queue_overflow
+schedulerMode=round_robin
+configuredDurationSeconds=30
+observedDurationMs=30000
+messageDropped=956
+queueFullDrops=956
+faultInjectedDrops=0
+```
+
+---
+
+## 12. Phase 28 Frontend/API Workflow Verification
+
+Phase 28 adds a browser workflow benchmark:
+
+| Check | Expected Result |
+|---|---|
+| `npm run typecheck` | TypeScript passes. |
+| `npm run build` | Vite production build succeeds. |
+| Dashboard loads at `http://localhost:5173` | Page renders the MiniRTOS dashboard. |
+| `GET /api/scenarios` from frontend | Scenario dropdown is populated. |
+| `POST /api/runs` from frontend | Run is created through backend orchestration. |
+| `GET /api/runs` from frontend | Persisted run history is displayed. |
+| `GET /api/runs/{runId}/analysis` from frontend | Analyzer panel displays message summary, task metrics, root causes, and raw report. |
+
+Known local issue and fix:
+
+```text
+Dashboard error: Failed to fetch
+```
+
+Likely causes:
+
+1. Backend not running.
+2. CORS config missing or backend not restarted after adding CORS.
+3. `VITE_API_BASE_URL` set to HTTPS instead of HTTP.
+4. Browser cached old environment/build.
+
+Correct local configuration:
+
+```env
+VITE_API_BASE_URL=http://localhost:8081
+```
+
+---
+
+## 13. Final Measured Summary
+
 | Scenario | Final Benchmark Result |
 |---|---|
 | Normal runtime | Pass. Baseline run produced no deadline misses or faults; queue-full drops show bounded-queue pressure. |
@@ -239,10 +309,13 @@ Correct interpretation:
 | Dropped messages fault | Pass. Fault-injected drops reproduced and separated from queue-full drops. |
 | Watchdog slow task | Pass. Watchdog escalation reproduced with 22 timeouts and 22 recoveries. |
 | Priority scheduler | Not refreshed from uploaded logs. Re-run/upload `priority_scheduler_runtime_logs.jsonl` if exact measured values are required. |
+| Backend persistence | Pass. PostgreSQL stores and returns run metadata/analysis summaries. |
+| Frontend dashboard | Added. Complete verification requires confirming local API base URL, CORS, backend uptime, and successful browser API calls. |
 
 ---
 
-## 12. Limitations
+## 14. Limitations
+
 Current limitations remain:
 
 - Timing is simulated on Linux, not hard real-time hardware.
@@ -251,32 +324,17 @@ Current limitations remain:
 - Queue pressure can appear in baseline scenarios depending on message production and consumption rates.
 - Synthetic ML labels are scenario-derived, not manually reviewed per-window labels.
 - ML metrics are not listed in this refresh because `model_metrics.json` was not included with the uploaded benchmark logs.
+- Frontend currently displays analyzer summaries but does not yet provide charts/timelines.
+- Phase 28 dashboard verification should be repeated after resolving any local `Failed to fetch` environment issue.
 
 ---
 
-## 13. Recommended Next Updates
+## 15. Recommended Next Updates
+
 Recommended follow-up polish:
 
 1. Add or upload `priority_scheduler_runtime_logs.jsonl` and refresh the priority row.
 2. Paste or upload `reports/generated/model_metrics.json` if exact ML accuracy and confusion-matrix values should be included.
-3. Keep generated logs, datasets, metrics, and `.joblib` files ignored by Git.
-4. Commit this refreshed benchmark report as:
-
-```bash
-git add docs/performance-results.md
-git commit -m "Refresh final benchmark results"
-git push
-```
-
----
-
-## 14. Resume and Interview Talking Points
-Updated measured points that can be discussed carefully:
-
-- Queue-overflow benchmark produced 958 queue-full drops with 0 deadline misses and 0 fault-injected drops.
-- CPU-spike benchmark produced 97 CPU-spike fault events and 193 total deadline misses.
-- Task-crash benchmark produced 1 task failure and 99 skipped-task events while the runtime process continued.
-- Slow-task benchmark produced 174 slow-task fault events and 174 `ControlTask` deadline misses.
-- Dropped-message benchmark produced 181 fault-injected drops and 158 queue-full drops, proving that the analyzer separates reliability faults from capacity pressure.
-- Watchdog benchmark produced 22 watchdog timeouts and 22 simulated recovery events.
-- The ML pipeline trains a lightweight classifier on synthetic telemetry and reports prediction labels with confidence values.
+3. Keep generated logs, datasets, metrics, `.joblib` files, frontend `node_modules`, frontend `dist`, and local `.env` files ignored by Git.
+4. Add automated frontend tests after the dashboard stabilizes.
+5. Add a frontend/API workflow screenshot or benchmark after Phase 28 verification succeeds.

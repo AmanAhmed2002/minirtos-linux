@@ -19,5 +19,6 @@ com/minirtos/playground/service/RuntimeExecutionService.class
 com/minirtos/playground/service/AnalyzerReportParser$MutableTaskMetric.class
 com/minirtos/playground/dto/CreateRunRequest.class
 com/minirtos/playground/service/ProcessRunner.class
+com/minirtos/playground/config/CorsConfig.class
 com/minirtos/playground/dto/ScenarioResponse.class
 com/minirtos/playground/service/AnalyzerReportParser.class

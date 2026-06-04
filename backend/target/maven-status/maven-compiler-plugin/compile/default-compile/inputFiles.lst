@@ -1,4 +1,5 @@
 /home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/MiniRtosPlaygroundApplication.java
+/home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/config/CorsConfig.java
 /home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/config/MiniRtosProperties.java
 /home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/controller/HealthController.java
 /home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/controller/RunController.java

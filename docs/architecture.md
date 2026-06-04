@@ -1,88 +1,74 @@
 # MiniRTOS-Linux / MiniRTOS Playground Architecture
 
-## Current Status After This Chat
+## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 is now complete for the local backend MVP.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP layer and frontend Docker integration.
 
-Phase 26 added the Run Orchestration API:
+The platform now includes:
 
-- `POST /api/runs`
-- `GET /api/runs`
-- `GET /api/runs/{runId}`
-- `GET /api/runs/{runId}/analysis`
-- trusted scenario-ID validation
-- C++ runtime execution from Spring Boot
-- unique per-run output folders under `runs/<runId>/`
-- runtime log copying from `logs/runtime_logs.jsonl`
-- Python analyzer execution from Spring Boot
-- analyzer text saved as `analysis.txt`
-- structured analysis JSON returned by the backend
-- backend process timeout handling
-- safe subprocess output draining to avoid hanging processes
-
-Verified behavior:
-
-- Spring Boot backend runs locally on port `8081`.
-- `GET /api/health` works.
-- `GET /api/scenarios` works.
-- `POST /api/runs` successfully runs `queue_overflow`.
-- A successful `queue_overflow` run returned `status=COMPLETED`, `runtimeHealth=WARNING`, and `errorMessage=null`.
-- `WARNING` is expected for `queue_overflow` because the scenario intentionally creates bounded queue pressure and dropped messages.
-- Backend generated `runs/<runId>/runtime_logs.jsonl` and `runs/<runId>/analysis.txt`.
-- Existing C++/Python/analyzer/ML Docker workflow remains intact.
-
-Important implementation notes:
-
-- Backend uses Java 17.
-- Backend runs on port `8081` because Nginx is already using `8080` locally.
-- Phase 26 stores run metadata in memory only. Run history resets when the backend restarts.
-- Phase 27 should add PostgreSQL persistence.
-- The backend accepts only known scenario IDs and never accepts arbitrary user-provided config paths.
-
+- C++ runtime simulator.
+- Python deterministic analyzer.
+- Rule-based anomaly detector.
+- Synthetic dataset generator.
+- Random Forest ML classifier workflow.
+- Spring Boot backend orchestration API.
+- PostgreSQL persisted run history.
+- React/TypeScript frontend dashboard MVP.
+- Docker Compose services for runtime, analyzer, ML, backend, database, and frontend.
 
 ---
 
 ## 1. Current Architecture
 
 ```text
-+----------------------------------------+
-| Docker Compose                         |
-| demo / runtime-* / analyzer            |
-| training-dataset / ml-* / backend      |
-+-------------------+--------------------+
-                    |
-                    v
-+-------------------------------+       +----------------------------------+
-| C++ Runtime Simulator         |       | Java Spring Boot Backend         |
-| Config Loader                 |       | GET  /api/health                 |
-| Scheduler                     |       | GET  /api/scenarios              |
-| Message Bus                   |       | POST /api/runs                   |
-| Fault Injector                |       | GET  /api/runs                   |
-| Watchdog                      |       | GET  /api/runs/{runId}          |
-| JSONL Logger                  |       | GET  /api/runs/{runId}/analysis |
-+---------------+---------------+       +----------------+-----------------+
-                |                                        |
-                v                                        v
-+-------------------------------+       +----------------------------------+
-| logs/runtime_logs.jsonl       |       | runs/<runId>/runtime_logs.jsonl |
-+---------------+---------------+       | runs/<runId>/analysis.txt       |
-                |                       +----------------+-----------------+
-                v                                        |
-+-------------------------------+                        |
-| Python Analyzer               |<-----------------------+
++--------------------------------------------------------------------------------+
+| Docker Compose                                                                  |
+| demo / runtime-* / analyzer / ml-* / backend / postgres / frontend              |
++----------------------------------------+---------------------------------------+
+                                         |
+                                         v
++-------------------------------+       +---------------------------------------+
+| C++ Runtime Simulator         |       | Java Spring Boot Backend              |
+| Config Loader                 |       | GET  /api/health                      |
+| Scheduler                     |       | GET  /api/scenarios                   |
+| Message Bus                   |       | POST /api/runs                        |
+| Fault Injector                |       | GET  /api/runs                        |
+| Watchdog                      |       | GET  /api/runs/{runId}                |
+| JSONL Logger                  |       | GET  /api/runs/{runId}/analysis       |
++---------------+---------------+       +-------------------+-------------------+
+                |                                           |
+                v                                           v
++-------------------------------+       +---------------------------------------+
+| logs/runtime_logs.jsonl       |       | runs/<runId>/runtime_logs.jsonl      |
++---------------+---------------+       | runs/<runId>/analysis.txt            |
+                |                       +-------------------+-------------------+
+                v                                           |
++-------------------------------+                           |
+| Python Analyzer               |<--------------------------+
 | Deterministic report          |
 | Anomaly windows               |
 | Optional ML prediction        |
 +---------------+---------------+
                 |
                 v
-+-------------------------------+
-| Dataset + ML Layer            |
-| generate_dataset.py           |
-| train_model.py                |
-| predict_model.py              |
-| RandomForestClassifier        |
-+-------------------------------+
++-------------------------------+       +---------------------------------------+
+| Dataset + ML Layer            |       | PostgreSQL                            |
+| generate_dataset.py           |       | runs                                  |
+| train_model.py                |       | run_event_counts                      |
+| predict_model.py              |       | run_severity_counts                   |
+| RandomForestClassifier        |       | run_task_metrics                      |
++-------------------------------+       | run_root_causes                       |
+                                        +-------------------+-------------------+
+                                                            |
+                                                            v
+                                        +---------------------------------------+
+                                        | React/TypeScript Frontend             |
+                                        | scenario selector                     |
+                                        | run trigger                           |
+                                        | latest run summary                    |
+                                        | persisted history                     |
+                                        | analyzer summary panel                |
+                                        +---------------------------------------+
 ```
 
 ---
@@ -215,7 +201,10 @@ Maven
 Spring Web
 Spring Boot Actuator
 Spring Validation
-Spring Boot Test
+Spring Data JPA
+PostgreSQL Driver
+Flyway
+H2 for tests
 ```
 
 Current backend API:
@@ -241,6 +230,7 @@ Important backend files:
 backend/pom.xml
 backend/src/main/java/com/minirtos/playground/MiniRtosPlaygroundApplication.java
 backend/src/main/java/com/minirtos/playground/config/MiniRtosProperties.java
+backend/src/main/java/com/minirtos/playground/config/CorsConfig.java
 backend/src/main/java/com/minirtos/playground/controller/HealthController.java
 backend/src/main/java/com/minirtos/playground/controller/ScenarioController.java
 backend/src/main/java/com/minirtos/playground/controller/RunController.java
@@ -250,9 +240,15 @@ backend/src/main/java/com/minirtos/playground/service/RuntimeExecutionService.ja
 backend/src/main/java/com/minirtos/playground/service/AnalyzerExecutionService.java
 backend/src/main/java/com/minirtos/playground/service/AnalyzerReportParser.java
 backend/src/main/java/com/minirtos/playground/service/ProcessRunner.java
+backend/src/main/java/com/minirtos/playground/persistence/RunEntity.java
+backend/src/main/java/com/minirtos/playground/persistence/RunRepository.java
+backend/src/main/java/com/minirtos/playground/persistence/TaskMetricEntity.java
 backend/src/main/resources/application.yml
+backend/src/main/resources/db/migration/V1__create_run_storage.sql
 backend/README.md
 ```
+
+CORS is needed because the local dashboard runs on `http://localhost:5173` and the backend runs on `http://localhost:8081`.
 
 ---
 
@@ -287,32 +283,150 @@ Never let API clients provide arbitrary config paths.
 
 ---
 
-## 8. Run Storage Architecture
+## 8. Phase 27 Run Storage Architecture
 
-Current Phase 26 storage:
+Phase 27 replaced the previous in-memory run state with PostgreSQL-backed persistence.
+
+Filesystem artifacts remain:
 
 ```text
 runs/<runId>/runtime_logs.jsonl
 runs/<runId>/analysis.txt
 ```
 
-Current Phase 26 metadata state:
+Database-backed metadata now persists:
 
 ```text
-in-memory ConcurrentHashMap in RunService
+runs
+run_event_counts
+run_severity_counts
+run_task_metrics
+run_root_causes
 ```
 
-Limitation:
+Run storage flow:
 
 ```text
-Run list and analysis lookup reset when backend restarts.
+POST /api/runs
+  -> create RunEntity with RUNNING status
+  -> save RunEntity through RunRepository
+  -> execute runtime
+  -> execute analyzer
+  -> parse AnalysisResponse
+  -> mark RunEntity COMPLETED or FAILED
+  -> persist parsed counters/metrics/root causes/raw report
 ```
 
-Phase 27 will replace/augment this with PostgreSQL.
+Read flow:
+
+```text
+GET /api/runs
+  -> RunRepository.findAllByOrderByCreatedAtDesc()
+  -> RunEntity.toSummaryResponse()
+
+GET /api/runs/{runId}
+  -> RunRepository.findByRunId(runId)
+  -> RunEntity.toSummaryResponse()
+
+GET /api/runs/{runId}/analysis
+  -> RunRepository.findByRunId(runId)
+  -> RunEntity.toAnalysisResponse()
+```
+
+Important Phase 27 persistence rule:
+
+```text
+rawReport must be PostgreSQL TEXT without @Lob.
+```
 
 ---
 
-## 9. Docker Architecture
+## 9. Phase 28 Frontend Architecture
+
+Frontend stack:
+
+```text
+Vite
+React
+TypeScript
+Node 22+
+npm
+clsx
+```
+
+Current frontend port:
+
+```text
+5173
+```
+
+Environment:
+
+```env
+VITE_API_BASE_URL=http://localhost:8081
+```
+
+Important frontend files:
+
+```text
+frontend/package.json
+frontend/.env
+frontend/.env.example
+frontend/README.md
+frontend/src/types/api.ts
+frontend/src/api/minirtosApi.ts
+frontend/src/components/DashboardHeader.tsx
+frontend/src/components/ScenarioSelector.tsx
+frontend/src/components/RunResultCard.tsx
+frontend/src/components/RunHistory.tsx
+frontend/src/components/AnalysisPanel.tsx
+frontend/src/App.tsx
+frontend/src/App.css
+frontend/src/index.css
+frontend/src/main.tsx
+```
+
+Frontend API flow:
+
+```text
+App.tsx
+  -> loadDashboard()
+       -> GET /api/scenarios
+       -> GET /api/runs
+  -> ScenarioSelector
+       -> selected scenario ID
+       -> run button
+  -> createRun()
+       -> POST /api/runs
+       -> refresh GET /api/runs
+  -> RunHistory
+       -> select run ID
+  -> AnalysisPanel
+       -> GET /api/runs/{runId}/analysis
+```
+
+Frontend display responsibilities:
+
+- Scenario metadata.
+- What each scenario teaches.
+- Expected telemetry signals.
+- Latest run summary.
+- Persisted run history.
+- Runtime health.
+- Message summary.
+- Task metrics.
+- Root causes.
+- Raw analyzer report.
+
+Important local debugging note:
+
+```text
+If the dashboard reports Failed to fetch and backend logs show bytes like 0x16 0x03 0x01 in the HTTP method, the browser/frontend is sending HTTPS/TLS to an HTTP-only backend. Use http://localhost:8081.
+```
+
+---
+
+## 10. Docker Architecture
 
 Dockerfiles:
 
@@ -320,6 +434,7 @@ Dockerfiles:
 docker/Dockerfile.runtime
 docker/Dockerfile.analyzer
 docker/Dockerfile.backend
+docker/Dockerfile.frontend
 ```
 
 Services:
@@ -339,7 +454,9 @@ analyzer
 training-dataset
 ml-train
 ml-predict
+postgres
 backend
+frontend
 ```
 
 Backend service should mount logs/runs:
@@ -352,14 +469,56 @@ backend:
   container_name: minirtos-playground-backend
   ports:
     - "8081:8081"
+  environment:
+    SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/minirtos_playground
+    SPRING_DATASOURCE_USERNAME: minirtos
+    SPRING_DATASOURCE_PASSWORD: minirtos
+  depends_on:
+    postgres:
+      condition: service_healthy
   volumes:
     - ./logs:/app/logs
     - ./runs:/app/runs
 ```
 
+Frontend service:
+
+```yaml
+frontend:
+  build:
+    context: .
+    dockerfile: docker/Dockerfile.frontend
+  container_name: minirtos-playground-frontend
+  ports:
+    - "5173:5173"
+  environment:
+    VITE_API_BASE_URL: http://localhost:8081
+  depends_on:
+    - backend
+  volumes:
+    - ./frontend:/app/frontend
+    - /app/frontend/node_modules
+```
+
+Postgres service:
+
+```yaml
+postgres:
+  image: postgres:16
+  container_name: minirtos-postgres
+  environment:
+    POSTGRES_DB: minirtos_playground
+    POSTGRES_USER: minirtos
+    POSTGRES_PASSWORD: minirtos
+  ports:
+    - "5432:5432"
+  volumes:
+    - minirtos-postgres-data:/var/lib/postgresql/data
+```
+
 ---
 
-## 10. Future Full-Stack Architecture
+## 11. Future Full-Stack Architecture
 
 ```text
 React/TypeScript Frontend
@@ -370,20 +529,21 @@ React/TypeScript Frontend
   -> ML Predictor
   -> Docker Compose
   -> Kubernetes Jobs/Deployments
+  -> Terraform/cloud infrastructure
 ```
 
 ---
 
-## 11. Next Phase Architecture: PostgreSQL
+## 12. Next Phase Architecture: Educational Modules and Visualizers
 
-Phase 27 should add:
+Phase 29 should add:
 
 ```text
-PostgreSQL container
-Spring Data JPA
-RunEntity
-RunRepository
-persistent run metadata
-persistent analysis summary
-startup-safe run history
+student learning pages/cards
+scheduler timeline visualization
+queue depth / message drop charts
+fault explanation cards
+runtime health explanations
+anomaly and root-cause visual panels
+guided scenario walkthroughs
 ```

@@ -195,5 +195,20 @@ services:
       - ./logs:/app/logs
       - ./runs:/app/runs
 
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    container_name: minirtos-playground-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_BASE_URL: http://localhost:8081
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app/frontend
+      - /app/frontend/node_modules
+
 volumes:
   minirtos-postgres-data:

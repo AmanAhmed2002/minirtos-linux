@@ -1,0 +1,95 @@
+MiniRTOS-Linux Runtime Health Analyzer
+======================================
+
+Log file: /app/runs/2026-06-04T174559-940866895Z-cpu-spike-5f55a90e/runtime_logs.jsonl
+Events loaded: 1070
+Runtime status: UNSTABLE
+Simulation: cpu_spike
+Scheduler mode: round_robin
+Configured duration: 30 seconds
+Observed log duration: 30075 ms
+
+Event counts:
+  fault_injected: 97
+  message_dropped: 186
+  message_received: 58
+  message_sent: 78
+  runtime_finished: 1
+  runtime_started: 1
+  runtime_summary: 3
+  scheduler_finished: 1
+  scheduler_started: 1
+  task_completed: 322
+  task_started: 322
+
+Severity counts:
+  info: 690
+  warning: 380
+
+Task summary:
+  ControlTask:
+    runs: 147
+    deadline_misses: 96
+    deadline_missed_events: 0
+    avg_duration_ms: 10.0
+    max_duration_ms: 10
+  LoggerTask:
+    runs: 58
+    deadline_misses: 0
+    deadline_missed_events: 0
+    avg_duration_ms: 15.0
+    max_duration_ms: 15
+  NetworkTask:
+    runs: 117
+    deadline_misses: 97
+    deadline_missed_events: 97
+    avg_duration_ms: 202.4
+    max_duration_ms: 240
+
+Message summary:
+  sent: 78
+  received: 58
+  dropped: 186
+  queue_full_drops: 186
+  fault_injected_drops: 0
+
+Fault summary:
+  cpu_spike: 97
+
+Watchdog summary:
+  watchdog_timeouts: 0
+  task_recoveries: 0
+
+Task failure summary:
+  task_failures: 0
+  task_skips: 0
+
+Likely root causes:
+  - ControlTask missed its deadline 96 time(s).
+  - NetworkTask missed its deadline 97 time(s).
+  - CPU-spike fault injection was active.
+  - One or more task queues became full, causing queue_full message drops.
+
+AI Anomaly Detection Summary
+============================
+
+Window size: 5000 ms
+Overall classification: UNSTABLE
+Anomaly windows: 7 / 7
+Highest anomaly score: 1.00
+
+Top anomaly drivers:
+  - max_task_duration_ms
+  - deadline_missed_count
+  - message_dropped_count
+  - fault_injected_count
+  - warning_event_count
+
+Window summary:
+  0-4999 ms: WARNING score=0.41 drivers=message_dropped_count, queue_full_drop_count, warning_event_count, max_task_duration_ms
+  5000-9999 ms: UNSTABLE score=1.00 drivers=deadline_missed_count, fault_injected_count, max_task_duration_ms, message_dropped_count
+  10000-14999 ms: UNSTABLE score=1.00 drivers=deadline_missed_count, fault_injected_count, max_task_duration_ms, message_dropped_count
+  15000-19999 ms: UNSTABLE score=1.00 drivers=deadline_missed_count, fault_injected_count, max_task_duration_ms, message_dropped_count
+  20000-24999 ms: UNSTABLE score=1.00 drivers=deadline_missed_count, fault_injected_count, max_task_duration_ms, message_dropped_count
+  25000-29999 ms: UNSTABLE score=1.00 drivers=deadline_missed_count, fault_injected_count, max_task_duration_ms, message_dropped_count
+  30000-34999 ms: WARNING score=0.38 drivers=max_task_duration_ms, avg_task_duration_ms, deadline_missed_count, warning_event_count
