@@ -2,13 +2,26 @@
 
 React + TypeScript dashboard for MiniRTOS Playground.
 
+**Updated:** June 5, 2026  
+**Current Phase:** Phase 30 — Full-Stack Docker Compose Hardening
+
 ---
 
 ## Current Phase
 
-Phase 29 — Educational Modules and Visualizers.
+Phase 28 added the React Dashboard MVP. Phase 29 expanded it into a more student-friendly learning dashboard by adding guided scenario education and CSS-based visualizations. Phase 30 added separate dev and production Docker frontend workflows.
 
-Phase 28 added the React Dashboard MVP. Phase 29 expanded it into a more student-friendly learning dashboard by adding guided scenario education and CSS-based visualizations.
+The frontend can now run in two supported modes:
+
+```text
+Development frontend:
+  Vite dev server
+  http://localhost:5173
+
+Production frontend:
+  Nginx static server
+  http://localhost:3000
+```
 
 ---
 
@@ -26,6 +39,9 @@ Phase 28 added the React Dashboard MVP. Phase 29 expanded it into a more student
 - Display a queue pressure visualizer using analyzer message summary data.
 - Display a task runtime timeline using analyzer task metrics.
 - Display a fault and health explanation panel using runtime health and root causes.
+- Run through Vite for active development.
+- Run through Nginx for production-style Docker verification.
+- Expose `/health` in the production Nginx container.
 
 ---
 
@@ -36,6 +52,7 @@ Node.js 22+
 npm
 Spring Boot backend running on localhost:8081
 PostgreSQL running through Docker Compose
+Docker / Docker Compose for container workflows
 ```
 
 ---
@@ -62,9 +79,16 @@ Use http://localhost:8081, not https://localhost:8081.
 
 Local Spring Boot runs plain HTTP.
 
+Production build note:
+
+```text
+VITE_API_BASE_URL is baked into the built React bundle by Vite.
+If VITE_API_BASE_URL changes, rebuild the production frontend image.
+```
+
 ---
 
-## Run Locally
+## Run Locally Without Frontend Docker
 
 From repo root:
 
@@ -88,6 +112,91 @@ Open:
 
 ```text
 http://localhost:5173
+```
+
+---
+
+## Run Dev Frontend Through Docker
+
+Use this for active development and Vite dev server behavior:
+
+```bash
+docker compose down --remove-orphans
+docker compose up -d postgres
+docker compose up -d backend
+docker compose up --build frontend
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+If your Compose file uses a separate dev profile/service:
+
+```bash
+docker compose --profile dev up --build frontend-dev
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+Expected dev behavior:
+
+```text
+Vite logs show the local URL.
+Frontend uses port 5173.
+Backend calls go to http://localhost:8081.
+```
+
+---
+
+## Run Production Frontend Through Docker
+
+Use this for Phase 30 production-style verification:
+
+```bash
+docker compose down --remove-orphans
+mkdir -p logs runs reports/generated models
+
+docker compose up -d postgres
+docker compose build --no-cache backend
+docker compose up -d backend
+
+docker compose --profile prod build --no-cache frontend-prod
+docker compose --profile prod up -d frontend-prod
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+Check production frontend health:
+
+```bash
+curl -i http://localhost:3000/health
+```
+
+Expected:
+
+```text
+HTTP/1.1 200 OK
+ok
+```
+
+Important:
+
+```text
+Production frontend uses Nginx.
+Nginx listens on container port 80.
+Correct production port mapping is 3000:80.
+Do not map production Nginx as 5173:5173.
 ```
 
 ---
@@ -136,6 +245,28 @@ frontend/src/components/AnalysisPanel.tsx
 
 ---
 
+## Phase 30 Docker Files
+
+```text
+docker/Dockerfile.frontend
+docker/nginx.frontend.conf
+docker-compose.yml
+backend/src/main/java/com/minirtos/playground/config/CorsConfig.java
+```
+
+Phase 30 frontend Docker requirements:
+
+```text
+- Node 22 base image for frontend build/dev stages.
+- Dev target runs Vite on 0.0.0.0:5173.
+- Production target builds static assets.
+- Nginx production stage serves /usr/share/nginx/html.
+- Nginx config supports SPA fallback with try_files.
+- Nginx exposes /health.
+```
+
+---
+
 ## Component Responsibilities
 
 | Component | Purpose |
@@ -163,13 +294,13 @@ GET  /api/runs
 GET  /api/runs/{runId}/analysis
 ```
 
-Phase 29 did not require new backend endpoints.
+Phase 29 and Phase 30 did not require new backend endpoints.
 
 ---
 
 ## Manual Verification
 
-Expected after running the backend and frontend:
+Expected after running the backend and either frontend mode:
 
 ```text
 Scenario dropdown loads.
@@ -209,50 +340,91 @@ npm run build
 npm run dev
 ```
 
----
-
-## Docker
-
-Run through Docker Compose:
+Docker build commands:
 
 ```bash
-docker compose up --build frontend
-```
+docker build -f docker/Dockerfile.frontend --target dev -t minirtos-frontend-dev .
 
-Open:
-
-```text
-http://localhost:5173
+docker build \
+  -f docker/Dockerfile.frontend \
+  --target production \
+  --build-arg VITE_API_BASE_URL=http://localhost:8081 \
+  -t minirtos-frontend-prod .
 ```
 
 ---
 
 ## Troubleshooting
 
-### Dashboard says Failed to fetch
+### Production container starts but Docker logs appear stuck
 
-Check:
+This is normal for Nginx.
+
+Nginx logs may show:
+
+```text
+Configuration complete; ready for start up
+start worker process
+```
+
+That means Nginx is running and waiting for requests.
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+### Production frontend does not load
+
+Check port mapping:
 
 ```bash
-cat frontend/.env
+docker ps
+```
+
+Expected production mapping:
+
+```text
+0.0.0.0:3000->80/tcp
+```
+
+If you see:
+
+```text
+0.0.0.0:5173->5173/tcp
+```
+
+but the container is running Nginx, the mapping is wrong.
+
+### Dashboard says Failed to Fetch in production
+
+Check backend:
+
+```bash
+curl -i http://localhost:8081/actuator/health
+curl -i http://localhost:8081/api/scenarios
+```
+
+Check production CORS:
+
+```bash
+curl -i -X OPTIONS http://localhost:8081/api/scenarios \
+  -H "Origin: http://localhost:3000" \
+  -H "Access-Control-Request-Method: GET"
 ```
 
 Expected:
 
-```env
-VITE_API_BASE_URL=http://localhost:8081
+```text
+Access-Control-Allow-Origin: http://localhost:3000
 ```
 
-Then restart Vite:
+Check built bundle API URL:
 
 ```bash
-npm run dev
-```
-
-Also check backend:
-
-```bash
-curl -i http://localhost:8081/api/scenarios
+docker exec -it minirtos-playground-frontend-prod sh -c \
+  "grep -R 'localhost:8081' -n /usr/share/nginx/html/assets || true"
 ```
 
 ### Backend logs invalid HTTP method bytes
@@ -276,10 +448,17 @@ http://localhost:8081
 Recommended next frontend work:
 
 ```text
-Vitest + React Testing Library
-More detailed scheduler visualizer
-Dedicated learn pages
-Frontend screenshot documentation
-Production frontend Dockerfile
-Nginx static asset serving for production image
+Phase 31 — Frontend Automated Tests
+Vitest
+React Testing Library
+jsdom
+Scenario selector tests
+Run button tests
+Run history tests
+Analysis panel tests
+Learning module tests
+Queue pressure visualizer tests
+Task timeline tests
+Fault/health explanation tests
+Failed fetch and empty state tests
 ```
