@@ -3,7 +3,7 @@
 **Original Project:** Embedded Runtime Simulator with AI-Based Fault Detection  
 **Full-Stack Evolution:** MiniRTOS Playground — Full-Stack Embedded Systems Learning Platform
 
-MiniRTOS-Linux is a software-only C++20 embedded runtime simulator that models periodic tasks, bounded message queues, configurable fault injection, task-crash simulation, watchdog monitoring, structured JSONL telemetry, Python-based runtime analysis, AI-style anomaly detection, synthetic training-dataset generation, a trained lightweight ML anomaly classifier, automated tests, Dockerized demos, benchmark reporting, a Java/Spring Boot backend with persistent PostgreSQL run history, and a React/TypeScript dashboard MVP.
+MiniRTOS-Linux is a software-only C++20 embedded runtime simulator that models periodic tasks, bounded message queues, configurable fault injection, task-crash simulation, watchdog monitoring, structured JSONL telemetry, Python-based runtime analysis, AI-style anomaly detection, synthetic training-dataset generation, a trained lightweight ML anomaly classifier, automated tests, Dockerized demos, benchmark reporting, a Java/Spring Boot backend with persistent PostgreSQL run history, and a React/TypeScript educational dashboard.
 
 MiniRTOS Playground extends the project into a full-stack educational platform for students learning embedded systems, RTOS concepts, runtime telemetry, scheduling, queues, faults, watchdog behavior, Docker, Kubernetes, and ML-based anomaly detection.
 
@@ -11,7 +11,7 @@ MiniRTOS Playground extends the project into a full-stack educational platform f
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run storage. Phase 28 added the React Dashboard MVP implementation plan/code, frontend Docker integration, and local frontend/backend debugging notes.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run storage. Phase 28 added the React Dashboard MVP, frontend Docker integration, and local frontend/backend debugging notes. Phase 29 added educational modules and visualizers to the React dashboard.
 
 Current verified backend behavior:
 
@@ -24,7 +24,7 @@ Current verified backend behavior:
 - `queue_overflow` returns `status=COMPLETED`, `runtimeHealth=WARNING`, and `errorMessage=null`.
 - Run history survives backend restarts.
 
-Current frontend behavior added in Phase 28:
+Current frontend behavior:
 
 - Vite + React + TypeScript dashboard under `frontend/`.
 - Scenario selector using `GET /api/scenarios`.
@@ -32,6 +32,11 @@ Current frontend behavior added in Phase 28:
 - Persisted history using `GET /api/runs`.
 - Analyzer panel using `GET /api/runs/{runId}/analysis`.
 - Student-friendly scenario details, expected signals, task metrics, message summaries, root causes, and raw report display.
+- Guided Learning panel that changes by selected scenario.
+- Queue pressure visualizer.
+- Task runtime timeline visualizer.
+- Fault and runtime-health explanation panel.
+- Root-cause teaching notes.
 - Local frontend runs on `http://localhost:5173`.
 - Backend API base URL should be `http://localhost:8081`.
 
@@ -42,6 +47,7 @@ Important local decisions:
 - Frontend uses Node 22+ because current Vite tooling may fail on older Node 18 releases.
 - Database persistence uses PostgreSQL, Spring Data JPA, and Flyway.
 - The backend accepts only known scenario IDs and never accepts arbitrary config paths.
+- Phase 29 visualizers are CSS-based and add no new chart dependency.
 
 ---
 
@@ -60,7 +66,8 @@ Important local decisions:
 | ML | Synthetic dataset generation and Random Forest classifier |
 | Backend | Java Spring Boot API for health, scenarios, and runs |
 | Persistence | PostgreSQL run history with Flyway migrations |
-| Frontend | React/TypeScript dashboard MVP |
+| Frontend | React/TypeScript educational dashboard |
+| Learning UI | Scenario learning cards, queue visualizer, task timeline, health/fault explanations |
 | Testing | GoogleTest, CTest, pytest, Spring Boot tests, repository tests, frontend build/typecheck |
 | Docker | Runtime, analyzer, ML, backend, PostgreSQL, and frontend services |
 
@@ -89,6 +96,10 @@ Docker Compose
         -> run trigger
         -> persisted run history
         -> analyzer summary display
+        -> guided learning content
+        -> queue pressure visualizer
+        -> task runtime visualizer
+        -> fault and health explanation panel
 ```
 
 Future architecture:
@@ -206,7 +217,9 @@ curl http://localhost:8081/api/scenarios
 Run a scenario:
 
 ```bash
-curl -X POST http://localhost:8081/api/runs   -H "Content-Type: application/json"   -d '{"scenarioId":"queue_overflow"}'
+curl -X POST http://localhost:8081/api/runs \
+  -H "Content-Type: application/json" \
+  -d '{"scenarioId":"queue_overflow"}'
 ```
 
 List persisted runs:
@@ -237,6 +250,7 @@ Run locally:
 ```bash
 cd frontend
 npm install
+npm run typecheck
 npm run build
 npm run dev
 ```
@@ -251,10 +265,15 @@ Expected:
 
 - Scenario list loads.
 - You can select a scenario.
+- Guided Learning panel changes for the selected scenario.
 - The run button calls the backend.
 - Latest run card updates.
 - Persisted history appears.
-- Completed runs can load analyzer details.
+- Completed runs load analyzer details.
+- Queue pressure visualizer appears.
+- Task runtime timeline appears.
+- Fault/health explanation panel appears.
+- Raw analyzer report remains expandable.
 
 Troubleshooting:
 
@@ -344,7 +363,9 @@ Test backend:
 ```bash
 curl http://localhost:8081/api/health
 curl http://localhost:8081/api/scenarios
-curl -X POST http://localhost:8081/api/runs   -H "Content-Type: application/json"   -d '{"scenarioId":"queue_overflow"}'
+curl -X POST http://localhost:8081/api/runs \
+  -H "Content-Type: application/json" \
+  -d '{"scenarioId":"queue_overflow"}'
 curl http://localhost:8081/api/runs
 ```
 
@@ -368,10 +389,10 @@ docker compose up --build demo
 |---|---|
 | `docs/architecture.md` | Runtime/analyzer/ML/backend/PostgreSQL/frontend architecture |
 | `docs/testing.md` | C++/Python/ML/backend/database/frontend testing |
-| `docs/fault-injection.md` | Fault modes, telemetry, backend API, and frontend learning use |
-| `docs/anomaly-detector.md` | Analyzer, anomaly, dataset, ML, backend, and frontend analysis flow |
+| `docs/fault-injection.md` | Fault modes, telemetry, backend API, frontend learning use, and visualizer interpretation |
+| `docs/anomaly-detector.md` | Analyzer, anomaly, dataset, ML, backend, frontend analysis flow, and educational display |
 | `docs/performance-results.md` | Runtime/fault/benchmark results and dashboard verification notes |
-| `docs/docker-phase28-update-notes.md` | Phase 28 Docker/frontend/backend notes |
+| `docs/docker-phase29-update-notes.md` | Phase 29 frontend educational visualizer notes |
 | `backend/README.md` | Backend-specific setup and API documentation |
 | `frontend/README.md` | Frontend-specific setup and dashboard documentation |
 
@@ -380,7 +401,7 @@ docker compose up --build demo
 ## Next Phase
 
 ```text
-Phase 29 — Educational Modules and Visualizers
+Phase 30 — Full-Stack Docker Compose Hardening
 ```
 
-Phase 29 should build on the React dashboard by adding concept pages, guided learning cards, scheduler timeline visualization, queue pressure charts, fault explanation panels, and more polished student-facing learning flows.
+Phase 30 should improve dev/prod Docker separation, add a production frontend image, healthchecks, backend readiness checks, Compose profiles, and Docker/CI smoke tests.

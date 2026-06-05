@@ -2,9 +2,17 @@
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP that can display parsed analyzer summaries from the backend.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP that can display parsed analyzer summaries from the backend. Phase 29 added educational modules and visualizers that translate analyzer output into student-friendly explanations.
 
 The backend can run the deterministic analyzer after each simulation, parse the report, return structured JSON, persist the parsed analysis summary in PostgreSQL, and expose it to the React dashboard.
+
+The frontend can now display:
+
+- Runtime health explanation.
+- Message/queue pressure visualizer.
+- Task runtime timeline.
+- Root-cause teaching notes.
+- Fault-specific learning panels.
 
 ---
 
@@ -19,7 +27,7 @@ It includes:
 3. Synthetic training-dataset generator.
 4. Lightweight ML anomaly classifier.
 
-Phase 26 connected the Spring Boot backend to the deterministic analyzer. Phase 27 persisted run metadata and parsed analyzer summaries in PostgreSQL. Phase 28 connected those persisted summaries to the frontend dashboard.
+Phase 26 connected the Spring Boot backend to the deterministic analyzer. Phase 27 persisted run metadata and parsed analyzer summaries in PostgreSQL. Phase 28 connected those persisted summaries to the frontend dashboard. Phase 29 added a learning/visualization layer on top of the existing analysis response.
 
 ---
 
@@ -50,6 +58,11 @@ Frontend integration files:
 frontend/src/api/minirtosApi.ts
 frontend/src/types/api.ts
 frontend/src/components/AnalysisPanel.tsx
+frontend/src/content/learningContent.ts
+frontend/src/components/QueuePressureChart.tsx
+frontend/src/components/TaskTimeline.tsx
+frontend/src/components/FaultExplanationPanel.tsx
+frontend/src/components/LearningModulePanel.tsx
 ```
 
 ---
@@ -64,7 +77,11 @@ frontend/src/components/AnalysisPanel.tsx
 With ML:
 
 ```bash
-python3 ai-analyzer/app/analyze.py   --log logs/task_crash_runtime_logs.jsonl   --window-ms 5000   --ml-model models/anomaly_classifier.joblib   --ml-label-encoder models/label_encoder.joblib
+python3 ai-analyzer/app/analyze.py \
+  --log logs/task_crash_runtime_logs.jsonl \
+  --window-ms 5000 \
+  --ml-model models/anomaly_classifier.joblib \
+  --ml-label-encoder models/label_encoder.joblib
 ```
 
 Backend analyzer command pattern:
@@ -96,6 +113,14 @@ NORMAL
 WARNING
 UNSTABLE
 ```
+
+Phase 29 frontend interpretation:
+
+| Health | Student-Facing Meaning |
+|---|---|
+| `NORMAL` | No major timing, queue, fault, watchdog, or failure problems were detected. |
+| `WARNING` | The run completed, but degraded behavior such as message drops or queue pressure occurred. |
+| `UNSTABLE` | Serious issues such as deadline misses, task failures, CPU spikes, or watchdog events occurred. |
 
 ---
 
@@ -136,7 +161,18 @@ The rule-based detector reports anomaly scores and top drivers.
 ## 6. Dataset Generation
 
 ```bash
-python3 ai-analyzer/training/generate_dataset.py   --output reports/generated/synthetic_dataset.csv   --window-ms 5000   --scenario normal=logs/normal_runtime_logs.jsonl   --scenario priority_scheduler=logs/priority_scheduler_runtime_logs.jsonl   --scenario deadline_scheduler=logs/deadline_scheduler_runtime_logs.jsonl   --scenario queue_overflow=logs/queue_overflow_runtime_logs.jsonl   --scenario cpu_spike=logs/cpu_spike_runtime_logs.jsonl   --scenario task_crash=logs/task_crash_runtime_logs.jsonl   --scenario slow_task=logs/slow_task_runtime_logs.jsonl   --scenario dropped_messages=logs/dropped_messages_runtime_logs.jsonl   --scenario watchdog=logs/watchdog_runtime_logs.jsonl
+python3 ai-analyzer/training/generate_dataset.py \
+  --output reports/generated/synthetic_dataset.csv \
+  --window-ms 5000 \
+  --scenario normal=logs/normal_runtime_logs.jsonl \
+  --scenario priority_scheduler=logs/priority_scheduler_runtime_logs.jsonl \
+  --scenario deadline_scheduler=logs/deadline_scheduler_runtime_logs.jsonl \
+  --scenario queue_overflow=logs/queue_overflow_runtime_logs.jsonl \
+  --scenario cpu_spike=logs/cpu_spike_runtime_logs.jsonl \
+  --scenario task_crash=logs/task_crash_runtime_logs.jsonl \
+  --scenario slow_task=logs/slow_task_runtime_logs.jsonl \
+  --scenario dropped_messages=logs/dropped_messages_runtime_logs.jsonl \
+  --scenario watchdog=logs/watchdog_runtime_logs.jsonl
 ```
 
 Docker:
@@ -176,30 +212,38 @@ synthetic_dataset.csv
 Train:
 
 ```bash
-python3 ai-analyzer/ml/train_model.py   --dataset reports/generated/synthetic_dataset.csv   --model-output models/anomaly_classifier.joblib   --label-encoder-output models/label_encoder.joblib   --metrics-output reports/generated/model_metrics.json
+python3 ai-analyzer/ml/train_model.py \
+  --dataset reports/generated/synthetic_dataset.csv \
+  --model-output models/anomaly_classifier.joblib \
+  --label-encoder-output models/label_encoder.joblib \
+  --metrics-output reports/generated/model_metrics.json
 ```
 
 Predict:
 
 ```bash
-python3 ai-analyzer/ml/predict_model.py   --model models/anomaly_classifier.joblib   --label-encoder models/label_encoder.joblib   --dataset reports/generated/synthetic_dataset.csv   --limit 20
+python3 ai-analyzer/ml/predict_model.py \
+  --model models/anomaly_classifier.joblib \
+  --label-encoder models/label_encoder.joblib \
+  --dataset reports/generated/synthetic_dataset.csv \
+  --limit 20
 ```
 
 ---
 
 ## 8. Scenario Expectations
 
-| Scenario | Rule-Based Classification | ML Label |
-|---|---|---|
-| Normal | `NORMAL` or `WARNING` if queue pressure occurs | `NORMAL` |
-| Priority scheduler | `NORMAL` or `WARNING` if queue pressure occurs | `NORMAL` |
-| EDF scheduler | `NORMAL` or `WARNING` if queue pressure occurs | `NORMAL` |
-| Queue overflow | `WARNING` | `QUEUE_PRESSURE` |
-| CPU spike | `UNSTABLE` if deadline misses occur | `CPU_SPIKE` |
-| Task crash | `UNSTABLE` | `TASK_CRASH` |
-| Slow task | `UNSTABLE` | `SLOW_TASK` |
-| Dropped messages | `WARNING` | `DROPPED_MESSAGES` |
-| Watchdog slow task | `UNSTABLE` | `WATCHDOG_RECOVERY` |
+| Scenario | Rule-Based Classification | ML Label | Frontend Visual Focus |
+|---|---|---|---|
+| Normal | `NORMAL` or `WARNING` if queue pressure occurs | `NORMAL` | Baseline periodic tasks and bounded queues. |
+| Priority scheduler | `NORMAL` or `WARNING` if queue pressure occurs | `NORMAL` | Priority scheduling concept. |
+| EDF scheduler | `NORMAL` or `WARNING` if queue pressure occurs | `NORMAL` | Deadline-aware scheduling concept. |
+| Queue overflow | `WARNING` | `QUEUE_PRESSURE` | Queue pressure chart and queue-full drops. |
+| CPU spike | `UNSTABLE` if deadline misses occur | `CPU_SPIKE` | Task runtime timeline and deadline risk. |
+| Task crash | `UNSTABLE` | `TASK_CRASH` | Fault explanation and task skipped/failure signals. |
+| Slow task | `UNSTABLE` | `SLOW_TASK` | Deadline misses and long task duration. |
+| Dropped messages | `WARNING` | `DROPPED_MESSAGES` | Fault-injected drop explanation. |
+| Watchdog slow task | `UNSTABLE` | `WATCHDOG_RECOVERY` | Watchdog timeout and recovery explanation. |
 
 ---
 
@@ -256,11 +300,21 @@ It does not accept arbitrary user-supplied config paths.
 
 ## 10. Frontend Integration
 
-Phase 28 dashboard consumes analysis through:
+Phase 28 dashboard consumed analysis through:
 
 ```text
 frontend/src/api/minirtosApi.ts
 frontend/src/components/AnalysisPanel.tsx
+```
+
+Phase 29 expanded display through:
+
+```text
+frontend/src/content/learningContent.ts
+frontend/src/components/LearningModulePanel.tsx
+frontend/src/components/QueuePressureChart.tsx
+frontend/src/components/TaskTimeline.tsx
+frontend/src/components/FaultExplanationPanel.tsx
 ```
 
 Frontend call:
@@ -289,12 +343,14 @@ Student-facing purpose:
 - Show why a run is `NORMAL`, `WARNING`, or `UNSTABLE`.
 - Separate queue-full drops from fault-injected drops.
 - Show which tasks missed deadlines.
+- Visualize message drops and queue pressure.
+- Visualize task duration and deadline risk.
+- Explain analyzer root causes.
 - Show raw analyzer output for transparency.
-- Prepare for future visualizations in Phase 29.
 
 ---
 
-## 11. Verified Phase 27/28 Analysis Example
+## 11. Verified Queue Overflow Example
 
 A verified `queue_overflow` analysis returned:
 
@@ -316,7 +372,16 @@ Interpretation:
 The run completed successfully, but the analyzer correctly classified it as WARNING because bounded queue pressure caused queue-full message drops.
 ```
 
-In the frontend dashboard, this should appear in the latest run card, persisted history, message summary, and analyzer panel after selecting the completed run.
+In the frontend dashboard, this should appear in:
+
+```text
+latest run card
+persisted history
+message summary
+queue pressure visualizer
+fault/health explanation panel
+raw analyzer report
+```
 
 ---
 
@@ -329,4 +394,4 @@ In the frontend dashboard, this should appear in the latest run card, persisted 
 - Backend analyzer integration currently uses deterministic analyzer output only.
 - ML prediction is not yet exposed through the backend API.
 - Runtime logs are still stored as files; PostgreSQL stores metadata and parsed analysis summaries.
-- Phase 28 frontend displays parsed analyzer summaries but does not yet visualize time windows/charts.
+- Phase 29 frontend visualizers summarize parsed analyzer fields but do not yet provide full event-by-event charts.

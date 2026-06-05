@@ -2,7 +2,7 @@
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP layer and frontend Docker integration.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP layer and frontend Docker integration. Phase 29 added educational learning modules and frontend visualizers.
 
 The platform now includes:
 
@@ -13,7 +13,9 @@ The platform now includes:
 - Random Forest ML classifier workflow.
 - Spring Boot backend orchestration API.
 - PostgreSQL persisted run history.
-- React/TypeScript frontend dashboard MVP.
+- React/TypeScript educational dashboard.
+- CSS-based queue and task visualizers.
+- Guided scenario learning modules.
 - Docker Compose services for runtime, analyzer, ML, backend, database, and frontend.
 
 ---
@@ -68,6 +70,10 @@ The platform now includes:
                                         | latest run summary                    |
                                         | persisted history                     |
                                         | analyzer summary panel                |
+                                        | guided learning modules               |
+                                        | queue pressure visualizer             |
+                                        | task runtime timeline                 |
+                                        | fault/health explanation panel        |
                                         +---------------------------------------+
 ```
 
@@ -418,15 +424,69 @@ Frontend display responsibilities:
 - Root causes.
 - Raw analyzer report.
 
-Important local debugging note:
+---
+
+## 10. Phase 29 Educational Frontend Architecture
+
+Phase 29 added educational and visualizer components without backend changes.
+
+New frontend files:
 
 ```text
-If the dashboard reports Failed to fetch and backend logs show bytes like 0x16 0x03 0x01 in the HTTP method, the browser/frontend is sending HTTPS/TLS to an HTTP-only backend. Use http://localhost:8081.
+frontend/src/content/learningContent.ts
+frontend/src/components/LearningModulePanel.tsx
+frontend/src/components/QueuePressureChart.tsx
+frontend/src/components/TaskTimeline.tsx
+frontend/src/components/FaultExplanationPanel.tsx
 ```
+
+Updated frontend files:
+
+```text
+frontend/src/App.tsx
+frontend/src/App.css
+frontend/src/components/AnalysisPanel.tsx
+```
+
+Phase 29 flow:
+
+```text
+ScenarioSelector
+  -> selected scenario ID
+  -> LearningModulePanel
+       -> getScenarioLearningContent(selectedScenario)
+       -> show concept modules and signals to watch
+
+AnalysisPanel
+  -> QueuePressureChart(messageSummary)
+  -> TaskTimeline(taskMetrics)
+  -> FaultExplanationPanel(analysis)
+  -> existing summary grid / task table / root causes / raw report
+```
+
+Phase 29 visualizers use these existing API fields:
+
+```text
+messageSummary.sent
+messageSummary.received
+messageSummary.dropped
+messageSummary.queueFullDrops
+messageSummary.faultInjectedDrops
+taskMetrics[taskName].runs
+taskMetrics[taskName].deadlineMisses
+taskMetrics[taskName].avgDurationMs
+taskMetrics[taskName].maxDurationMs
+runtimeHealth
+rootCauses
+scenarioId
+simulationName
+```
+
+No chart library was added. Visualizers are implemented with CSS bars and cards.
 
 ---
 
-## 10. Docker Architecture
+## 11. Docker Architecture
 
 Dockerfiles:
 
@@ -459,66 +519,11 @@ backend
 frontend
 ```
 
-Backend service should mount logs/runs:
-
-```yaml
-backend:
-  build:
-    context: .
-    dockerfile: docker/Dockerfile.backend
-  container_name: minirtos-playground-backend
-  ports:
-    - "8081:8081"
-  environment:
-    SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/minirtos_playground
-    SPRING_DATASOURCE_USERNAME: minirtos
-    SPRING_DATASOURCE_PASSWORD: minirtos
-  depends_on:
-    postgres:
-      condition: service_healthy
-  volumes:
-    - ./logs:/app/logs
-    - ./runs:/app/runs
-```
-
-Frontend service:
-
-```yaml
-frontend:
-  build:
-    context: .
-    dockerfile: docker/Dockerfile.frontend
-  container_name: minirtos-playground-frontend
-  ports:
-    - "5173:5173"
-  environment:
-    VITE_API_BASE_URL: http://localhost:8081
-  depends_on:
-    - backend
-  volumes:
-    - ./frontend:/app/frontend
-    - /app/frontend/node_modules
-```
-
-Postgres service:
-
-```yaml
-postgres:
-  image: postgres:16
-  container_name: minirtos-postgres
-  environment:
-    POSTGRES_DB: minirtos_playground
-    POSTGRES_USER: minirtos
-    POSTGRES_PASSWORD: minirtos
-  ports:
-    - "5432:5432"
-  volumes:
-    - minirtos-postgres-data:/var/lib/postgresql/data
-```
+Phase 29 did not require Docker changes.
 
 ---
 
-## 11. Future Full-Stack Architecture
+## 12. Future Full-Stack Architecture
 
 ```text
 React/TypeScript Frontend
@@ -534,16 +539,16 @@ React/TypeScript Frontend
 
 ---
 
-## 12. Next Phase Architecture: Educational Modules and Visualizers
+## 13. Next Phase Architecture: Full-Stack Docker Compose Hardening
 
-Phase 29 should add:
+Phase 30 should add:
 
 ```text
-student learning pages/cards
-scheduler timeline visualization
-queue depth / message drop charts
-fault explanation cards
-runtime health explanations
-anomaly and root-cause visual panels
-guided scenario walkthroughs
+production frontend Dockerfile
+Nginx static serving for built frontend assets
+frontend healthcheck
+backend readiness checks
+Compose dev/prod profiles
+Docker build smoke tests
+CI validation for backend/frontend images
 ```

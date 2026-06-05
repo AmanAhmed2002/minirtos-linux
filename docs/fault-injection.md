@@ -2,9 +2,9 @@
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React Dashboard MVP for running and inspecting scenarios from the browser.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React Dashboard MVP for running and inspecting scenarios from the browser. Phase 29 added educational modules and visualizers that explain fault behavior in student-friendly language.
 
-The backend can execute fault and queue-pressure scenarios through `POST /api/runs`, persist the resulting run summaries/analysis in PostgreSQL, and expose them to the React dashboard.
+The backend can execute fault and queue-pressure scenarios through `POST /api/runs`, persist the resulting run summaries/analysis in PostgreSQL, and expose them to the React dashboard. The frontend can now explain and visualize queue pressure, task runtime duration, runtime health, and root causes.
 
 ---
 
@@ -25,22 +25,30 @@ It generates telemetry such as:
 
 In MiniRTOS Playground, these scenarios are exposed through backend metadata, can be executed through the Run Orchestration API, are persisted through PostgreSQL run storage, and can be inspected from the React dashboard.
 
+Phase 29 adds a learning layer on top of this data:
+
+- Guided scenario explanation cards.
+- Queue pressure visualizer.
+- Task runtime timeline.
+- Fault and health explanation panel.
+- Root-cause teaching notes.
+
 ---
 
 ## 2. Supported Fault Types
 
-| Fault Type | Description | Main Runtime Impact | ML Label |
-|---|---|---|---|
-| `slow_task` | Adds extra execution time to a target task. | Deadline misses, unstable timing. | `SLOW_TASK` |
-| `cpu_spike` | Adds simulated CPU-load delay. | Increased duration, deadline misses. | `CPU_SPIKE` |
-| `task_crash` | Simulates task failure state. | `task_failed`, `task_skipped`. | `TASK_CRASH` |
-| `dropped_messages` | Drops messages by probability. | `message_dropped`. | `DROPPED_MESSAGES` |
+| Fault Type | Description | Main Runtime Impact | ML Label | Frontend Learning Focus |
+|---|---|---|---|---|
+| `slow_task` | Adds extra execution time to a target task. | Deadline misses, unstable timing. | `SLOW_TASK` | Deadline misses and long task duration. |
+| `cpu_spike` | Adds simulated CPU-load delay. | Increased duration, deadline misses. | `CPU_SPIKE` | CPU timing pressure and max duration. |
+| `task_crash` | Simulates task failure state. | `task_failed`, `task_skipped`. | `TASK_CRASH` | Task failure isolation and skipped work. |
+| `dropped_messages` | Drops messages by probability. | `message_dropped`. | `DROPPED_MESSAGES` | Fault-injected message loss. |
 
 Related non-fault capacity scenario:
 
-| Scenario | Purpose | ML Label |
-|---|---|---|
-| `queue_overflow` | Bounded queue pressure without intentional fault injection. | `QUEUE_PRESSURE` |
+| Scenario | Purpose | ML Label | Frontend Learning Focus |
+|---|---|---|---|
+| `queue_overflow` | Bounded queue pressure without intentional fault injection. | `QUEUE_PRESSURE` | Queue-full drops and bounded capacity. |
 
 ---
 
@@ -121,7 +129,9 @@ Analyze:
 Run a fault or queue scenario through Spring Boot:
 
 ```bash
-curl -X POST http://localhost:8081/api/runs   -H "Content-Type: application/json"   -d '{"scenarioId":"queue_overflow"}'
+curl -X POST http://localhost:8081/api/runs \
+  -H "Content-Type: application/json" \
+  -d '{"scenarioId":"queue_overflow"}'
 ```
 
 Other scenario IDs:
@@ -187,11 +197,16 @@ http://localhost:5173
 Expected dashboard flow:
 
 1. Select a fault scenario from the scenario dropdown.
-2. Review the scenario explanation and expected telemetry signals.
-3. Click **Run selected scenario**.
-4. Inspect the latest run result card.
-5. Click the completed run in persisted history.
-6. Review the analyzer panel for message drops, deadline misses, root causes, and raw report details.
+2. Review the Guided Learning panel.
+3. Review scenario explanation and expected telemetry signals.
+4. Click **Run selected scenario**.
+5. Inspect the latest run result card.
+6. Click the completed run in persisted history.
+7. Review analyzer summary.
+8. Review queue pressure visualizer.
+9. Review task runtime timeline.
+10. Review fault/health explanation panel.
+11. Expand raw analyzer report if needed.
 
 Important:
 
@@ -215,6 +230,13 @@ runtime_summary
 Runtime status: UNSTABLE when deadline misses cross analyzer thresholds
 ```
 
+Phase 29 frontend interpretation:
+
+```text
+Task runtime timeline highlights tasks with deadline misses.
+Fault explanation panel describes slow execution and deadline risk.
+```
+
 ### `cpu_spike`
 
 Expected:
@@ -224,6 +246,13 @@ fault_type=cpu_spike
 target_task=NetworkTask
 deadline misses if timing pressure exceeds deadline
 Runtime status: UNSTABLE when deadline misses occur
+```
+
+Phase 29 frontend interpretation:
+
+```text
+Task timeline shows high max duration on affected task.
+Health explanation explains why timing pressure can make a system unstable.
 ```
 
 ### `task_crash`
@@ -238,6 +267,12 @@ runtime_summary
 Runtime status: UNSTABLE
 ```
 
+Phase 29 frontend interpretation:
+
+```text
+Fault panel explains task failure isolation and skipped-task telemetry.
+```
+
 ### `dropped_messages`
 
 Expected:
@@ -247,6 +282,12 @@ fault_injected
 message_dropped
 reason=fault_injected_drop
 Runtime status: WARNING
+```
+
+Phase 29 frontend interpretation:
+
+```text
+Queue pressure chart separates fault-injected drops from queue-full drops.
 ```
 
 ### `queue_overflow`
@@ -271,6 +312,14 @@ POST /api/runs with scenarioId=queue_overflow
 -> GET /api/runs/{runId}/analysis returns queueFullDrops and faultInjectedDrops
 ```
 
+Phase 29 frontend interpretation:
+
+```text
+Guided Learning explains queue pressure.
+Queue pressure visualizer shows dropped messages.
+Fault/health panel explains WARNING and queue capacity.
+```
+
 ### `watchdog_slow_task`
 
 Expected:
@@ -283,14 +332,20 @@ task_recovered
 Runtime status: UNSTABLE
 ```
 
+Phase 29 frontend interpretation:
+
+```text
+Fault panel explains watchdog escalation and simulated recovery telemetry.
+```
+
 ---
 
 ## 8. Queue-Full Drops vs Fault-Injected Drops
 
-| Drop Type | Cause | Meaning |
-|---|---|---|
-| `queue_full` | Target queue reached capacity. | Bounded queue pressure. |
-| `fault_injected_drop` | Fault injector intentionally dropped a message. | Simulated message reliability fault. |
+| Drop Type | Cause | Meaning | Frontend Explanation |
+|---|---|---|---|
+| `queue_full` | Target queue reached capacity. | Bounded queue pressure. | Capacity problem or producer/consumer mismatch. |
+| `fault_injected_drop` | Fault injector intentionally dropped a message. | Simulated message reliability fault. | Communication reliability issue. |
 
 This distinction is important for educational explanations, root-cause analysis, ML labeling, persisted analysis summaries, and the frontend dashboard.
 
@@ -312,7 +367,9 @@ Backend orchestration through Docker:
 
 ```bash
 docker compose up --build backend
-curl -X POST http://localhost:8081/api/runs   -H "Content-Type: application/json"   -d '{"scenarioId":"task_crash"}'
+curl -X POST http://localhost:8081/api/runs \
+  -H "Content-Type: application/json" \
+  -d '{"scenarioId":"task_crash"}'
 ```
 
 Frontend through Docker:
@@ -367,7 +424,19 @@ The React dashboard consumes all of these APIs.
 
 ---
 
-## 11. Limitations
+## 11. Phase 29 Frontend Learning Files
+
+```text
+frontend/src/content/learningContent.ts
+frontend/src/components/LearningModulePanel.tsx
+frontend/src/components/QueuePressureChart.tsx
+frontend/src/components/TaskTimeline.tsx
+frontend/src/components/FaultExplanationPanel.tsx
+```
+
+---
+
+## 12. Limitations
 
 - `task_crash` simulates failure but does not crash real threads/processes.
 - It does not simulate memory corruption.
@@ -375,11 +444,11 @@ The React dashboard consumes all of these APIs.
 - Recovery is logged rather than implemented as a real restart.
 - ML labels are scenario-derived.
 - PostgreSQL persistence stores run metadata and parsed analysis, but the raw runtime log still lives as a file under `runs/<runId>/runtime_logs.jsonl`.
-- Phase 28 frontend displays fault/analyzer summaries but does not yet include charts or timeline visualizations.
+- Phase 29 visualizers are summary visualizers, not full event-by-event timelines.
 
 ---
 
-## 12. Recommended Future Faults
+## 13. Recommended Future Faults
 
 ```text
 corrupted_message

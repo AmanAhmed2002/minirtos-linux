@@ -1,18 +1,18 @@
 # MiniRTOS-Linux Performance, Fault, Dataset, ML, Backend, and Frontend Benchmark Report
 
 **Updated:** June 4, 2026  
-**Phase:** Phase 28 React dashboard update after Phase 27 PostgreSQL/Flyway integration  
+**Phase:** Phase 29 educational modules and frontend visualizers after Phase 28 React dashboard and Phase 27 PostgreSQL/Flyway integration  
 **Project:** MiniRTOS-Linux — Embedded Runtime Simulator with AI-Based Fault Detection
 
 ---
 
 ## 1. Purpose
 
-This benchmark report summarizes the observed behavior of MiniRTOS-Linux across scheduler, queue-pressure, fault-injected, watchdog, dataset-generation, ML-classifier, backend persistence, and frontend dashboard workflows.
+This benchmark report summarizes the observed behavior of MiniRTOS-Linux across scheduler, queue-pressure, fault-injected, watchdog, dataset-generation, ML-classifier, backend persistence, frontend dashboard, and educational visualizer workflows.
 
 MiniRTOS-Linux is a software-only C++20 embedded runtime simulator that models periodic tasks, round-robin scheduling, priority scheduling, earliest-deadline-first scheduling, bounded message queues, structured JSONL telemetry, configurable fault injection, watchdog monitoring, simulated recovery behavior, Python-based runtime analysis, synthetic training-dataset generation, and a trained lightweight ML anomaly classifier.
 
-Phase 27 added persistent PostgreSQL/Flyway run storage around backend-orchestrated runs. Phase 28 added the React/TypeScript dashboard MVP for scenario selection, run creation, persisted run history, and analyzer summary display.
+Phase 27 added persistent PostgreSQL/Flyway run storage around backend-orchestrated runs. Phase 28 added the React/TypeScript dashboard MVP for scenario selection, run creation, persisted run history, and analyzer summary display. Phase 29 added guided learning modules, queue pressure visualizer, task runtime timeline, fault/health explanation panel, and root-cause teaching notes.
 
 ---
 
@@ -53,13 +53,29 @@ npm run build
 npm run dev
 ```
 
-Open:
+Phase 29 frontend verification checklist:
 
 ```text
-http://localhost:5173
+Dashboard loads at http://localhost:5173.
+Scenario dropdown loads.
+Guided Learning panel changes by selected scenario.
+Run selected scenario works.
+Persisted history updates.
+Completed run analysis loads.
+Queue pressure visualizer appears.
+Task runtime timeline appears.
+Fault/health explanation panel appears.
+Raw analyzer report remains expandable.
 ```
 
-Important Phase 28 debugging context:
+User confirmed after Phase 29:
+
+```text
+Everything works.
+Changes were committed and pushed to GitHub.
+```
+
+Important frontend/backend debugging context:
 
 ```text
 VITE_API_BASE_URL must be http://localhost:8081.
@@ -217,9 +233,17 @@ A complete 9-scenario dataset that also includes the priority scheduler log woul
 Phase 22 added the trained ML classifier workflow:
 
 ```bash
-python3 ai-analyzer/ml/train_model.py   --dataset reports/generated/synthetic_dataset.csv   --model-output models/anomaly_classifier.joblib   --label-encoder-output models/label_encoder.joblib   --metrics-output reports/generated/model_metrics.json
+python3 ai-analyzer/ml/train_model.py \
+  --dataset reports/generated/synthetic_dataset.csv \
+  --model-output models/anomaly_classifier.joblib \
+  --label-encoder-output models/label_encoder.joblib \
+  --metrics-output reports/generated/model_metrics.json
 
-python3 ai-analyzer/ml/predict_model.py   --model models/anomaly_classifier.joblib   --label-encoder models/label_encoder.joblib   --dataset reports/generated/synthetic_dataset.csv   --limit 20
+python3 ai-analyzer/ml/predict_model.py \
+  --model models/anomaly_classifier.joblib \
+  --label-encoder models/label_encoder.joblib \
+  --dataset reports/generated/synthetic_dataset.csv \
+  --limit 20
 ```
 
 Correct interpretation:
@@ -231,9 +255,7 @@ Correct interpretation:
 
 ---
 
-## 11. Phase 27 Backend Persistence Verification
-
-Phase 27 did not change the C++ runtime timing model or the Python analyzer logic. It added persistence around backend-orchestrated runs.
+## 11. Backend Persistence Verification
 
 Verified backend/database behavior:
 
@@ -261,19 +283,21 @@ faultInjectedDrops=0
 
 ---
 
-## 12. Phase 28 Frontend/API Workflow Verification
+## 12. Frontend/API Workflow Verification
 
-Phase 28 adds a browser workflow benchmark:
-
-| Check | Expected Result |
-|---|---|
-| `npm run typecheck` | TypeScript passes. |
-| `npm run build` | Vite production build succeeds. |
-| Dashboard loads at `http://localhost:5173` | Page renders the MiniRTOS dashboard. |
-| `GET /api/scenarios` from frontend | Scenario dropdown is populated. |
-| `POST /api/runs` from frontend | Run is created through backend orchestration. |
-| `GET /api/runs` from frontend | Persisted run history is displayed. |
-| `GET /api/runs/{runId}/analysis` from frontend | Analyzer panel displays message summary, task metrics, root causes, and raw report. |
+| Check | Expected Result | Phase |
+|---|---|---|
+| `npm run typecheck` | TypeScript passes. | Phase 28/29 |
+| `npm run build` | Vite production build succeeds. | Phase 28/29 |
+| Dashboard loads at `http://localhost:5173` | Page renders the MiniRTOS dashboard. | Phase 28/29 |
+| `GET /api/scenarios` from frontend | Scenario dropdown is populated. | Phase 28 |
+| `POST /api/runs` from frontend | Run is created through backend orchestration. | Phase 28 |
+| `GET /api/runs` from frontend | Persisted run history is displayed. | Phase 28 |
+| `GET /api/runs/{runId}/analysis` from frontend | Analyzer panel displays message summary, task metrics, root causes, and raw report. | Phase 28 |
+| Guided Learning panel | Changes based on selected scenario. | Phase 29 |
+| Queue pressure visualizer | Displays received/dropped and queue/fault drop breakdown. | Phase 29 |
+| Task runtime timeline | Displays task duration bars and deadline risk. | Phase 29 |
+| Fault/health panel | Explains runtime health and root causes. | Phase 29 |
 
 Known local issue and fix:
 
@@ -310,7 +334,8 @@ VITE_API_BASE_URL=http://localhost:8081
 | Watchdog slow task | Pass. Watchdog escalation reproduced with 22 timeouts and 22 recoveries. |
 | Priority scheduler | Not refreshed from uploaded logs. Re-run/upload `priority_scheduler_runtime_logs.jsonl` if exact measured values are required. |
 | Backend persistence | Pass. PostgreSQL stores and returns run metadata/analysis summaries. |
-| Frontend dashboard | Added. Complete verification requires confirming local API base URL, CORS, backend uptime, and successful browser API calls. |
+| Frontend dashboard | Pass after user verification. Dashboard works with correct API base URL and backend/CORS setup. |
+| Phase 29 learning modules and visualizers | Pass after user verification. Educational cards, queue visualizer, task timeline, and fault/health panel work. |
 
 ---
 
@@ -324,8 +349,8 @@ Current limitations remain:
 - Queue pressure can appear in baseline scenarios depending on message production and consumption rates.
 - Synthetic ML labels are scenario-derived, not manually reviewed per-window labels.
 - ML metrics are not listed in this refresh because `model_metrics.json` was not included with the uploaded benchmark logs.
-- Frontend currently displays analyzer summaries but does not yet provide charts/timelines.
-- Phase 28 dashboard verification should be repeated after resolving any local `Failed to fetch` environment issue.
+- Phase 29 visualizers summarize parsed analyzer output but do not yet render a full event-by-event timeline.
+- Frontend automated tests are still recommended.
 
 ---
 
@@ -337,4 +362,5 @@ Recommended follow-up polish:
 2. Paste or upload `reports/generated/model_metrics.json` if exact ML accuracy and confusion-matrix values should be included.
 3. Keep generated logs, datasets, metrics, `.joblib` files, frontend `node_modules`, frontend `dist`, and local `.env` files ignored by Git.
 4. Add automated frontend tests after the dashboard stabilizes.
-5. Add a frontend/API workflow screenshot or benchmark after Phase 28 verification succeeds.
+5. Add a frontend/API workflow screenshot or benchmark after Phase 29 verification.
+6. Begin Phase 30 Docker Compose hardening.

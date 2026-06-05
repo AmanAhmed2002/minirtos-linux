@@ -191,6 +191,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8081/actuator/health', timeout=3)\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     volumes:
       - ./logs:/app/logs
       - ./runs:/app/runs
@@ -205,10 +215,43 @@ services:
     environment:
       VITE_API_BASE_URL: http://localhost:8081
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://localhost:5173').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     volumes:
       - ./frontend:/app/frontend
       - /app/frontend/node_modules
+
+  frontend-prod:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+      target: production
+      args:
+        VITE_API_BASE_URL: http://localhost:8081
+    container_name: minirtos-playground-frontend-prod
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    profiles:
+      - prod
 
 volumes:
   minirtos-postgres-data:

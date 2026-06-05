@@ -6,7 +6,7 @@ Java Spring Boot backend for the MiniRTOS Playground educational platform.
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React Dashboard MVP and required local CORS support for browser API calls.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React Dashboard MVP and required local CORS support for browser API calls. Phase 29 added frontend educational modules and visualizers without requiring backend API changes.
 
 The backend can now:
 
@@ -19,6 +19,7 @@ The backend can now:
 - Persist run metadata and parsed analysis summaries in PostgreSQL.
 - Return run history after backend restarts.
 - Serve APIs consumed by the React frontend running at `http://localhost:5173`.
+- Provide the persisted analysis data used by Phase 29 learning and visualizer components.
 
 Verified behavior:
 
@@ -30,6 +31,7 @@ Verified behavior:
 - `GET /api/runs/{runId}/analysis` returns HTTP 200 with parsed persisted analysis.
 - A successful `queue_overflow` run returned `status=COMPLETED`, `runtimeHealth=WARNING`, and `errorMessage=null`.
 - `WARNING` is expected for `queue_overflow` because the scenario intentionally creates bounded queue pressure and dropped messages.
+- Phase 29 frontend visualizers work using existing `messageSummary`, `taskMetrics`, `runtimeHealth`, `scenarioId`, and `rootCauses` fields.
 
 Important implementation notes:
 
@@ -39,6 +41,7 @@ Important implementation notes:
 - `rawReport` should be stored as PostgreSQL `TEXT` without `@Lob`.
 - The backend accepts only known scenario IDs and never accepts arbitrary user-provided config paths.
 - Local React frontend calls require CORS for `http://localhost:5173` and `http://127.0.0.1:5173`.
+- Phase 29 did not add backend dependencies or endpoints.
 
 ---
 
@@ -124,8 +127,6 @@ minirtos:
 
 ## CORS Configuration
 
-Phase 28 added CORS for the local dashboard.
-
 Expected file:
 
 ```text
@@ -170,7 +171,9 @@ curl http://localhost:8081/api/scenarios
 Run a scenario through the backend:
 
 ```bash
-curl -X POST http://localhost:8081/api/runs   -H "Content-Type: application/json"   -d '{"scenarioId":"queue_overflow"}'
+curl -X POST http://localhost:8081/api/runs \
+  -H "Content-Type: application/json" \
+  -d '{"scenarioId":"queue_overflow"}'
 ```
 
 Expected successful `queue_overflow` result:
@@ -218,6 +221,23 @@ POST /api/runs
 GET  /api/runs
 GET  /api/runs/{runId}/analysis
 ```
+
+Phase 29 frontend components use existing response fields:
+
+```text
+ScenarioResponse.id
+ScenarioResponse.name
+ScenarioResponse.description
+AnalysisResponse.runtimeHealth
+AnalysisResponse.scenarioId
+AnalysisResponse.simulationName
+AnalysisResponse.messageSummary
+AnalysisResponse.taskMetrics
+AnalysisResponse.rootCauses
+AnalysisResponse.rawReport
+```
+
+No backend endpoint change is required for Phase 29.
 
 ---
 
@@ -284,20 +304,6 @@ Returns parsed analyzer JSON plus the raw analyzer report from persisted data.
 
 ## Phase 27 Database Storage
 
-Phase 27 added:
-
-```text
-Spring Data JPA
-PostgreSQL driver
-Flyway
-RunEntity
-TaskMetricEntity
-RunRepository
-V1__create_run_storage.sql
-application-test.yml
-RunRepositoryTest
-```
-
 Database tables:
 
 ```text
@@ -336,51 +342,6 @@ Correct mapping:
 ```java
 @Column(name = "raw_report", columnDefinition = "text")
 private String rawReport;
-```
-
----
-
-## Backend Structure
-
-```text
-backend/
-├── pom.xml
-├── README.md
-└── src/
-    ├── main/
-    │   ├── java/com/minirtos/playground/
-    │   │   ├── MiniRtosPlaygroundApplication.java
-    │   │   ├── config/
-    │   │   │   ├── MiniRtosProperties.java
-    │   │   │   └── CorsConfig.java
-    │   │   ├── controller/
-    │   │   │   ├── HealthController.java
-    │   │   │   ├── ScenarioController.java
-    │   │   │   └── RunController.java
-    │   │   ├── dto/
-    │   │   ├── model/
-    │   │   ├── persistence/
-    │   │   │   ├── RunEntity.java
-    │   │   │   ├── RunRepository.java
-    │   │   │   └── TaskMetricEntity.java
-    │   │   └── service/
-    │   └── resources/
-    │       ├── application.yml
-    │       └── db/migration/V1__create_run_storage.sql
-    └── test/
-        ├── java/com/minirtos/playground/
-        └── resources/application-test.yml
-```
-
-Important services:
-
-```text
-RunService.java
-RuntimeExecutionService.java
-AnalyzerExecutionService.java
-AnalyzerReportParser.java
-ProcessRunner.java
-ScenarioService.java
 ```
 
 ---
@@ -446,13 +407,13 @@ Do not accept arbitrary config paths, runtime paths, analyzer paths, or shell co
 
 ## Next Phase
 
-Phase 29 should add:
+Phase 30 should harden Docker Compose:
 
 ```text
-Educational modules and visualizers
-scheduler timeline
-queue pressure charts
-fault explanation cards
-runtime health explanations
-guided student learning flows
+production frontend Dockerfile
+frontend healthcheck
+backend readiness checks
+Compose profiles for dev/prod
+Docker build smoke tests
+CI validation for frontend/backend images
 ```

@@ -2,7 +2,7 @@
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP and frontend Docker integration.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP and frontend Docker integration. Phase 29 added educational modules and CSS-based frontend visualizers.
 
 Verified Phase 27 behavior:
 
@@ -13,7 +13,7 @@ Verified Phase 27 behavior:
 - `queue_overflow` returns `status=COMPLETED`, `runtimeHealth=WARNING`, and `errorMessage=null`.
 - The PostgreSQL `@Lob` issue was fixed by storing `rawReport` as normal `TEXT`.
 
-Phase 28 verification focus:
+Verified Phase 28 behavior:
 
 - React dashboard builds.
 - Frontend can call backend APIs from `http://localhost:5173`.
@@ -21,6 +21,21 @@ Phase 28 verification focus:
 - `VITE_API_BASE_URL` uses `http://localhost:8081`.
 - Docker Compose can start the `frontend` service.
 - Dashboard can display scenarios, create runs, show persisted history, and load analysis.
+
+Verified Phase 29 behavior:
+
+- Dashboard still loads successfully.
+- Scenario dropdown still loads.
+- Guided Learning panel changes when selecting a different scenario.
+- `queue_overflow` can still be run successfully.
+- Latest run still shows `COMPLETED` and `WARNING` where expected.
+- Persisted history still updates.
+- Completed run analysis still loads.
+- Queue pressure visualizer displays parsed message summary data.
+- Task runtime timeline displays parsed task metric data.
+- Fault/health explanation panel displays student-friendly runtime health and root-cause explanations.
+- Raw analyzer report still expands correctly.
+- User confirmed everything works and committed/pushed the phase.
 
 ---
 
@@ -75,7 +90,9 @@ curl http://localhost:8081/api/scenarios
 Run a scenario:
 
 ```bash
-curl -X POST http://localhost:8081/api/runs   -H "Content-Type: application/json"   -d '{"scenarioId":"queue_overflow"}'
+curl -X POST http://localhost:8081/api/runs \
+  -H "Content-Type: application/json" \
+  -d '{"scenarioId":"queue_overflow"}'
 ```
 
 Expected:
@@ -163,10 +180,15 @@ Manual frontend checks:
 ```text
 Open http://localhost:5173
 Scenario dropdown loads scenarios from backend.
+Guided Learning panel appears.
+Guided Learning panel changes when selecting a different scenario.
 Run selected scenario button works.
 Latest run card updates.
 Persisted history appears.
 Selecting a completed run loads analyzer summary.
+Queue pressure visualizer appears when messageSummary exists.
+Task runtime timeline appears when taskMetrics exists.
+Fault/health explanation panel appears when analysis exists.
 Message summary, task metrics, root causes, and raw report display correctly.
 ```
 
@@ -192,7 +214,55 @@ Local Spring Boot is running plain HTTP. If backend logs show invalid HTTP metho
 
 ---
 
-## 4. Docker Verification
+## 4. Phase 29 Manual Verification
+
+Start PostgreSQL and backend:
+
+```bash
+docker compose up -d postgres
+cd backend
+mvn spring-boot:run
+```
+
+Start frontend:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+Recommended test scenario:
+
+```text
+queue_overflow
+```
+
+Expected:
+
+```text
+Scenario list loads.
+Guided Learning panel explains queue pressure.
+Run selected scenario is enabled after scenarios load.
+Clicking queue_overflow creates a run.
+Latest run card shows COMPLETED and WARNING.
+History count increases.
+Clicking the completed run loads analyzer summary.
+Message summary shows queueFullDrops > 0 and faultInjectedDrops = 0.
+Queue pressure visualizer shows dropped messages.
+Task runtime timeline shows task bars.
+Fault/health panel explains WARNING and queue pressure.
+Raw analyzer report remains expandable.
+```
+
+---
+
+## 5. Docker Verification
 
 Validate Compose:
 
@@ -211,7 +281,9 @@ Test:
 ```bash
 curl http://localhost:8081/api/health
 curl http://localhost:8081/api/scenarios
-curl -X POST http://localhost:8081/api/runs   -H "Content-Type: application/json"   -d '{"scenarioId":"queue_overflow"}'
+curl -X POST http://localhost:8081/api/runs \
+  -H "Content-Type: application/json" \
+  -d '{"scenarioId":"queue_overflow"}'
 curl http://localhost:8081/api/runs
 ```
 
@@ -237,7 +309,7 @@ docker compose run --rm ml-predict
 
 ---
 
-## 5. C++ Test Coverage
+## 6. C++ Test Coverage
 
 C++ tests live in:
 
@@ -260,7 +332,7 @@ Current coverage:
 
 ---
 
-## 6. Python Test Coverage
+## 7. Python Test Coverage
 
 Python tests live in:
 
@@ -285,7 +357,7 @@ Current coverage:
 
 ---
 
-## 7. Backend Test Coverage
+## 8. Backend Test Coverage
 
 Backend tests live in:
 
@@ -327,9 +399,9 @@ Recommended next backend tests:
 
 ---
 
-## 8. Frontend Test Coverage To Add
+## 9. Frontend Test Coverage To Add
 
-Current Phase 28 frontend verification is mainly build/typecheck/manual API testing.
+Current frontend verification is build/typecheck/manual API testing.
 
 Recommended next frontend tests:
 
@@ -338,8 +410,12 @@ ScenarioSelector renders scenario options.
 Run button calls createRun with selected scenario ID.
 RunHistory renders persisted runs.
 AnalysisPanel renders message summary and task metrics.
+LearningModulePanel changes with selected scenario.
+QueuePressureChart renders received/dropped bars.
+TaskTimeline renders task duration rows.
+FaultExplanationPanel renders runtime health and root-cause explanations.
 Failed API calls show error banner.
-Empty state displays when there are no runs.
+Empty state displays when there are no runs or no analysis.
 ```
 
 Recommended tools:
@@ -359,43 +435,6 @@ npm run test:coverage
 
 ---
 
-## 9. Manual Phase 28 Verification
-
-Start PostgreSQL and backend:
-
-```bash
-docker compose up -d postgres
-cd backend
-mvn spring-boot:run
-```
-
-Start frontend:
-
-```bash
-cd frontend
-npm run dev
-```
-
-Open:
-
-```text
-http://localhost:5173
-```
-
-Expected:
-
-```text
-Scenario list loads.
-Run selected scenario button is enabled after scenarios load.
-Clicking queue_overflow creates a run.
-Latest run card shows COMPLETED and WARNING.
-History count increases.
-Clicking the completed run loads analyzer summary.
-Message summary shows queueFullDrops > 0 and faultInjectedDrops = 0.
-```
-
----
-
 ## 10. Dataset and ML Verification
 
 ```bash
@@ -408,9 +447,17 @@ docker compose run --rm ml-predict
 Local ML commands:
 
 ```bash
-python3 ai-analyzer/ml/train_model.py   --dataset reports/generated/synthetic_dataset.csv   --model-output models/anomaly_classifier.joblib   --label-encoder-output models/label_encoder.joblib   --metrics-output reports/generated/model_metrics.json
+python3 ai-analyzer/ml/train_model.py \
+  --dataset reports/generated/synthetic_dataset.csv \
+  --model-output models/anomaly_classifier.joblib \
+  --label-encoder-output models/label_encoder.joblib \
+  --metrics-output reports/generated/model_metrics.json
 
-python3 ai-analyzer/ml/predict_model.py   --model models/anomaly_classifier.joblib   --label-encoder models/label_encoder.joblib   --dataset reports/generated/synthetic_dataset.csv   --limit 20
+python3 ai-analyzer/ml/predict_model.py \
+  --model models/anomaly_classifier.joblib \
+  --label-encoder models/label_encoder.joblib \
+  --dataset reports/generated/synthetic_dataset.csv \
+  --limit 20
 ```
 
 ---
@@ -433,6 +480,7 @@ Passing tests prove:
 - Frontend TypeScript compiles.
 - Frontend production build succeeds.
 - Frontend can consume backend APIs when backend, CORS, and `VITE_API_BASE_URL` are configured correctly.
+- Phase 29 educational and visualizer components render using existing API data.
 
 ---
 
@@ -448,6 +496,7 @@ Current tests do not fully prove:
 - Kubernetes deployment.
 - Full async job execution under concurrent users.
 - Production-grade database migrations beyond the initial schema.
+- Production Docker frontend serving through Nginx.
 
 ---
 
@@ -464,3 +513,4 @@ Future GitHub Actions improvements:
 - Add backend orchestration smoke test with a short-duration test config.
 - Add frontend Node setup, `npm ci`, `npm run typecheck`, and `npm run build`.
 - Add frontend tests once Vitest/React Testing Library are introduced.
+- Add Docker frontend production image build smoke test after Phase 30.
