@@ -1,10 +1,15 @@
 # MiniRTOS-Linux Fault Injection Guide
 
+**Updated:** June 5, 2026  
+**Current Phase:** Phase 30 — Full-Stack Docker Compose Hardening
+
+---
+
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React Dashboard MVP for running and inspecting scenarios from the browser. Phase 29 added educational modules and visualizers that explain fault behavior in student-friendly language.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React Dashboard MVP for running and inspecting scenarios from the browser. Phase 29 added educational modules and visualizers that explain fault behavior in student-friendly language. Phase 30 hardened Docker Compose so the backend, dev frontend, and production frontend can run reliably.
 
-The backend can execute fault and queue-pressure scenarios through `POST /api/runs`, persist the resulting run summaries/analysis in PostgreSQL, and expose them to the React dashboard. The frontend can now explain and visualize queue pressure, task runtime duration, runtime health, and root causes.
+The backend can execute fault and queue-pressure scenarios through `POST /api/runs`, persist the resulting run summaries/analysis in PostgreSQL, and expose them to the React dashboard. The frontend can explain and visualize queue pressure, task runtime duration, runtime health, and root causes in both dev and production Docker modes.
 
 ---
 
@@ -25,13 +30,15 @@ It generates telemetry such as:
 
 In MiniRTOS Playground, these scenarios are exposed through backend metadata, can be executed through the Run Orchestration API, are persisted through PostgreSQL run storage, and can be inspected from the React dashboard.
 
-Phase 29 adds a learning layer on top of this data:
+Phase 29 added a learning layer on top of this data:
 
 - Guided scenario explanation cards.
 - Queue pressure visualizer.
 - Task runtime timeline.
 - Fault and health explanation panel.
 - Root-cause teaching notes.
+
+Phase 30 ensured those workflows also work through the production Docker frontend at `http://localhost:3000`.
 
 ---
 
@@ -173,6 +180,8 @@ run_root_causes
 
 ## 6. Frontend Dashboard Usage
 
+### Dev frontend
+
 Run backend and frontend:
 
 ```bash
@@ -194,6 +203,42 @@ Open:
 http://localhost:5173
 ```
 
+Or through Docker:
+
+```bash
+docker compose up -d postgres
+docker compose up -d backend
+docker compose up --build frontend
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+### Production frontend
+
+Run the production frontend through Nginx:
+
+```bash
+docker compose down --remove-orphans
+mkdir -p logs runs reports/generated models
+
+docker compose up -d postgres
+docker compose build --no-cache backend
+docker compose up -d backend
+
+docker compose --profile prod build --no-cache frontend-prod
+docker compose --profile prod up -d frontend-prod
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
 Expected dashboard flow:
 
 1. Select a fault scenario from the scenario dropdown.
@@ -212,6 +257,7 @@ Important:
 
 ```text
 VITE_API_BASE_URL must be http://localhost:8081.
+Backend CORS must allow localhost:5173 and localhost:3000.
 ```
 
 ---
@@ -230,7 +276,7 @@ runtime_summary
 Runtime status: UNSTABLE when deadline misses cross analyzer thresholds
 ```
 
-Phase 29 frontend interpretation:
+Frontend interpretation:
 
 ```text
 Task runtime timeline highlights tasks with deadline misses.
@@ -248,7 +294,7 @@ deadline misses if timing pressure exceeds deadline
 Runtime status: UNSTABLE when deadline misses occur
 ```
 
-Phase 29 frontend interpretation:
+Frontend interpretation:
 
 ```text
 Task timeline shows high max duration on affected task.
@@ -267,7 +313,7 @@ runtime_summary
 Runtime status: UNSTABLE
 ```
 
-Phase 29 frontend interpretation:
+Frontend interpretation:
 
 ```text
 Fault panel explains task failure isolation and skipped-task telemetry.
@@ -284,7 +330,7 @@ reason=fault_injected_drop
 Runtime status: WARNING
 ```
 
-Phase 29 frontend interpretation:
+Frontend interpretation:
 
 ```text
 Queue pressure chart separates fault-injected drops from queue-full drops.
@@ -312,7 +358,7 @@ POST /api/runs with scenarioId=queue_overflow
 -> GET /api/runs/{runId}/analysis returns queueFullDrops and faultInjectedDrops
 ```
 
-Phase 29 frontend interpretation:
+Frontend interpretation:
 
 ```text
 Guided Learning explains queue pressure.
@@ -332,7 +378,7 @@ task_recovered
 Runtime status: UNSTABLE
 ```
 
-Phase 29 frontend interpretation:
+Frontend interpretation:
 
 ```text
 Fault panel explains watchdog escalation and simulated recovery telemetry.
@@ -366,13 +412,16 @@ docker compose run --rm analyzer
 Backend orchestration through Docker:
 
 ```bash
-docker compose up --build backend
+docker compose up -d postgres
+docker compose build --no-cache backend
+docker compose up -d backend
+
 curl -X POST http://localhost:8081/api/runs \
   -H "Content-Type: application/json" \
   -d '{"scenarioId":"task_crash"}'
 ```
 
-Frontend through Docker:
+Frontend dev through Docker:
 
 ```bash
 docker compose up --build frontend
@@ -382,6 +431,19 @@ Open:
 
 ```text
 http://localhost:5173
+```
+
+Frontend production through Docker:
+
+```bash
+docker compose --profile prod build --no-cache frontend-prod
+docker compose --profile prod up -d frontend-prod
+```
+
+Open:
+
+```text
+http://localhost:3000
 ```
 
 ---
@@ -420,7 +482,7 @@ GET /api/runs/{runId}
 GET /api/runs/{runId}/analysis
 ```
 
-The React dashboard consumes all of these APIs.
+The React dashboard consumes all of these APIs in both dev and production modes.
 
 ---
 
@@ -436,7 +498,45 @@ frontend/src/components/FaultExplanationPanel.tsx
 
 ---
 
-## 12. Limitations
+## 12. Phase 30 Docker/CORS Troubleshooting for Fault Dashboard
+
+If production frontend says:
+
+```text
+Dashboard Failed to Fetch
+```
+
+check:
+
+```bash
+curl -i http://localhost:8081/api/scenarios
+
+curl -i -X OPTIONS http://localhost:8081/api/scenarios \
+  -H "Origin: http://localhost:3000" \
+  -H "Access-Control-Request-Method: GET"
+```
+
+Expected:
+
+```text
+Access-Control-Allow-Origin: http://localhost:3000
+```
+
+If the production frontend cannot load at all, check:
+
+```bash
+docker ps
+```
+
+Expected:
+
+```text
+0.0.0.0:3000->80/tcp
+```
+
+---
+
+## 13. Limitations
 
 - `task_crash` simulates failure but does not crash real threads/processes.
 - It does not simulate memory corruption.
@@ -445,10 +545,11 @@ frontend/src/components/FaultExplanationPanel.tsx
 - ML labels are scenario-derived.
 - PostgreSQL persistence stores run metadata and parsed analysis, but the raw runtime log still lives as a file under `runs/<runId>/runtime_logs.jsonl`.
 - Phase 29 visualizers are summary visualizers, not full event-by-event timelines.
+- Phase 30 did not add new fault types; it hardened Docker workflows for running existing scenarios.
 
 ---
 
-## 13. Recommended Future Faults
+## 14. Recommended Future Faults
 
 ```text
 corrupted_message

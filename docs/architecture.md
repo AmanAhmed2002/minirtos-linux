@@ -1,8 +1,13 @@
 # MiniRTOS-Linux / MiniRTOS Playground Architecture
 
+**Updated:** June 5, 2026  
+**Current Phase:** Phase 30 — Full-Stack Docker Compose Hardening
+
+---
+
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP layer and frontend Docker integration. Phase 29 added educational learning modules and frontend visualizers.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP layer and frontend Docker integration. Phase 29 added educational learning modules and frontend visualizers. Phase 30 hardened the Docker Compose architecture for backend, dev frontend, and production frontend workflows.
 
 The platform now includes:
 
@@ -16,7 +21,10 @@ The platform now includes:
 - React/TypeScript educational dashboard.
 - CSS-based queue and task visualizers.
 - Guided scenario learning modules.
-- Docker Compose services for runtime, analyzer, ML, backend, database, and frontend.
+- Docker Compose services for runtime, analyzer, ML, backend, database, dev frontend, and production frontend.
+- Production Nginx frontend serving on `http://localhost:3000`.
+- Vite dev frontend serving on `http://localhost:5173`.
+- Backend CORS support for both dev and production frontend origins.
 
 ---
 
@@ -25,18 +33,19 @@ The platform now includes:
 ```text
 +--------------------------------------------------------------------------------+
 | Docker Compose                                                                  |
-| demo / runtime-* / analyzer / ml-* / backend / postgres / frontend              |
+| demo / runtime-* / analyzer / ml-* / backend / postgres / frontend / frontend-prod |
 +----------------------------------------+---------------------------------------+
                                          |
                                          v
 +-------------------------------+       +---------------------------------------+
 | C++ Runtime Simulator         |       | Java Spring Boot Backend              |
 | Config Loader                 |       | GET  /api/health                      |
-| Scheduler                     |       | GET  /api/scenarios                   |
-| Message Bus                   |       | POST /api/runs                        |
-| Fault Injector                |       | GET  /api/runs                        |
-| Watchdog                      |       | GET  /api/runs/{runId}                |
-| JSONL Logger                  |       | GET  /api/runs/{runId}/analysis       |
+| Scheduler                     |       | GET  /actuator/health                 |
+| Message Bus                   |       | GET  /api/scenarios                   |
+| Fault Injector                |       | POST /api/runs                        |
+| Watchdog                      |       | GET  /api/runs                        |
+| JSONL Logger                  |       | GET  /api/runs/{runId}                |
+|                               |       | GET  /api/runs/{runId}/analysis       |
 +---------------+---------------+       +-------------------+-------------------+
                 |                                           |
                 v                                           v
@@ -63,18 +72,21 @@ The platform now includes:
                                         +-------------------+-------------------+
                                                             |
                                                             v
-                                        +---------------------------------------+
-                                        | React/TypeScript Frontend             |
-                                        | scenario selector                     |
-                                        | run trigger                           |
-                                        | latest run summary                    |
-                                        | persisted history                     |
-                                        | analyzer summary panel                |
-                                        | guided learning modules               |
-                                        | queue pressure visualizer             |
-                                        | task runtime timeline                 |
-                                        | fault/health explanation panel        |
-                                        +---------------------------------------+
+                 +------------------------------------------+----------------------------------+
+                 |                                                                             |
+                 v                                                                             v
++---------------------------------------+                          +---------------------------------------+
+| React/Vite Dev Frontend               |                          | React/Nginx Production Frontend        |
+| http://localhost:5173                 |                          | http://localhost:3000                  |
+| scenario selector                     |                          | Nginx static assets                    |
+| run trigger                           |                          | /health endpoint                       |
+| persisted history                     |                          | SPA fallback routing                   |
+| analyzer summary panel                |                          | same dashboard bundle                  |
+| guided learning modules               |                          | calls backend at localhost:8081        |
+| queue pressure visualizer             |                          +---------------------------------------+
+| task runtime timeline                 |
+| fault/health explanation panel        |
++---------------------------------------+
 ```
 
 ---
@@ -211,12 +223,14 @@ Spring Data JPA
 PostgreSQL Driver
 Flyway
 H2 for tests
+Docker image with Python and compiled C++ runtime
 ```
 
 Current backend API:
 
 ```text
 GET  /api/health
+GET  /actuator/health
 GET  /api/scenarios
 POST /api/runs
 GET  /api/runs
@@ -252,9 +266,19 @@ backend/src/main/java/com/minirtos/playground/persistence/TaskMetricEntity.java
 backend/src/main/resources/application.yml
 backend/src/main/resources/db/migration/V1__create_run_storage.sql
 backend/README.md
+docker/Dockerfile.backend
 ```
 
-CORS is needed because the local dashboard runs on `http://localhost:5173` and the backend runs on `http://localhost:8081`.
+CORS is needed because the browser frontend runs on a different origin from the backend.
+
+Allowed local origins after Phase 30:
+
+```text
+http://localhost:5173
+http://127.0.0.1:5173
+http://localhost:3000
+http://127.0.0.1:3000
+```
 
 ---
 
@@ -360,7 +384,7 @@ npm
 clsx
 ```
 
-Current frontend port:
+Current frontend dev port:
 
 ```text
 5173
@@ -410,19 +434,6 @@ App.tsx
   -> AnalysisPanel
        -> GET /api/runs/{runId}/analysis
 ```
-
-Frontend display responsibilities:
-
-- Scenario metadata.
-- What each scenario teaches.
-- Expected telemetry signals.
-- Latest run summary.
-- Persisted run history.
-- Runtime health.
-- Message summary.
-- Task metrics.
-- Root causes.
-- Raw analyzer report.
 
 ---
 
@@ -486,7 +497,9 @@ No chart library was added. Visualizers are implemented with CSS bars and cards.
 
 ---
 
-## 11. Docker Architecture
+## 11. Phase 30 Docker Architecture
+
+Phase 30 split the frontend architecture into dev and production flows.
 
 Dockerfiles:
 
@@ -495,6 +508,7 @@ docker/Dockerfile.runtime
 docker/Dockerfile.analyzer
 docker/Dockerfile.backend
 docker/Dockerfile.frontend
+docker/nginx.frontend.conf
 ```
 
 Services:
@@ -517,13 +531,118 @@ ml-predict
 postgres
 backend
 frontend
+frontend-dev
+frontend-prod
 ```
 
-Phase 29 did not require Docker changes.
+Backend Docker hardening:
+
+```text
+- Backend image compiles the C++ runtime during Docker build.
+- Backend build stage installs build-essential, cmake, and ninja-build.
+- Backend runtime image includes python3, python3-pip, and curl.
+- Backend healthcheck uses /actuator/health.
+- Backend depends on healthy PostgreSQL.
+```
+
+Frontend Docker hardening:
+
+```text
+- Dev frontend target runs Vite on 0.0.0.0:5173.
+- Production frontend target builds React/Vite static assets.
+- Nginx production stage serves the built frontend on container port 80.
+- Host production URL is http://localhost:3000.
+- Nginx exposes /health.
+- Nginx uses SPA fallback routing.
+```
+
+Correct port mappings:
+
+```text
+Dev:
+  host 5173 -> container 5173
+
+Production:
+  host 3000 -> container 80
+```
+
+Common incorrect mapping:
+
+```text
+host 5173 -> container 5173 for Nginx production
+```
+
+Nginx does not listen on `5173`.
 
 ---
 
-## 12. Future Full-Stack Architecture
+## 12. Docker Runtime Commands
+
+Backend stack:
+
+```bash
+docker compose down --remove-orphans
+mkdir -p logs runs reports/generated models
+docker compose up -d postgres
+docker compose build --no-cache backend
+docker compose up -d backend
+```
+
+Check backend:
+
+```bash
+curl -i http://localhost:8081/actuator/health
+curl -i http://localhost:8081/api/scenarios
+```
+
+Dev frontend:
+
+```bash
+docker compose up --build frontend
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+Production frontend:
+
+```bash
+docker compose --profile prod build --no-cache frontend-prod
+docker compose --profile prod up -d frontend-prod
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+Production healthcheck:
+
+```bash
+curl -i http://localhost:3000/health
+```
+
+CORS check:
+
+```bash
+curl -i -X OPTIONS http://localhost:8081/api/scenarios \
+  -H "Origin: http://localhost:3000" \
+  -H "Access-Control-Request-Method: GET"
+```
+
+Expected:
+
+```text
+Access-Control-Allow-Origin: http://localhost:3000
+```
+
+---
+
+## 13. Future Full-Stack Architecture
 
 ```text
 React/TypeScript Frontend
@@ -539,16 +658,18 @@ React/TypeScript Frontend
 
 ---
 
-## 13. Next Phase Architecture: Full-Stack Docker Compose Hardening
+## 14. Next Phase Architecture: Frontend Automated Tests
 
-Phase 30 should add:
+Phase 31 should add:
 
 ```text
-production frontend Dockerfile
-Nginx static serving for built frontend assets
-frontend healthcheck
-backend readiness checks
-Compose dev/prod profiles
-Docker build smoke tests
-CI validation for backend/frontend images
+Vitest
+React Testing Library
+jsdom
+frontend test scripts
+component tests
+failed-fetch tests
+empty-state tests
+dashboard rendering tests
+visualizer rendering tests
 ```

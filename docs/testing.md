@@ -1,8 +1,13 @@
 # MiniRTOS-Linux / MiniRTOS Playground Testing Guide
 
+**Updated:** June 5, 2026  
+**Current Phase:** Phase 30 — Full-Stack Docker Compose Hardening
+
+---
+
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP and frontend Docker integration. Phase 29 added educational modules and CSS-based frontend visualizers.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP and frontend Docker integration. Phase 29 added educational modules and CSS-based frontend visualizers. Phase 30 hardened Docker Compose and Dockerfiles for backend, dev frontend, and production frontend workflows.
 
 Verified Phase 27 behavior:
 
@@ -19,7 +24,7 @@ Verified Phase 28 behavior:
 - Frontend can call backend APIs from `http://localhost:5173`.
 - CORS allows local browser API requests.
 - `VITE_API_BASE_URL` uses `http://localhost:8081`.
-- Docker Compose can start the `frontend` service.
+- Docker Compose can start the frontend service.
 - Dashboard can display scenarios, create runs, show persisted history, and load analysis.
 
 Verified Phase 29 behavior:
@@ -36,6 +41,18 @@ Verified Phase 29 behavior:
 - Fault/health explanation panel displays student-friendly runtime health and root-cause explanations.
 - Raw analyzer report still expands correctly.
 - User confirmed everything works and committed/pushed the phase.
+
+Verified Phase 30 behavior:
+
+- Backend Docker build works after installing `build-essential`, `cmake`, and `ninja-build` in the backend C++ runtime build stage.
+- Backend Docker image runs on `http://localhost:8081`.
+- Backend actuator health works at `GET /actuator/health`.
+- Dev frontend works on `http://localhost:5173`.
+- Production frontend works on `http://localhost:3000`.
+- Production frontend health works at `GET /health`.
+- Backend CORS allows both `localhost:5173` and `localhost:3000`.
+- Production dashboard initially failed to fetch until `localhost:3000` was added to CORS.
+- User confirmed production frontend now connects to backend correctly.
 
 ---
 
@@ -84,6 +101,7 @@ Test health and scenarios:
 
 ```bash
 curl http://localhost:8081/api/health
+curl http://localhost:8081/actuator/health
 curl http://localhost:8081/api/scenarios
 ```
 
@@ -262,7 +280,7 @@ Raw analyzer report remains expandable.
 
 ---
 
-## 5. Docker Verification
+## 5. Phase 30 Docker Verification
 
 Validate Compose:
 
@@ -270,24 +288,34 @@ Validate Compose:
 docker compose config
 ```
 
+Create generated folders:
+
+```bash
+mkdir -p logs runs reports/generated models
+```
+
 Run backend with PostgreSQL:
 
 ```bash
-docker compose up --build backend
+docker compose down --remove-orphans
+docker compose up -d postgres
+docker compose build --no-cache backend
+docker compose up -d backend
 ```
 
-Test:
+Test backend:
 
 ```bash
-curl http://localhost:8081/api/health
-curl http://localhost:8081/api/scenarios
+curl -i http://localhost:8081/actuator/health
+curl -i http://localhost:8081/api/health
+curl -i http://localhost:8081/api/scenarios
 curl -X POST http://localhost:8081/api/runs \
   -H "Content-Type: application/json" \
   -d '{"scenarioId":"queue_overflow"}'
-curl http://localhost:8081/api/runs
+curl -i http://localhost:8081/api/runs
 ```
 
-Run frontend:
+Run dev frontend:
 
 ```bash
 docker compose up --build frontend
@@ -299,17 +327,143 @@ Open:
 http://localhost:5173
 ```
 
-Run full existing demo:
+Run production frontend:
 
 ```bash
-docker compose up --build demo
-docker compose run --rm ml-train
-docker compose run --rm ml-predict
+docker compose --profile prod build --no-cache frontend-prod
+docker compose --profile prod up -d frontend-prod
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+Production frontend healthcheck:
+
+```bash
+curl -i http://localhost:3000/health
+```
+
+Expected:
+
+```text
+HTTP/1.1 200 OK
+ok
+```
+
+Confirm production CORS:
+
+```bash
+curl -i -X OPTIONS http://localhost:8081/api/scenarios \
+  -H "Origin: http://localhost:3000" \
+  -H "Access-Control-Request-Method: GET"
+```
+
+Expected:
+
+```text
+Access-Control-Allow-Origin: http://localhost:3000
+```
+
+Confirm frontend bundle uses the correct backend URL:
+
+```bash
+docker exec -it minirtos-playground-frontend-prod sh -c \
+  "grep -R 'localhost:8081' -n /usr/share/nginx/html/assets || true"
 ```
 
 ---
 
-## 6. C++ Test Coverage
+## 6. Docker Failure Troubleshooting
+
+### Backend Docker build fails with `cmake: not found`
+
+Cause:
+
+```text
+The backend Dockerfile runs cmake in the C++ runtime build stage, but cmake/ninja are not installed in that stage.
+```
+
+Fix:
+
+```text
+Install build-essential, cmake, and ninja-build in docker/Dockerfile.backend.
+```
+
+Then run:
+
+```bash
+docker compose build --no-cache backend
+docker compose up -d backend
+```
+
+### Nginx frontend appears stuck in logs
+
+This is normal. Nginx stays attached and waits for requests.
+
+Expected logs include:
+
+```text
+Configuration complete; ready for start up
+start worker process
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+### Production frontend cannot load site
+
+Check Docker port mapping:
+
+```bash
+docker ps
+```
+
+Expected:
+
+```text
+0.0.0.0:3000->80/tcp
+```
+
+Incorrect for Nginx:
+
+```text
+0.0.0.0:5173->5173/tcp
+```
+
+Nginx listens on container port `80`, not `5173`.
+
+### Production dashboard says Failed to Fetch
+
+Check backend health:
+
+```bash
+curl -i http://localhost:8081/actuator/health
+curl -i http://localhost:8081/api/scenarios
+```
+
+Check production CORS:
+
+```bash
+curl -i -X OPTIONS http://localhost:8081/api/scenarios \
+  -H "Origin: http://localhost:3000" \
+  -H "Access-Control-Request-Method: GET"
+```
+
+Expected:
+
+```text
+Access-Control-Allow-Origin: http://localhost:3000
+```
+
+---
+
+## 7. C++ Test Coverage
 
 C++ tests live in:
 
@@ -332,7 +486,7 @@ Current coverage:
 
 ---
 
-## 7. Python Test Coverage
+## 8. Python Test Coverage
 
 Python tests live in:
 
@@ -357,7 +511,7 @@ Current coverage:
 
 ---
 
-## 8. Backend Test Coverage
+## 9. Backend Test Coverage
 
 Backend tests live in:
 
@@ -387,6 +541,7 @@ They verify:
 Recommended next backend tests:
 
 - CORS config allows `http://localhost:5173`.
+- CORS config allows `http://localhost:3000`.
 - `POST /api/runs` accepts valid scenario IDs.
 - Unknown scenario IDs are rejected.
 - Arbitrary config paths are not accepted.
@@ -399,11 +554,11 @@ Recommended next backend tests:
 
 ---
 
-## 9. Frontend Test Coverage To Add
+## 10. Frontend Test Coverage To Add
 
 Current frontend verification is build/typecheck/manual API testing.
 
-Recommended next frontend tests:
+Recommended next frontend tests for Phase 31:
 
 ```text
 ScenarioSelector renders scenario options.
@@ -416,6 +571,7 @@ TaskTimeline renders task duration rows.
 FaultExplanationPanel renders runtime health and root-cause explanations.
 Failed API calls show error banner.
 Empty state displays when there are no runs or no analysis.
+Production build uses configured VITE_API_BASE_URL.
 ```
 
 Recommended tools:
@@ -435,7 +591,7 @@ npm run test:coverage
 
 ---
 
-## 10. Dataset and ML Verification
+## 11. Dataset and ML Verification
 
 ```bash
 docker compose up --build demo
@@ -462,7 +618,7 @@ python3 ai-analyzer/ml/predict_model.py \
 
 ---
 
-## 11. What Passing Tests Prove
+## 12. What Passing Tests Prove
 
 Passing tests prove:
 
@@ -481,10 +637,11 @@ Passing tests prove:
 - Frontend production build succeeds.
 - Frontend can consume backend APIs when backend, CORS, and `VITE_API_BASE_URL` are configured correctly.
 - Phase 29 educational and visualizer components render using existing API data.
+- Phase 30 dev and production Docker frontend workflows both work.
 
 ---
 
-## 12. What Tests Do Not Prove Yet
+## 13. What Tests Do Not Prove Yet
 
 Current tests do not fully prove:
 
@@ -496,16 +653,17 @@ Current tests do not fully prove:
 - Kubernetes deployment.
 - Full async job execution under concurrent users.
 - Production-grade database migrations beyond the initial schema.
-- Production Docker frontend serving through Nginx.
+- Cloud deployment readiness.
 
 ---
 
-## 13. Recommended CI Updates
+## 14. Recommended CI Updates
 
 Future GitHub Actions improvements:
 
 - Add backend Maven test job.
 - Add backend Docker build smoke test.
+- Add frontend production Docker build smoke test.
 - Add Docker Compose config validation.
 - Add PostgreSQL service container for backend integration tests.
 - Add dataset-generation smoke test.
@@ -513,4 +671,3 @@ Future GitHub Actions improvements:
 - Add backend orchestration smoke test with a short-duration test config.
 - Add frontend Node setup, `npm ci`, `npm run typecheck`, and `npm run build`.
 - Add frontend tests once Vitest/React Testing Library are introduced.
-- Add Docker frontend production image build smoke test after Phase 30.

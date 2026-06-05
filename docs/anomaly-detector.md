@@ -1,10 +1,31 @@
 # MiniRTOS-Linux AI-Style Anomaly Detector and ML Classifier
 
+**Updated:** June 5, 2026  
+**Current Phase:** Phase 30 — Full-Stack Docker Compose Hardening
+
+---
+
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP that can display parsed analyzer summaries from the backend. Phase 29 added educational modules and visualizers that translate analyzer output into student-friendly explanations.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP that can display parsed analyzer summaries from the backend. Phase 29 added educational modules and visualizers that translate analyzer output into student-friendly explanations. Phase 30 hardened Docker Compose and Dockerfiles so the backend, dev frontend, and production frontend can run reliably through Docker.
 
 The backend can run the deterministic analyzer after each simulation, parse the report, return structured JSON, persist the parsed analysis summary in PostgreSQL, and expose it to the React dashboard.
+
+The frontend can display analysis in two modes:
+
+```text
+Dev frontend:
+  http://localhost:5173
+
+Production frontend:
+  http://localhost:3000
+```
+
+Both frontend modes use the same backend API:
+
+```text
+http://localhost:8081
+```
 
 The frontend can now display:
 
@@ -27,7 +48,7 @@ It includes:
 3. Synthetic training-dataset generator.
 4. Lightweight ML anomaly classifier.
 
-Phase 26 connected the Spring Boot backend to the deterministic analyzer. Phase 27 persisted run metadata and parsed analyzer summaries in PostgreSQL. Phase 28 connected those persisted summaries to the frontend dashboard. Phase 29 added a learning/visualization layer on top of the existing analysis response.
+Phase 26 connected the Spring Boot backend to the deterministic analyzer. Phase 27 persisted run metadata and parsed analyzer summaries in PostgreSQL. Phase 28 connected those persisted summaries to the frontend dashboard. Phase 29 added a learning/visualization layer on top of the existing analysis response. Phase 30 improved Docker reliability so analyzer-backed run workflows work through the Dockerized backend.
 
 ---
 
@@ -50,6 +71,7 @@ RunService.java
 RunController.java
 RunEntity.java
 RunRepository.java
+docker/Dockerfile.backend
 ```
 
 Frontend integration files:
@@ -63,6 +85,8 @@ frontend/src/components/QueuePressureChart.tsx
 frontend/src/components/TaskTimeline.tsx
 frontend/src/components/FaultExplanationPanel.tsx
 frontend/src/components/LearningModulePanel.tsx
+docker/Dockerfile.frontend
+docker/nginx.frontend.conf
 ```
 
 ---
@@ -114,7 +138,7 @@ WARNING
 UNSTABLE
 ```
 
-Phase 29 frontend interpretation:
+Frontend interpretation:
 
 | Health | Student-Facing Meaning |
 |---|---|
@@ -296,6 +320,13 @@ The backend accepts only known scenario IDs.
 It does not accept arbitrary user-supplied config paths.
 ```
 
+Docker backend note:
+
+```text
+The backend Docker image must include the compiled C++ runtime and Python analyzer files.
+Phase 30 fixed backend Docker compilation by installing CMake and Ninja in the build stage.
+```
+
 ---
 
 ## 10. Frontend Integration
@@ -315,6 +346,16 @@ frontend/src/components/LearningModulePanel.tsx
 frontend/src/components/QueuePressureChart.tsx
 frontend/src/components/TaskTimeline.tsx
 frontend/src/components/FaultExplanationPanel.tsx
+```
+
+Phase 30 added two valid frontend serving modes:
+
+```text
+Dev:
+  http://localhost:5173
+
+Production:
+  http://localhost:3000
 ```
 
 Frontend call:
@@ -385,7 +426,53 @@ raw analyzer report
 
 ---
 
-## 12. Limitations
+## 12. Phase 30 Docker Verification for Analysis Flow
+
+Backend:
+
+```bash
+docker compose up -d postgres
+docker compose build --no-cache backend
+docker compose up -d backend
+```
+
+Production frontend:
+
+```bash
+docker compose --profile prod build --no-cache frontend-prod
+docker compose --profile prod up -d frontend-prod
+```
+
+Check analysis-capable backend:
+
+```bash
+curl -i http://localhost:8081/api/scenarios
+
+curl -X POST http://localhost:8081/api/runs \
+  -H "Content-Type: application/json" \
+  -d '{"scenarioId":"queue_overflow"}'
+```
+
+Open production frontend:
+
+```text
+http://localhost:3000
+```
+
+Expected:
+
+```text
+Run history loads.
+Completed run analysis loads.
+Queue pressure visualizer appears.
+Task timeline appears.
+Fault/health explanation panel appears.
+Raw report expands.
+```
+
+---
+
+## 13. Limitations
 
 - Rule thresholds are manual.
 - Labels are scenario-derived.
@@ -395,3 +482,4 @@ raw analyzer report
 - ML prediction is not yet exposed through the backend API.
 - Runtime logs are still stored as files; PostgreSQL stores metadata and parsed analysis summaries.
 - Phase 29 frontend visualizers summarize parsed analyzer fields but do not yet provide full event-by-event charts.
+- Phase 30 improved Docker reliability but did not change analyzer logic.

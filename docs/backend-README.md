@@ -2,15 +2,19 @@
 
 Java Spring Boot backend for the MiniRTOS Playground educational platform.
 
+**Updated:** June 5, 2026  
+**Current Phase:** Phase 30 — Full-Stack Docker Compose Hardening
+
 ---
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React Dashboard MVP and required local CORS support for browser API calls. Phase 29 added frontend educational modules and visualizers without requiring backend API changes.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React Dashboard MVP and required local CORS support for browser API calls. Phase 29 added frontend educational modules and visualizers without requiring backend API changes. Phase 30 hardened the Docker backend/frontend workflow.
 
 The backend can now:
 
 - Return health metadata.
+- Return actuator health metadata for Docker healthchecks.
 - Return trusted scenario metadata.
 - Run trusted C++ runtime scenarios through HTTP.
 - Run the Python analyzer after each simulation.
@@ -18,12 +22,14 @@ The backend can now:
 - Parse analyzer text into structured JSON.
 - Persist run metadata and parsed analysis summaries in PostgreSQL.
 - Return run history after backend restarts.
-- Serve APIs consumed by the React frontend running at `http://localhost:5173`.
+- Serve APIs consumed by the React dev frontend running at `http://localhost:5173`.
+- Serve APIs consumed by the production Nginx frontend running at `http://localhost:3000`.
 - Provide the persisted analysis data used by Phase 29 learning and visualizer components.
 
 Verified behavior:
 
 - `GET /api/health` works.
+- `GET /actuator/health` works.
 - `GET /api/scenarios` works.
 - `POST /api/runs` successfully runs `queue_overflow`.
 - `GET /api/runs` returns HTTP 200 with persisted runs.
@@ -32,6 +38,7 @@ Verified behavior:
 - A successful `queue_overflow` run returned `status=COMPLETED`, `runtimeHealth=WARNING`, and `errorMessage=null`.
 - `WARNING` is expected for `queue_overflow` because the scenario intentionally creates bounded queue pressure and dropped messages.
 - Phase 29 frontend visualizers work using existing `messageSummary`, `taskMetrics`, `runtimeHealth`, `scenarioId`, and `rootCauses` fields.
+- Phase 30 production frontend works on `http://localhost:3000` after CORS was updated.
 
 Important implementation notes:
 
@@ -40,8 +47,9 @@ Important implementation notes:
 - PostgreSQL persistence uses Spring Data JPA and Flyway migrations.
 - `rawReport` should be stored as PostgreSQL `TEXT` without `@Lob`.
 - The backend accepts only known scenario IDs and never accepts arbitrary user-provided config paths.
-- Local React frontend calls require CORS for `http://localhost:5173` and `http://127.0.0.1:5173`.
-- Phase 29 did not add backend dependencies or endpoints.
+- Local React frontend calls require CORS for both dev and production origins.
+- Backend Docker image must install C++ build tools in the build stage so it can compile `cpp-runtime/build/minirtos_runtime`.
+- Backend Docker runtime image should include `curl` for healthchecks.
 
 ---
 
@@ -54,7 +62,8 @@ Docker / Docker Compose
 PostgreSQL 16 through Docker Compose
 C++ runtime binary built at ../cpp-runtime/build/minirtos_runtime for local orchestration
 Python 3 available as python3
-React frontend running separately on localhost:5173 for dashboard use
+React dev frontend on localhost:5173
+React production frontend on localhost:3000
 ```
 
 ---
@@ -133,18 +142,37 @@ Expected file:
 backend/src/main/java/com/minirtos/playground/config/CorsConfig.java
 ```
 
-Expected allowed origins:
+Expected allowed origins after Phase 30:
 
 ```text
 http://localhost:5173
 http://127.0.0.1:5173
+http://localhost:3000
+http://127.0.0.1:3000
 ```
 
-This allows the Vite frontend to call `/api/**` endpoints from the browser.
+This allows:
+
+- Vite dev frontend at `http://localhost:5173`.
+- Nginx production frontend at `http://localhost:3000`.
+
+Confirm CORS for production frontend:
+
+```bash
+curl -i -X OPTIONS http://localhost:8081/api/scenarios \
+  -H "Origin: http://localhost:3000" \
+  -H "Access-Control-Request-Method: GET"
+```
+
+Expected header:
+
+```text
+Access-Control-Allow-Origin: http://localhost:3000
+```
 
 ---
 
-## Run Locally
+## Run Locally Without Backend Docker
 
 From repo root:
 
@@ -165,6 +193,7 @@ Test:
 
 ```bash
 curl http://localhost:8081/api/health
+curl http://localhost:8081/actuator/health
 curl http://localhost:8081/api/scenarios
 ```
 
@@ -199,12 +228,68 @@ curl http://localhost:8081/api/runs/<runId>/analysis
 
 ---
 
+## Run Backend Through Docker
+
+From repo root:
+
+```bash
+docker compose down --remove-orphans
+mkdir -p logs runs reports/generated models
+docker compose up -d postgres
+docker compose build --no-cache backend
+docker compose up -d backend
+```
+
+Check:
+
+```bash
+curl -i http://localhost:8081/actuator/health
+curl -i http://localhost:8081/api/health
+curl -i http://localhost:8081/api/scenarios
+```
+
+Logs:
+
+```bash
+docker compose logs -f backend
+```
+
+If backend Docker build fails with:
+
+```text
+cmake: not found
+```
+
+then `docker/Dockerfile.backend` is missing build tools in the `runtime-build` stage. Add:
+
+```text
+build-essential
+cmake
+ninja-build
+```
+
+The backend runtime image should also include:
+
+```text
+python3
+python3-pip
+curl
+```
+
+---
+
 ## Frontend Integration
 
-Frontend runs at:
+Frontend dev URL:
 
 ```text
 http://localhost:5173
+```
+
+Frontend production URL:
+
+```text
+http://localhost:3000
 ```
 
 Frontend environment should contain:
@@ -237,7 +322,7 @@ AnalysisResponse.rootCauses
 AnalysisResponse.rawReport
 ```
 
-No backend endpoint change is required for Phase 29.
+No backend endpoint change was required for Phase 29 or Phase 30.
 
 ---
 
@@ -246,6 +331,10 @@ No backend endpoint change is required for Phase 29.
 ### `GET /api/health`
 
 Returns backend health.
+
+### `GET /actuator/health`
+
+Returns actuator health for Docker healthchecks.
 
 ### `GET /api/scenarios`
 
@@ -348,17 +437,12 @@ private String rawReport;
 
 ## Docker
 
-Compose backend:
+Backend Compose:
 
 ```bash
-docker compose up --build backend
-```
-
-This starts:
-
-```text
-postgres
-backend
+docker compose up -d postgres
+docker compose build --no-cache backend
+docker compose up -d backend
 ```
 
 Backend Docker image must include:
@@ -369,6 +453,7 @@ C++ runtime binary
 configs/
 ai-analyzer/
 python3
+curl
 logs/
 runs/
 ```
@@ -381,18 +466,71 @@ SPRING_DATASOURCE_USERNAME=minirtos
 SPRING_DATASOURCE_PASSWORD=minirtos
 ```
 
-Full local frontend stack:
+Full production frontend stack:
+
+```bash
+docker compose --profile prod build --no-cache frontend-prod
+docker compose --profile prod up -d frontend-prod
+```
+
+Full dev frontend stack:
 
 ```bash
 docker compose up --build frontend
 ```
 
-This should start or depend on:
+---
+
+## Troubleshooting
+
+### Backend container builds fail with `cmake: not found`
+
+Fix `docker/Dockerfile.backend` and install build tools in the C++ runtime build stage:
 
 ```text
-postgres
-backend
-frontend
+build-essential
+cmake
+ninja-build
+```
+
+Then run:
+
+```bash
+docker compose build --no-cache backend
+docker compose up -d backend
+```
+
+### Production dashboard says `Dashboard failed to fetch`
+
+Check CORS and backend reachability:
+
+```bash
+curl -i http://localhost:8081/actuator/health
+curl -i http://localhost:8081/api/scenarios
+
+curl -i -X OPTIONS http://localhost:8081/api/scenarios \
+  -H "Origin: http://localhost:3000" \
+  -H "Access-Control-Request-Method: GET"
+```
+
+Expected:
+
+```text
+Access-Control-Allow-Origin: http://localhost:3000
+```
+
+### Backend logs invalid HTTP method bytes
+
+If logs show bytes like:
+
+```text
+0x16 0x03 0x01
+```
+
+something is trying to call HTTPS on the HTTP backend. Use:
+
+```text
+http://localhost:8081
 ```
 
 ---
@@ -407,13 +545,17 @@ Do not accept arbitrary config paths, runtime paths, analyzer paths, or shell co
 
 ## Next Phase
 
-Phase 30 should harden Docker Compose:
+```text
+Phase 31 — Frontend Automated Tests
+```
+
+Recommended scope:
 
 ```text
-production frontend Dockerfile
-frontend healthcheck
-backend readiness checks
-Compose profiles for dev/prod
-Docker build smoke tests
-CI validation for frontend/backend images
+Vitest
+React Testing Library
+jsdom
+Dashboard component tests
+Frontend error-state tests
+Production build regression tests
 ```

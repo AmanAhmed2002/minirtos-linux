@@ -1,18 +1,18 @@
-# MiniRTOS-Linux Performance, Fault, Dataset, ML, Backend, and Frontend Benchmark Report
+# MiniRTOS-Linux Performance, Fault, Dataset, ML, Backend, Frontend, and Docker Benchmark Report
 
-**Updated:** June 4, 2026  
-**Phase:** Phase 29 educational modules and frontend visualizers after Phase 28 React dashboard and Phase 27 PostgreSQL/Flyway integration  
+**Updated:** June 5, 2026  
+**Phase:** Phase 30 Docker Compose hardening after Phase 29 educational modules and frontend visualizers  
 **Project:** MiniRTOS-Linux — Embedded Runtime Simulator with AI-Based Fault Detection
 
 ---
 
 ## 1. Purpose
 
-This benchmark report summarizes the observed behavior of MiniRTOS-Linux across scheduler, queue-pressure, fault-injected, watchdog, dataset-generation, ML-classifier, backend persistence, frontend dashboard, and educational visualizer workflows.
+This benchmark report summarizes the observed behavior of MiniRTOS-Linux across scheduler, queue-pressure, fault-injected, watchdog, dataset-generation, ML-classifier, backend persistence, frontend dashboard, educational visualizer, and Docker workflow verification.
 
 MiniRTOS-Linux is a software-only C++20 embedded runtime simulator that models periodic tasks, round-robin scheduling, priority scheduling, earliest-deadline-first scheduling, bounded message queues, structured JSONL telemetry, configurable fault injection, watchdog monitoring, simulated recovery behavior, Python-based runtime analysis, synthetic training-dataset generation, and a trained lightweight ML anomaly classifier.
 
-Phase 27 added persistent PostgreSQL/Flyway run storage around backend-orchestrated runs. Phase 28 added the React/TypeScript dashboard MVP for scenario selection, run creation, persisted run history, and analyzer summary display. Phase 29 added guided learning modules, queue pressure visualizer, task runtime timeline, fault/health explanation panel, and root-cause teaching notes.
+Phase 27 added persistent PostgreSQL/Flyway run storage around backend-orchestrated runs. Phase 28 added the React/TypeScript dashboard MVP for scenario selection, run creation, persisted run history, and analyzer summary display. Phase 29 added guided learning modules, queue pressure visualizer, task runtime timeline, fault/health explanation panel, and root-cause teaching notes. Phase 30 hardened the full-stack Docker workflow by fixing backend Docker builds, separating dev and production frontend modes, adding production Nginx serving, and updating CORS for the production frontend.
 
 ---
 
@@ -43,7 +43,7 @@ curl -X POST http://localhost:8081/api/runs -H "Content-Type: application/json" 
 curl http://localhost:8081/api/runs/<runId>/analysis
 ```
 
-Phase 28 frontend verification checklist:
+Phase 28/29 frontend verification checklist:
 
 ```bash
 cd frontend
@@ -68,11 +68,37 @@ Fault/health explanation panel appears.
 Raw analyzer report remains expandable.
 ```
 
-User confirmed after Phase 29:
+Phase 30 Docker verification checklist:
+
+```bash
+docker compose down --remove-orphans
+mkdir -p logs runs reports/generated models
+docker compose config
+
+docker compose up -d postgres
+docker compose build --no-cache backend
+docker compose up -d backend
+
+curl -i http://localhost:8081/actuator/health
+curl -i http://localhost:8081/api/scenarios
+
+docker compose up --build frontend
+# open http://localhost:5173
+
+docker compose --profile prod build --no-cache frontend-prod
+docker compose --profile prod up -d frontend-prod
+curl -i http://localhost:3000/health
+# open http://localhost:3000
+```
+
+User confirmed after Phase 30:
 
 ```text
-Everything works.
-Changes were committed and pushed to GitHub.
+Dev frontend worked.
+Production frontend initially failed to fetch.
+The issue was fixed by updating backend CORS to include localhost:3000.
+Production frontend then connected to backend correctly.
+Phase 30 was considered functionally complete.
 ```
 
 Important frontend/backend debugging context:
@@ -81,6 +107,9 @@ Important frontend/backend debugging context:
 VITE_API_BASE_URL must be http://localhost:8081.
 The backend is plain HTTP locally, not HTTPS.
 If backend logs show invalid HTTP method bytes such as 0x16 0x03 0x01, the browser/frontend is sending HTTPS/TLS to the HTTP backend port.
+Production frontend runs on http://localhost:3000.
+Dev frontend runs on http://localhost:5173.
+Backend CORS must allow both frontend origins.
 ```
 
 ---
@@ -132,130 +161,7 @@ If backend logs show invalid HTTP method bytes such as 0x16 0x03 0x01, the brows
 
 ---
 
-## 6. Fault-Type Breakdown
-
-| Scenario | Fault-Type Counts |
-|---|---|
-| Normal runtime | None |
-| Earliest-deadline-first scheduler | None |
-| Queue overflow | None |
-| CPU spike fault | `cpu_spike`: 97 |
-| Task crash fault | `task_crash`: 1 |
-| Slow task fault | `slow_task`: 174 |
-| Dropped messages fault | `dropped_messages`: 181 |
-| Watchdog slow task | `slow_task`: 174 |
-
----
-
-## 7. Per-Task Runtime Metrics
-
-Average and maximum durations are computed from `task_completed` events in the uploaded logs.
-
-| Scenario | Task | Runs | Deadline Misses | Avg Duration ms | Max Duration ms |
-|---|---|---:|---:|---:|---:|
-| Normal runtime | `ControlTask` | 299 | 0 | 10.00 | 10.00 |
-| Normal runtime | `NetworkTask` | 120 | 0 | 20.00 | 20.00 |
-| Normal runtime | `LoggerTask` | 60 | 0 | 15.00 | 15.00 |
-| Earliest-deadline-first scheduler | `ControlTask` | 299 | 0 | 10.00 | 10.00 |
-| Earliest-deadline-first scheduler | `NetworkTask` | 120 | 0 | 20.00 | 20.00 |
-| Earliest-deadline-first scheduler | `LoggerTask` | 60 | 0 | 15.00 | 15.00 |
-| Queue overflow | `ControlTask` | 594 | 0 | 5.00 | 5.00 |
-| Queue overflow | `NetworkTask` | 397 | 0 | 8.00 | 8.00 |
-| Queue overflow | `LoggerTask` | 30 | 0 | 15.00 | 15.00 |
-| CPU spike fault | `ControlTask` | 147 | 96 | 10.00 | 10.00 |
-| CPU spike fault | `NetworkTask` | 117 | 97 | 202.39 | 240.00 |
-| CPU spike fault | `LoggerTask` | 58 | 0 | 15.00 | 15.00 |
-| Task crash fault | `ControlTask` | 299 | 0 | 10.00 | 10.00 |
-| Task crash fault | `NetworkTask` | 20 | 0 | 20.00 | 20.00 |
-| Task crash fault | `LoggerTask` | 60 | 0 | 15.00 | 15.00 |
-| Slow task fault | `ControlTask` | 224 | 174 | 103.21 | 130.00 |
-| Slow task fault | `NetworkTask` | 107 | 0 | 20.00 | 20.00 |
-| Slow task fault | `LoggerTask` | 54 | 0 | 15.00 | 15.00 |
-| Dropped messages fault | `ControlTask` | 299 | 0 | 10.00 | 10.00 |
-| Dropped messages fault | `NetworkTask` | 120 | 0 | 20.00 | 20.00 |
-| Dropped messages fault | `LoggerTask` | 60 | 0 | 15.00 | 15.00 |
-| Watchdog slow task | `ControlTask` | 224 | 174 | 103.21 | 130.00 |
-| Watchdog slow task | `NetworkTask` | 107 | 0 | 20.00 | 20.00 |
-| Watchdog slow task | `LoggerTask` | 54 | 0 | 15.00 | 15.00 |
-
----
-
-## 8. Scenario Observations
-
-### 8.1 Normal Runtime
-The normal runtime completed with 1,444 events, no deadline misses, no fault injection, no watchdog events, and 339 queue-full message drops.
-
-### 8.2 Earliest-Deadline-First Scheduler
-The EDF scheduler run completed with the same top-level telemetry profile as the normal run: 1,444 events, 339 queue-full drops, and 0 deadline misses.
-
-### 8.3 Queue Overflow
-The queue-overflow scenario produced 3,070 events and 958 queue-full drops. There were 0 fault-injected drops, 0 deadline misses, 0 watchdog timeouts, and 0 task failures.
-
-### 8.4 CPU Spike
-The CPU-spike scenario produced 97 `cpu_spike` fault events and 193 total deadline misses.
-
-### 8.5 Task Crash
-The task-crash scenario produced 1 `task_crash` fault event, 1 `task_failed` event, and 99 `task_skipped` events.
-
-### 8.6 Slow Task
-The slow-task scenario produced 174 `slow_task` fault events and 174 `ControlTask` deadline misses.
-
-### 8.7 Dropped Messages
-The dropped-message scenario produced 181 fault-injected message drops and 158 queue-full drops.
-
-### 8.8 Watchdog Slow Task
-The watchdog scenario produced 22 watchdog timeout events and 22 simulated task recovery events.
-
----
-
-## 9. Synthetic Dataset Implications
-
-Using a 5,000 ms window size, the uploaded benchmark logs produce **56 derived window rows** across the 8 uploaded non-duplicate scenario logs.
-
-| Scenario | Label | Derived 5s Windows |
-|---|---|---:|
-| Normal runtime | `NORMAL` | 7 |
-| Earliest-deadline-first scheduler | `NORMAL` | 7 |
-| Queue overflow | `QUEUE_PRESSURE` | 7 |
-| CPU spike fault | `CPU_SPIKE` | 7 |
-| Task crash fault | `TASK_CRASH` | 7 |
-| Slow task fault | `SLOW_TASK` | 7 |
-| Dropped messages fault | `DROPPED_MESSAGES` | 7 |
-| Watchdog slow task | `WATCHDOG_RECOVERY` | 7 |
-| **Total from uploaded logs** |  | **56** |
-
-A complete 9-scenario dataset that also includes the priority scheduler log would be expected to add another 7 windows.
-
----
-
-## 10. ML Classifier Benchmark Context
-
-Phase 22 added the trained ML classifier workflow:
-
-```bash
-python3 ai-analyzer/ml/train_model.py \
-  --dataset reports/generated/synthetic_dataset.csv \
-  --model-output models/anomaly_classifier.joblib \
-  --label-encoder-output models/label_encoder.joblib \
-  --metrics-output reports/generated/model_metrics.json
-
-python3 ai-analyzer/ml/predict_model.py \
-  --model models/anomaly_classifier.joblib \
-  --label-encoder models/label_encoder.joblib \
-  --dataset reports/generated/synthetic_dataset.csv \
-  --limit 20
-```
-
-Correct interpretation:
-
-- The classifier is a lightweight supervised ML layer.
-- It is trained on synthetic scenario telemetry generated by the simulator.
-- It predicts scenario-style anomaly labels with confidence values.
-- It should not be described as production-validated AI.
-
----
-
-## 11. Backend Persistence Verification
+## 6. Backend Persistence Verification
 
 Verified backend/database behavior:
 
@@ -283,21 +189,23 @@ faultInjectedDrops=0
 
 ---
 
-## 12. Frontend/API Workflow Verification
+## 7. Frontend/API Workflow Verification
 
 | Check | Expected Result | Phase |
 |---|---|---|
-| `npm run typecheck` | TypeScript passes. | Phase 28/29 |
-| `npm run build` | Vite production build succeeds. | Phase 28/29 |
-| Dashboard loads at `http://localhost:5173` | Page renders the MiniRTOS dashboard. | Phase 28/29 |
-| `GET /api/scenarios` from frontend | Scenario dropdown is populated. | Phase 28 |
-| `POST /api/runs` from frontend | Run is created through backend orchestration. | Phase 28 |
-| `GET /api/runs` from frontend | Persisted run history is displayed. | Phase 28 |
-| `GET /api/runs/{runId}/analysis` from frontend | Analyzer panel displays message summary, task metrics, root causes, and raw report. | Phase 28 |
-| Guided Learning panel | Changes based on selected scenario. | Phase 29 |
-| Queue pressure visualizer | Displays received/dropped and queue/fault drop breakdown. | Phase 29 |
-| Task runtime timeline | Displays task duration bars and deadline risk. | Phase 29 |
-| Fault/health panel | Explains runtime health and root causes. | Phase 29 |
+| `npm run typecheck` | TypeScript passes. | Phase 28/29/30 |
+| `npm run build` | Vite production build succeeds. | Phase 28/29/30 |
+| Dashboard loads at `http://localhost:5173` | Dev dashboard renders the MiniRTOS dashboard. | Phase 28/29/30 |
+| Dashboard loads at `http://localhost:3000` | Production Nginx dashboard renders the MiniRTOS dashboard. | Phase 30 |
+| `GET /api/scenarios` from frontend | Scenario dropdown is populated. | Phase 28/29/30 |
+| `POST /api/runs` from frontend | Run is created through backend orchestration. | Phase 28/29/30 |
+| `GET /api/runs` from frontend | Persisted run history is displayed. | Phase 28/29/30 |
+| `GET /api/runs/{runId}/analysis` from frontend | Analyzer panel displays message summary, task metrics, root causes, and raw report. | Phase 28/29/30 |
+| Guided Learning panel | Changes based on selected scenario. | Phase 29/30 |
+| Queue pressure visualizer | Displays received/dropped and queue/fault drop breakdown. | Phase 29/30 |
+| Task runtime timeline | Displays task duration bars and deadline risk. | Phase 29/30 |
+| Fault/health panel | Explains runtime health and root causes. | Phase 29/30 |
+| Production `/health` | Returns HTTP 200 from Nginx. | Phase 30 |
 
 Known local issue and fix:
 
@@ -311,6 +219,8 @@ Likely causes:
 2. CORS config missing or backend not restarted after adding CORS.
 3. `VITE_API_BASE_URL` set to HTTPS instead of HTTP.
 4. Browser cached old environment/build.
+5. Production frontend on localhost:3000 is not included in backend CORS.
+6. Production frontend was built with the wrong API URL.
 
 Correct local configuration:
 
@@ -318,11 +228,36 @@ Correct local configuration:
 VITE_API_BASE_URL=http://localhost:8081
 ```
 
+Allowed CORS origins after Phase 30:
+
+```text
+http://localhost:5173
+http://127.0.0.1:5173
+http://localhost:3000
+http://127.0.0.1:3000
+```
+
 ---
 
-## 13. Final Measured Summary
+## 8. Phase 30 Docker Benchmark Summary
 
-| Scenario | Final Benchmark Result |
+| Check | Result |
+|---|---|
+| Backend Docker build | Passed after adding CMake/Ninja/build tools. |
+| Backend container startup | Passed. Tomcat starts on port 8081. |
+| Backend health | Passed at `/actuator/health`. |
+| Dev frontend Docker workflow | Passed at `http://localhost:5173`. |
+| Production frontend Docker workflow | Passed at `http://localhost:3000`. |
+| Nginx health | Passed at `/health`. |
+| Production frontend CORS | Passed after adding `localhost:3000` to allowed origins. |
+| Production dashboard fetch | Passed after CORS fix. |
+| Existing analyzer/runtime behavior | Unchanged by Phase 30. |
+
+---
+
+## 9. Final Measured Summary
+
+| Scenario / Area | Final Benchmark Result |
 |---|---|
 | Normal runtime | Pass. Baseline run produced no deadline misses or faults; queue-full drops show bounded-queue pressure. |
 | Earliest-deadline-first scheduler | Pass. EDF run preserved analyzer-compatible telemetry and produced no deadline misses. |
@@ -334,12 +269,14 @@ VITE_API_BASE_URL=http://localhost:8081
 | Watchdog slow task | Pass. Watchdog escalation reproduced with 22 timeouts and 22 recoveries. |
 | Priority scheduler | Not refreshed from uploaded logs. Re-run/upload `priority_scheduler_runtime_logs.jsonl` if exact measured values are required. |
 | Backend persistence | Pass. PostgreSQL stores and returns run metadata/analysis summaries. |
-| Frontend dashboard | Pass after user verification. Dashboard works with correct API base URL and backend/CORS setup. |
+| Frontend dev dashboard | Pass. Dashboard works with correct API base URL and backend/CORS setup. |
+| Frontend production dashboard | Pass after CORS update. Dashboard works through Nginx on localhost:3000. |
 | Phase 29 learning modules and visualizers | Pass after user verification. Educational cards, queue visualizer, task timeline, and fault/health panel work. |
+| Phase 30 Docker hardening | Pass after user verification. Dev/prod frontend and backend Docker workflows work. |
 
 ---
 
-## 14. Limitations
+## 10. Limitations
 
 Current limitations remain:
 
@@ -351,16 +288,18 @@ Current limitations remain:
 - ML metrics are not listed in this refresh because `model_metrics.json` was not included with the uploaded benchmark logs.
 - Phase 29 visualizers summarize parsed analyzer output but do not yet render a full event-by-event timeline.
 - Frontend automated tests are still recommended.
+- Phase 30 hardened local Docker workflows but did not add Kubernetes or cloud deployment yet.
 
 ---
 
-## 15. Recommended Next Updates
+## 11. Recommended Next Updates
 
 Recommended follow-up polish:
 
 1. Add or upload `priority_scheduler_runtime_logs.jsonl` and refresh the priority row.
 2. Paste or upload `reports/generated/model_metrics.json` if exact ML accuracy and confusion-matrix values should be included.
 3. Keep generated logs, datasets, metrics, `.joblib` files, frontend `node_modules`, frontend `dist`, and local `.env` files ignored by Git.
-4. Add automated frontend tests after the dashboard stabilizes.
-5. Add a frontend/API workflow screenshot or benchmark after Phase 29 verification.
-6. Begin Phase 30 Docker Compose hardening.
+4. Add automated frontend tests in Phase 31.
+5. Add CI Docker build smoke tests for backend and frontend-prod if not already committed.
+6. Add a frontend/API workflow screenshot showing both `localhost:5173` and `localhost:3000`.
+7. Begin Phase 31 frontend automated testing.
