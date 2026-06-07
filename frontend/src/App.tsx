@@ -6,6 +6,12 @@ import {
   getRuns,
   getScenarios,
 } from "./api/minirtosApi";
+import {
+  trackDashboardLoaded,
+  trackRunHistorySelected,
+  trackScenarioRunCompleted,
+  trackScenarioRunTriggered,
+} from "./analytics/amplitude";
 import { AnalysisPanel } from "./components/AnalysisPanel";
 import { DashboardHeader } from "./components/DashboardHeader";
 import { LearningModulePanel } from "./components/LearningModulePanel";
@@ -60,6 +66,7 @@ function App() {
 
         setScenarios(scenarioList);
         setRuns(runHistory);
+        trackDashboardLoaded(scenarioList.length, runHistory.length);
 
         if (scenarioList.length > 0) {
           setSelectedScenarioId(scenarioList[0].id);
@@ -120,6 +127,12 @@ function App() {
   async function handleRunScenario() {
     if (!selectedScenarioId) return;
 
+    const runStartTime = Date.now();
+    const runningScenarioName =
+      scenarios.find((s) => s.id === selectedScenarioId)?.name ??
+      selectedScenarioId;
+    trackScenarioRunTriggered(selectedScenarioId, runningScenarioName);
+
     try {
       setIsRunning(true);
       setError(null);
@@ -135,6 +148,13 @@ function App() {
         createdRun;
 
       setLatestRun(persistedRun);
+      trackScenarioRunCompleted({
+        scenarioId: selectedScenarioId,
+        scenarioName: persistedRun.scenarioName,
+        status: persistedRun.status,
+        runtimeHealth: persistedRun.runtimeHealth,
+        durationMs: Date.now() - runStartTime,
+      });
     } catch (runError) {
       setError(
         runError instanceof Error
@@ -152,6 +172,11 @@ function App() {
     const run = runs.find((item) => item.runId === runId);
     if (run) {
       setLatestRun(run);
+      trackRunHistorySelected({
+        scenarioId: run.scenarioId,
+        scenarioName: run.scenarioName,
+        status: run.status,
+      });
     }
   }
 
