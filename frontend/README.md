@@ -2,14 +2,14 @@
 
 React + TypeScript dashboard for MiniRTOS Playground.
 
-**Updated:** June 5, 2026  
-**Current Phase:** Phase 30 — Full-Stack Docker Compose Hardening
+**Updated:** June 7, 2026  
+**Current Phase:** Phase 32 — Amplitude Analytics
 
 ---
 
 ## Current Phase
 
-Phase 28 added the React Dashboard MVP. Phase 29 expanded it into a more student-friendly learning dashboard by adding guided scenario education and CSS-based visualizations. Phase 30 added separate dev and production Docker frontend workflows.
+Phase 28 added the React Dashboard MVP. Phase 29 expanded it into a more student-friendly learning dashboard by adding guided scenario education and CSS-based visualizations. Phase 30 added separate dev and production Docker frontend workflows. Phase 31 added frontend automated tests with Vitest and React Testing Library. Phase 32 added Amplitude event tracking with a safe `isAnalyticsEnabled` guard.
 
 The frontend can now run in two supported modes:
 
@@ -42,6 +42,7 @@ Production frontend:
 - Run through Vite for active development.
 - Run through Nginx for production-style Docker verification.
 - Expose `/health` in the production Nginx container.
+- Track key user actions via Amplitude when `VITE_AMPLITUDE_API_KEY` is configured: `dashboard_loaded`, `scenario_run_triggered`, `scenario_run_completed`, and `run_history_selected`. All tracking is a no-op without the key — safe for local dev, CI, and test environments.
 
 ---
 
@@ -69,6 +70,7 @@ Expected content:
 
 ```env
 VITE_API_BASE_URL=http://localhost:8081
+VITE_AMPLITUDE_API_KEY=your_amplitude_browser_api_key
 ```
 
 Important:
@@ -79,11 +81,13 @@ Use http://localhost:8081, not https://localhost:8081.
 
 Local Spring Boot runs plain HTTP.
 
+`VITE_AMPLITUDE_API_KEY` is optional. Omitting it disables all Amplitude tracking silently — no SDK calls are made and no errors are thrown.
+
 Production build note:
 
 ```text
-VITE_API_BASE_URL is baked into the built React bundle by Vite.
-If VITE_API_BASE_URL changes, rebuild the production frontend image.
+Both VITE_API_BASE_URL and VITE_AMPLITUDE_API_KEY are baked into the built
+React bundle by Vite. If either value changes, rebuild the production frontend image.
 ```
 
 ---
@@ -267,6 +271,50 @@ Phase 30 frontend Docker requirements:
 
 ---
 
+## Phase 31 Files
+
+New files:
+
+```text
+frontend/src/test/setupTests.ts
+frontend/src/components/__tests__/DashboardHeader.test.tsx
+frontend/src/components/__tests__/ScenarioSelector.test.tsx
+frontend/src/components/__tests__/RunHistory.test.tsx
+frontend/src/components/__tests__/AnalysisPanel.test.tsx
+```
+
+---
+
+## Phase 32 Analytics Files
+
+New files:
+
+```text
+frontend/src/analytics/amplitude.ts
+```
+
+Updated files:
+
+```text
+frontend/src/main.tsx       — calls initAmplitude() once at app entry
+frontend/src/App.tsx        — calls trackDashboardLoaded, trackScenarioRunTriggered,
+                              trackScenarioRunCompleted, trackRunHistorySelected
+frontend/package.json       — adds @amplitude/analytics-browser; removes session replay package
+frontend/vite.config.ts     — removes redundant triple-slash reference (lint fix)
+```
+
+Phase 32 analytics design rules:
+
+```text
+- initAmplitude() only initializes the SDK when VITE_AMPLITUDE_API_KEY is present.
+- isAnalyticsEnabled flag is set to true only after a successful amplitude.init().
+- Every track* function checks isAnalyticsEnabled before any SDK call.
+- Session replay is intentionally excluded — only structured event tracking is used.
+- The @amplitude/plugin-session-replay-browser package is not a dependency.
+```
+
+---
+
 ## Component Responsibilities
 
 | Component | Purpose |
@@ -445,20 +493,22 @@ http://localhost:8081
 
 ## Next Frontend Work
 
-Recommended next frontend work:
+```text
+Phase 33 — TBD
+```
+
+Completed recent frontend phases:
 
 ```text
 Phase 31 — Frontend Automated Tests
-Vitest
-React Testing Library
-jsdom
-Scenario selector tests
-Run button tests
-Run history tests
-Analysis panel tests
-Learning module tests
-Queue pressure visualizer tests
-Task timeline tests
-Fault/health explanation tests
-Failed fetch and empty state tests
+  Vitest + React Testing Library + jsdom
+  Component tests for DashboardHeader, ScenarioSelector,
+  RunHistory, and AnalysisPanel
+
+Phase 32 — Amplitude Analytics
+  src/analytics/amplitude.ts
+  initAmplitude() + isAnalyticsEnabled guard
+  trackDashboardLoaded, trackScenarioRunTriggered,
+  trackScenarioRunCompleted, trackRunHistorySelected
+  Requires VITE_AMPLITUDE_API_KEY in .env
 ```

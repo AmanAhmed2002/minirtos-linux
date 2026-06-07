@@ -1,13 +1,13 @@
 # MiniRTOS-Linux / MiniRTOS Playground Architecture
 
-**Updated:** June 5, 2026  
-**Current Phase:** Phase 30 — Full-Stack Docker Compose Hardening
+**Updated:** June 7, 2026  
+**Current Phase:** Phase 32 — Amplitude Analytics
 
 ---
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP layer and frontend Docker integration. Phase 29 added educational learning modules and frontend visualizers. Phase 30 hardened the Docker Compose architecture for backend, dev frontend, and production frontend workflows.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP layer and frontend Docker integration. Phase 29 added educational learning modules and frontend visualizers. Phase 30 hardened the Docker Compose architecture for backend, dev frontend, and production frontend workflows. Phase 31 added frontend automated tests with Vitest and React Testing Library. Phase 32 added Amplitude event tracking to the React dashboard.
 
 The platform now includes:
 
@@ -21,6 +21,7 @@ The platform now includes:
 - React/TypeScript educational dashboard.
 - CSS-based queue and task visualizers.
 - Guided scenario learning modules.
+- Amplitude event tracking for key dashboard interactions.
 - Docker Compose services for runtime, analyzer, ML, backend, database, dev frontend, and production frontend.
 - Production Nginx frontend serving on `http://localhost:3000`.
 - Vite dev frontend serving on `http://localhost:5173`.
@@ -394,6 +395,7 @@ Environment:
 
 ```env
 VITE_API_BASE_URL=http://localhost:8081
+VITE_AMPLITUDE_API_KEY=your_amplitude_browser_api_key  # optional — omit to disable tracking
 ```
 
 Important frontend files:
@@ -658,18 +660,92 @@ React/TypeScript Frontend
 
 ---
 
-## 14. Next Phase Architecture: Frontend Automated Tests
+## 14. Phase 31 Frontend Test Architecture
 
-Phase 31 should add:
+Phase 31 added:
 
 ```text
 Vitest
 React Testing Library
 jsdom
-frontend test scripts
-component tests
-failed-fetch tests
-empty-state tests
-dashboard rendering tests
-visualizer rendering tests
+frontend/src/test/setupTests.ts
+frontend/src/components/__tests__/DashboardHeader.test.tsx
+frontend/src/components/__tests__/ScenarioSelector.test.tsx
+frontend/src/components/__tests__/RunHistory.test.tsx
+frontend/src/components/__tests__/AnalysisPanel.test.tsx
+```
+
+---
+
+## 15. Phase 32 Analytics Architecture
+
+Phase 32 added client-side Amplitude event tracking.
+
+New file:
+
+```text
+frontend/src/analytics/amplitude.ts
+```
+
+Module design:
+
+```text
+API_KEY = import.meta.env.VITE_AMPLITUDE_API_KEY ?? ""
+
+isAnalyticsEnabled: boolean = false  (module-level flag)
+
+initAmplitude()
+  -> return early if API_KEY is empty
+  -> amplitude.init(API_KEY, { autocapture: false })
+  -> isAnalyticsEnabled = true
+
+trackDashboardLoaded(scenarioCount, runCount)
+  -> guard: if (!isAnalyticsEnabled) return
+  -> amplitude.track("dashboard_loaded", { scenario_count, run_count })
+
+trackScenarioRunTriggered(scenarioId, scenarioName)
+  -> guard: if (!isAnalyticsEnabled) return
+  -> amplitude.track("scenario_run_triggered", { scenario_id, scenario_name })
+
+trackScenarioRunCompleted({ scenarioId, scenarioName, status, runtimeHealth, durationMs })
+  -> guard: if (!isAnalyticsEnabled) return
+  -> amplitude.track("scenario_run_completed", { ... })
+
+trackRunHistorySelected({ scenarioId, scenarioName, status })
+  -> guard: if (!isAnalyticsEnabled) return
+  -> amplitude.track("run_history_selected", { ... })
+```
+
+Call sites:
+
+```text
+main.tsx
+  -> initAmplitude()   (once, before React renders)
+
+App.tsx loadDashboard()
+  -> trackDashboardLoaded(scenarioList.length, runHistory.length)
+
+App.tsx handleRunScenario()
+  -> trackScenarioRunTriggered(scenarioId, scenarioName)   (before the POST)
+  -> trackScenarioRunCompleted({ ..., durationMs })        (after run persists)
+
+App.tsx handleSelectRun()
+  -> trackRunHistorySelected({ scenarioId, scenarioName, status })
+```
+
+Design rules:
+
+```text
+- Session replay is intentionally excluded. Only structured events are tracked.
+- @amplitude/plugin-session-replay-browser is not a project dependency.
+- autocapture is disabled — only explicit track() calls fire.
+- VITE_AMPLITUDE_API_KEY is optional; missing key = complete no-op, no errors.
+- isAnalyticsEnabled is the single source of truth for SDK readiness.
+```
+
+Environment variable:
+
+```text
+VITE_AMPLITUDE_API_KEY — baked into the React bundle at build time by Vite.
+If it changes, rebuild the production frontend image.
 ```
