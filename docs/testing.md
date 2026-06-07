@@ -1,13 +1,13 @@
 # MiniRTOS-Linux / MiniRTOS Playground Testing Guide
 
-**Updated:** June 5, 2026  
-**Current Phase:** Phase 30 — Full-Stack Docker Compose Hardening
+**Updated:** June 7, 2026  
+**Current Phase:** Phase 32 — Amplitude Analytics
 
 ---
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP and frontend Docker integration. Phase 29 added educational modules and CSS-based frontend visualizers. Phase 30 hardened Docker Compose and Dockerfiles for backend, dev frontend, and production frontend workflows.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP and frontend Docker integration. Phase 29 added educational modules and CSS-based frontend visualizers. Phase 30 hardened Docker Compose and Dockerfiles for backend, dev frontend, and production frontend workflows. Phase 31 added frontend automated tests with Vitest and React Testing Library. Phase 32 added Amplitude event tracking with a safe `isAnalyticsEnabled` guard.
 
 Verified Phase 27 behavior:
 
@@ -53,6 +53,21 @@ Verified Phase 30 behavior:
 - Backend CORS allows both `localhost:5173` and `localhost:3000`.
 - Production dashboard initially failed to fetch until `localhost:3000` was added to CORS.
 - User confirmed production frontend now connects to backend correctly.
+
+Verified Phase 31 behavior:
+
+- Vitest + React Testing Library + jsdom added to the frontend.
+- 16 component tests pass across DashboardHeader, ScenarioSelector, RunHistory, and AnalysisPanel.
+- `npm run test`, `npm run test:coverage` work.
+- Frontend CI job runs `npm run typecheck`, `npm run build`, and `npm run test`.
+
+Verified Phase 32 behavior:
+
+- `frontend/src/analytics/amplitude.ts` added with `initAmplitude()` and four `track*` helpers.
+- `isAnalyticsEnabled` flag prevents any SDK call when `VITE_AMPLITUDE_API_KEY` is absent.
+- Session replay package removed; bundle dropped from 527 kB + rrweb chunks to 423 kB single chunk.
+- Pre-existing `@typescript-eslint/triple-slash-reference` lint error in `vite.config.ts` fixed.
+- `npm run typecheck`, `npm run lint`, `npm run test` (16/16), and `npm run build` all pass.
 
 ---
 
@@ -554,44 +569,67 @@ Recommended next backend tests:
 
 ---
 
-## 10. Frontend Test Coverage To Add
+## 10. Frontend Test Coverage
 
-Current frontend verification is build/typecheck/manual API testing.
-
-Recommended next frontend tests for Phase 31:
+Phase 31 added automated frontend tests. Current passing coverage:
 
 ```text
-ScenarioSelector renders scenario options.
-Run button calls createRun with selected scenario ID.
-RunHistory renders persisted runs.
+DashboardHeader renders title and phase context.
+ScenarioSelector renders scenario options from backend.
+ScenarioSelector run button calls createRun with selected scenario ID.
+RunHistory renders persisted run list.
 AnalysisPanel renders message summary and task metrics.
+```
+
+Frontend test commands:
+
+```bash
+cd frontend
+npm run test              # vitest run (single pass, 16 tests)
+npm run test:watch        # vitest watch mode
+npm run test:coverage     # vitest with v8 coverage report
+```
+
+Recommended additional coverage:
+
+```text
 LearningModulePanel changes with selected scenario.
 QueuePressureChart renders received/dropped bars.
 TaskTimeline renders task duration rows.
 FaultExplanationPanel renders runtime health and root-cause explanations.
 Failed API calls show error banner.
 Empty state displays when there are no runs or no analysis.
-Production build uses configured VITE_API_BASE_URL.
-```
-
-Recommended tools:
-
-```text
-Vitest
-React Testing Library
-jsdom
-```
-
-Potential commands after adding tests:
-
-```bash
-npm run test
-npm run test:coverage
+Analytics: initAmplitude no-ops when key is absent.
+Analytics: track* functions no-op when isAnalyticsEnabled is false.
 ```
 
 ---
 
-## 11. Dataset and ML Verification
+## 11. Phase 32 Analytics Testing
+
+Phase 32 analytics behavior verified manually and through existing test suite:
+
+```text
+Verified: npm run typecheck — 0 errors.
+Verified: npm run lint      — 0 errors (including vite.config.ts fix).
+Verified: npm run test      — 16/16 tests pass (analytics is a no-op in tests; no key present).
+Verified: npm run build     — single 423 kB chunk, no size warnings.
+```
+
+Analytics tests to add in a future phase:
+
+```text
+initAmplitude() does not call amplitude.init() when API key is absent.
+initAmplitude() calls amplitude.init() with the correct key when present.
+trackDashboardLoaded() is a no-op when isAnalyticsEnabled is false.
+trackScenarioRunTriggered() fires with correct scenarioId and scenarioName.
+trackScenarioRunCompleted() includes status, runtimeHealth, and durationMs.
+trackRunHistorySelected() fires on run history click.
+```
+
+---
+
+## 12. Dataset and ML Verification
 
 ```bash
 docker compose up --build demo
@@ -618,7 +656,7 @@ python3 ai-analyzer/ml/predict_model.py \
 
 ---
 
-## 12. What Passing Tests Prove
+## 13. What Passing Tests Prove
 
 Passing tests prove:
 
@@ -638,10 +676,12 @@ Passing tests prove:
 - Frontend can consume backend APIs when backend, CORS, and `VITE_API_BASE_URL` are configured correctly.
 - Phase 29 educational and visualizer components render using existing API data.
 - Phase 30 dev and production Docker frontend workflows both work.
+- Phase 31 frontend component tests pass (Vitest + React Testing Library, 16 tests).
+- Phase 32 Amplitude analytics are a complete no-op in tests and dev without an API key.
 
 ---
 
-## 13. What Tests Do Not Prove Yet
+## 14. What Tests Do Not Prove Yet
 
 Current tests do not fully prove:
 
@@ -657,7 +697,7 @@ Current tests do not fully prove:
 
 ---
 
-## 14. Recommended CI Updates
+## 15. Recommended CI Updates
 
 Future GitHub Actions improvements:
 
@@ -671,3 +711,4 @@ Future GitHub Actions improvements:
 - Add backend orchestration smoke test with a short-duration test config.
 - Add frontend Node setup, `npm ci`, `npm run typecheck`, and `npm run build`.
 - Add frontend tests once Vitest/React Testing Library are introduced.
+- Add analytics unit tests: verify no-op behavior without key, and correct event payloads with key.

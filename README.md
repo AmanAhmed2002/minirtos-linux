@@ -2,8 +2,8 @@
 
 **Original Project:** Embedded Runtime Simulator with AI-Based Fault Detection  
 **Full-Stack Evolution:** MiniRTOS Playground — Full-Stack Embedded Systems Learning Platform  
-**Current Phase:** Phase 30 — Full-Stack Docker Compose Hardening  
-**Updated:** June 5, 2026
+**Current Phase:** Phase 32 — Amplitude Analytics  
+**Updated:** June 7, 2026
 
 MiniRTOS-Linux is a software-only C++20 embedded runtime simulator that models periodic tasks, bounded message queues, configurable fault injection, task-crash simulation, watchdog monitoring, structured JSONL telemetry, Python-based runtime analysis, AI-style anomaly detection, synthetic training-dataset generation, a trained lightweight ML anomaly classifier, automated tests, Dockerized demos, benchmark reporting, a Java/Spring Boot backend with persistent PostgreSQL run history, and a React/TypeScript educational dashboard.
 
@@ -13,7 +13,7 @@ MiniRTOS Playground extends the project into a full-stack educational platform f
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run storage. Phase 28 added the React Dashboard MVP, frontend Docker integration, and local frontend/backend debugging notes. Phase 29 added educational modules and visualizers to the React dashboard. Phase 30 hardened Docker Compose and Dockerfiles for backend, dev frontend, and production frontend workflows.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run storage. Phase 28 added the React Dashboard MVP, frontend Docker integration, and local frontend/backend debugging notes. Phase 29 added educational modules and visualizers to the React dashboard. Phase 30 hardened Docker Compose and Dockerfiles for backend, dev frontend, and production frontend workflows. Phase 31 added frontend automated tests using Vitest, React Testing Library, and jsdom. Phase 32 added Amplitude event tracking to the React dashboard.
 
 Current verified backend behavior:
 
@@ -41,6 +41,7 @@ Current frontend behavior:
 - Guided Learning panel changes by selected scenario.
 - Queue pressure visualizer, task runtime timeline, fault/health explanation panel, and root-cause teaching notes work.
 - Backend CORS allows both dev and production local frontend origins.
+- Amplitude event tracking fires `dashboard_loaded`, `scenario_run_triggered`, `scenario_run_completed`, and `run_history_selected` when `VITE_AMPLITUDE_API_KEY` is set. All tracking is a no-op when the key is absent.
 
 Important local decisions:
 
@@ -52,6 +53,8 @@ Important local decisions:
 - Phase 29 visualizers are CSS-based and add no new chart dependency.
 - Phase 30 production frontend uses Nginx, which listens on container port `80`.
 - Phase 30 dev frontend uses Vite, which listens on container port `5173`.
+- Phase 32 Amplitude tracking is fully disabled (no SDK calls) when `VITE_AMPLITUDE_API_KEY` is missing — safe for local dev and CI.
+- Phase 32 does not include session replay; only structured event tracking is enabled.
 
 ---
 
@@ -72,7 +75,8 @@ Important local decisions:
 | Persistence | PostgreSQL run history with Flyway migrations |
 | Frontend | React/TypeScript educational dashboard |
 | Learning UI | Scenario learning cards, queue visualizer, task timeline, health/fault explanations |
-| Testing | GoogleTest, CTest, pytest, Spring Boot tests, repository tests, frontend build/typecheck |
+| Analytics | Amplitude event tracking for dashboard load, run trigger, run completion, and history selection |
+| Testing | GoogleTest, CTest, pytest, Spring Boot tests, repository tests, Vitest + React Testing Library frontend component tests |
 | Docker | Runtime, analyzer, ML, backend, PostgreSQL, dev frontend, and production frontend services |
 
 ---
@@ -287,6 +291,14 @@ The frontend API base URL should be:
 ```env
 VITE_API_BASE_URL=http://localhost:8081
 ```
+
+To enable Amplitude event tracking, also add:
+
+```env
+VITE_AMPLITUDE_API_KEY=your_amplitude_browser_api_key
+```
+
+Omitting `VITE_AMPLITUDE_API_KEY` is safe — all tracking functions become no-ops.
 
 Run locally without Docker:
 
@@ -554,29 +566,27 @@ docker logs minirtos-playground-frontend-prod --tail=100
 | `docs/performance-results.md` | Runtime/fault/benchmark results and dashboard verification notes |
 | `docs/docker-phase30-update-notes.md` | Phase 30 Docker Compose hardening notes |
 | `backend/README.md` | Backend-specific setup and API documentation |
-| `frontend/README.md` | Frontend-specific setup and dashboard documentation |
+| `frontend/README.md` | Frontend-specific setup, dashboard documentation, and analytics setup |
 
 ---
 
 ## Next Phase
 
 ```text
-Phase 31 — Frontend Automated Tests
+Phase 33 — TBD
 ```
 
-Recommended scope:
+Completed recent phases:
 
 ```text
-Vitest
-React Testing Library
-jsdom
-Scenario selector tests
-Run button tests
-Run history tests
-Analysis panel tests
-Learning panel tests
-Queue pressure visualizer tests
-Task timeline tests
-Fault/health explanation tests
-Failed fetch and empty-state tests
+Phase 31 — Frontend Automated Tests
+  Vitest + React Testing Library + jsdom
+  Scenario selector, run button, run history, analysis panel,
+  learning panel, visualizer, and error-state tests
+
+Phase 32 — Amplitude Analytics
+  Event tracking: dashboard_loaded, scenario_run_triggered,
+  scenario_run_completed, run_history_selected
+  isAnalyticsEnabled guard — safe no-op without API key
+  Session replay intentionally excluded
 ```
