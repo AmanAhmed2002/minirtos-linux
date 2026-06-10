@@ -1,0 +1,116 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minirtos-backend-runs
+  namespace: minirtos
+  labels:
+    app.kubernetes.io/name: minirtos-backend
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minirtos-backend
+  namespace: minirtos
+  labels:
+    app.kubernetes.io/name: minirtos-backend
+spec:
+  type: ClusterIP
+  selector:
+    app: minirtos-backend
+  ports:
+    - name: http
+      port: 8081
+      targetPort: 8081
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minirtos-backend-nodeport
+  namespace: minirtos
+  labels:
+    app.kubernetes.io/name: minirtos-backend
+spec:
+  type: NodePort
+  selector:
+    app: minirtos-backend
+  ports:
+    - name: http
+      port: 8081
+      targetPort: 8081
+      nodePort: 30081
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minirtos-backend
+  namespace: minirtos
+  labels:
+    app.kubernetes.io/name: minirtos-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minirtos-backend
+  template:
+    metadata:
+      labels:
+        app: minirtos-backend
+        app.kubernetes.io/name: minirtos-backend
+    spec:
+      containers:
+        - name: backend
+          image: minirtos-playground-backend:phase32
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8081
+          envFrom:
+            - configMapRef:
+                name: minirtos-backend-config
+          env:
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: minirtos-postgres-secret
+                  key: POSTGRES_USER
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: minirtos-postgres-secret
+                  key: POSTGRES_PASSWORD
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8081
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8081
+            initialDelaySeconds: 45
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          volumeMounts:
+            - name: backend-runs
+              mountPath: /app/runs
+            - name: backend-logs
+              mountPath: /app/logs
+      volumes:
+        - name: backend-runs
+          persistentVolumeClaim:
+            claimName: minirtos-backend-runs
+        - name: backend-logs
+          emptyDir: {}

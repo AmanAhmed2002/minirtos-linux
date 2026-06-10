@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: minirtos-backend-config
+  namespace: minirtos
+  labels:
+    app.kubernetes.io/name: minirtos-backend
+data:
+  SPRING_DATASOURCE_URL: jdbc:postgresql://minirtos-postgres:5432/minirtos_playground
+  MINIRTOS_PROJECT_ROOT: /app
+  MINIRTOS_RUNTIME_BINARY: cpp-runtime/build/minirtos_runtime
+  MINIRTOS_PYTHON_COMMAND: python3
+  MINIRTOS_ANALYZER_SCRIPT: ai-analyzer/app/analyze.py
+  MINIRTOS_LOGS_DIR: logs
+  MINIRTOS_RUNS_DIR: runs
+  MINIRTOS_WINDOW_MS: "5000"
+  MINIRTOS_PROCESS_TIMEOUT_SECONDS: "120"
