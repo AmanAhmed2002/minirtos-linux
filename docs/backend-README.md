@@ -2,14 +2,14 @@
 
 Java Spring Boot backend for the MiniRTOS Playground educational platform.
 
-**Updated:** June 5, 2026  
-**Current Phase:** Phase 30 — Full-Stack Docker Compose Hardening
+**Updated:** June 10, 2026
+**Current Phase:** Phase 33 — Local Kubernetes Deployment
 
 ---
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React Dashboard MVP and required local CORS support for browser API calls. Phase 29 added frontend educational modules and visualizers without requiring backend API changes. Phase 30 hardened the Docker backend/frontend workflow.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React Dashboard MVP and required local CORS support for browser API calls. Phase 29 added frontend educational modules and visualizers without requiring backend API changes. Phase 30 hardened the Docker backend/frontend workflow. Phase 31 added frontend automated tests. Phase 32 added frontend Amplitude tracking without backend API changes. Phase 33 added local Kubernetes manifests and a Kubernetes frontend origin for browser access.
 
 The backend can now:
 
@@ -24,7 +24,9 @@ The backend can now:
 - Return run history after backend restarts.
 - Serve APIs consumed by the React dev frontend running at `http://localhost:5173`.
 - Serve APIs consumed by the production Nginx frontend running at `http://localhost:3000`.
+- Serve APIs consumed by the Kubernetes frontend NodePort running at `http://localhost:30080`.
 - Provide the persisted analysis data used by Phase 29 learning and visualizer components.
+- Expose actuator liveness and readiness probe paths for Kubernetes.
 
 Verified behavior:
 
@@ -39,6 +41,7 @@ Verified behavior:
 - `WARNING` is expected for `queue_overflow` because the scenario intentionally creates bounded queue pressure and dropped messages.
 - Phase 29 frontend visualizers work using existing `messageSummary`, `taskMetrics`, `runtimeHealth`, `scenarioId`, and `rootCauses` fields.
 - Phase 30 production frontend works on `http://localhost:3000` after CORS was updated.
+- Phase 33 backend CORS includes `http://localhost:30080` for the Kubernetes frontend NodePort.
 
 Important implementation notes:
 
@@ -64,6 +67,7 @@ C++ runtime binary built at ../cpp-runtime/build/minirtos_runtime for local orch
 Python 3 available as python3
 React dev frontend on localhost:5173
 React production frontend on localhost:3000
+Kubernetes frontend NodePort on localhost:30080
 ```
 
 ---
@@ -142,19 +146,22 @@ Expected file:
 backend/src/main/java/com/minirtos/playground/config/CorsConfig.java
 ```
 
-Expected allowed origins after Phase 30:
+Expected allowed origins after Phase 33:
 
 ```text
 http://localhost:5173
 http://127.0.0.1:5173
 http://localhost:3000
 http://127.0.0.1:3000
+http://localhost:30080
+http://127.0.0.1:30080
 ```
 
 This allows:
 
 - Vite dev frontend at `http://localhost:5173`.
 - Nginx production frontend at `http://localhost:3000`.
+- Kubernetes frontend NodePort at `http://localhost:30080`.
 
 Confirm CORS for production frontend:
 
@@ -168,6 +175,20 @@ Expected header:
 
 ```text
 Access-Control-Allow-Origin: http://localhost:3000
+```
+
+Confirm CORS for Kubernetes frontend:
+
+```bash
+curl -i -X OPTIONS http://localhost:30081/api/scenarios \
+  -H "Origin: http://localhost:30080" \
+  -H "Access-Control-Request-Method: GET"
+```
+
+Expected header:
+
+```text
+Access-Control-Allow-Origin: http://localhost:30080
 ```
 
 ---
@@ -278,6 +299,52 @@ curl
 
 ---
 
+## Run Backend Through Local Kubernetes
+
+Build the backend image and create the cluster:
+
+```bash
+docker build -f docker/Dockerfile.backend -t minirtos-playground-backend:phase32 .
+kind create cluster --config k8s/kind/kind-config.yml
+kind load docker-image minirtos-playground-backend:phase32 --name minirtos
+```
+
+Apply backend-related manifests:
+
+```bash
+kubectl apply -f k8s/00-namespace.yml
+kubectl apply -f k8s/01-postgres-secret.yml
+kubectl apply -f k8s/02-backend-configmap.yml
+kubectl apply -f k8s/03-postgres-statefulset.yml
+kubectl apply -f k8s/04-backend-deployment.yml
+```
+
+Check backend resources:
+
+```bash
+kubectl get pods -n minirtos
+kubectl get svc -n minirtos
+```
+
+Test backend:
+
+```bash
+curl -i http://localhost:30081/actuator/health
+curl -i http://localhost:30081/actuator/health/readiness
+curl -i http://localhost:30081/actuator/health/liveness
+curl -i http://localhost:30081/api/scenarios
+```
+
+Important:
+
+```text
+The backend NodePort is 30081.
+The frontend NodePort is 30080.
+The frontend image must be built separately with VITE_API_BASE_URL=http://localhost:30081.
+```
+
+---
+
 ## Frontend Integration
 
 Frontend dev URL:
@@ -322,7 +389,7 @@ AnalysisResponse.rootCauses
 AnalysisResponse.rawReport
 ```
 
-No backend endpoint change was required for Phase 29 or Phase 30.
+No backend endpoint change was required for Phases 29-33.
 
 ---
 
@@ -546,16 +613,5 @@ Do not accept arbitrary config paths, runtime paths, analyzer paths, or shell co
 ## Next Phase
 
 ```text
-Phase 31 — Frontend Automated Tests
-```
-
-Recommended scope:
-
-```text
-Vitest
-React Testing Library
-jsdom
-Dashboard component tests
-Frontend error-state tests
-Production build regression tests
+Phase 34 — TBD
 ```

@@ -2,16 +2,16 @@
 
 React + TypeScript dashboard for MiniRTOS Playground.
 
-**Updated:** June 7, 2026  
-**Current Phase:** Phase 32 — Amplitude Analytics
+**Updated:** June 10, 2026
+**Current Phase:** Phase 33 — Local Kubernetes Deployment
 
 ---
 
 ## Current Phase
 
-Phase 28 added the React Dashboard MVP. Phase 29 expanded it into a more student-friendly learning dashboard by adding guided scenario education and CSS-based visualizations. Phase 30 added separate dev and production Docker frontend workflows. Phase 31 added frontend automated tests with Vitest and React Testing Library. Phase 32 added Amplitude event tracking with a safe `isAnalyticsEnabled` guard.
+Phase 28 added the React Dashboard MVP. Phase 29 expanded it into a more student-friendly learning dashboard by adding guided scenario education and CSS-based visualizations. Phase 30 added separate dev and production Docker frontend workflows. Phase 31 added frontend automated tests with Vitest and React Testing Library. Phase 32 added Amplitude event tracking with a safe `isAnalyticsEnabled` guard. Phase 33 added a local Kubernetes deployment path using frontend and backend NodePorts.
 
-The frontend can now run in two supported modes:
+The frontend can now run in three supported modes:
 
 ```text
 Development frontend:
@@ -21,6 +21,10 @@ Development frontend:
 Production frontend:
   Nginx static server
   http://localhost:3000
+
+Kubernetes frontend:
+  NodePort service
+  http://localhost:30080
 ```
 
 ---
@@ -43,6 +47,7 @@ Production frontend:
 - Run through Nginx for production-style Docker verification.
 - Expose `/health` in the production Nginx container.
 - Track key user actions via Amplitude when `VITE_AMPLITUDE_API_KEY` is configured: `dashboard_loaded`, `scenario_run_triggered`, `scenario_run_completed`, and `run_history_selected`. All tracking is a no-op without the key — safe for local dev, CI, and test environments.
+- Run through a Kubernetes NodePort on `http://localhost:30080` when the production image is built for the Kubernetes backend URL.
 
 ---
 
@@ -54,6 +59,7 @@ npm
 Spring Boot backend running on localhost:8081
 PostgreSQL running through Docker Compose
 Docker / Docker Compose for container workflows
+kubectl and kind for local Kubernetes workflow
 ```
 
 ---
@@ -89,6 +95,14 @@ Production build note:
 Both VITE_API_BASE_URL and VITE_AMPLITUDE_API_KEY are baked into the built
 React bundle by Vite. If either value changes, rebuild the production frontend image.
 ```
+
+For the local Kubernetes workflow, build the production image with:
+
+```env
+VITE_API_BASE_URL=http://localhost:30081
+```
+
+The Kubernetes manifests do not override this value at runtime.
 
 ---
 
@@ -205,6 +219,58 @@ Do not map production Nginx as 5173:5173.
 
 ---
 
+## Run Frontend Through Local Kubernetes
+
+Build the production frontend image for the Kubernetes backend URL:
+
+```bash
+docker build \
+  -f docker/Dockerfile.frontend \
+  --target production \
+  --build-arg VITE_API_BASE_URL=http://localhost:30081 \
+  -t minirtos-playground-frontend:phase32 .
+```
+
+Create the cluster and load the image:
+
+```bash
+kind create cluster --config k8s/kind/kind-config.yml
+kind load docker-image minirtos-playground-frontend:phase32 --name minirtos
+```
+
+Apply manifests:
+
+```bash
+kubectl apply -f k8s/00-namespace.yml
+kubectl apply -f k8s/01-postgres-secret.yml
+kubectl apply -f k8s/02-backend-configmap.yml
+kubectl apply -f k8s/03-postgres-statefulset.yml
+kubectl apply -f k8s/04-backend-deployment.yml
+kubectl apply -f k8s/05-frontend-deployment.yml
+```
+
+Open:
+
+```text
+http://localhost:30080
+```
+
+Healthcheck:
+
+```bash
+curl -i http://localhost:30080/health
+```
+
+Important:
+
+```text
+Frontend NodePort: http://localhost:30080
+Backend NodePort:  http://localhost:30081
+If the frontend image was built with http://localhost:8081 instead of http://localhost:30081, browser API calls will target the wrong backend URL.
+```
+
+---
+
 ## Phase 28 Files
 
 ```text
@@ -315,6 +381,28 @@ Phase 32 analytics design rules:
 
 ---
 
+## Phase 33 Kubernetes Files
+
+New files:
+
+```text
+k8s/00-namespace.yml
+k8s/01-postgres-secret.yml
+k8s/02-backend-configmap.yml
+k8s/03-postgres-statefulset.yml
+k8s/04-backend-deployment.yml
+k8s/05-frontend-deployment.yml
+k8s/kind/kind-config.yml
+```
+
+Updated file:
+
+```text
+backend/src/main/java/com/minirtos/playground/config/CorsConfig.java
+```
+
+---
+
 ## Component Responsibilities
 
 | Component | Purpose |
@@ -342,7 +430,7 @@ GET  /api/runs
 GET  /api/runs/{runId}/analysis
 ```
 
-Phase 29 and Phase 30 did not require new backend endpoints.
+Phases 29-33 did not require new backend endpoints.
 
 ---
 
@@ -398,6 +486,12 @@ docker build \
   --target production \
   --build-arg VITE_API_BASE_URL=http://localhost:8081 \
   -t minirtos-frontend-prod .
+
+docker build \
+  -f docker/Dockerfile.frontend \
+  --target production \
+  --build-arg VITE_API_BASE_URL=http://localhost:30081 \
+  -t minirtos-playground-frontend:phase32 .
 ```
 
 ---
@@ -475,6 +569,28 @@ docker exec -it minirtos-playground-frontend-prod sh -c \
   "grep -R 'localhost:8081' -n /usr/share/nginx/html/assets || true"
 ```
 
+### Kubernetes frontend loads but API calls fail
+
+Confirm the frontend image was built with the Kubernetes backend URL:
+
+```text
+VITE_API_BASE_URL=http://localhost:30081
+```
+
+Confirm backend CORS:
+
+```bash
+curl -i -X OPTIONS http://localhost:30081/api/scenarios \
+  -H "Origin: http://localhost:30080" \
+  -H "Access-Control-Request-Method: GET"
+```
+
+Expected:
+
+```text
+Access-Control-Allow-Origin: http://localhost:30080
+```
+
 ### Backend logs invalid HTTP method bytes
 
 If backend logs show bytes like:
@@ -494,7 +610,7 @@ http://localhost:8081
 ## Next Frontend Work
 
 ```text
-Phase 33 — TBD
+Phase 34 — TBD
 ```
 
 Completed recent frontend phases:
@@ -511,4 +627,10 @@ Phase 32 — Amplitude Analytics
   trackDashboardLoaded, trackScenarioRunTriggered,
   trackScenarioRunCompleted, trackRunHistorySelected
   Requires VITE_AMPLITUDE_API_KEY in .env
+
+Phase 33 — Local Kubernetes Deployment
+  k8s manifests and kind config
+  frontend NodePort at localhost:30080
+  backend NodePort at localhost:30081
+  production frontend image must be rebuilt for the Kubernetes API URL
 ```

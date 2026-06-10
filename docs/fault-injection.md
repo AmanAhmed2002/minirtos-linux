@@ -1,15 +1,15 @@
 # MiniRTOS-Linux Fault Injection Guide
 
-**Updated:** June 5, 2026  
-**Current Phase:** Phase 30 — Full-Stack Docker Compose Hardening
+**Updated:** June 10, 2026
+**Current Phase:** Phase 33 — Local Kubernetes Deployment
 
 ---
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React Dashboard MVP for running and inspecting scenarios from the browser. Phase 29 added educational modules and visualizers that explain fault behavior in student-friendly language. Phase 30 hardened Docker Compose so the backend, dev frontend, and production frontend can run reliably.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React Dashboard MVP for running and inspecting scenarios from the browser. Phase 29 added educational modules and visualizers that explain fault behavior in student-friendly language. Phase 30 hardened Docker Compose so the backend, dev frontend, and production frontend can run reliably. Phase 31 added frontend automated tests. Phase 32 added frontend analytics. Phase 33 added local Kubernetes manifests for the same services.
 
-The backend can execute fault and queue-pressure scenarios through `POST /api/runs`, persist the resulting run summaries/analysis in PostgreSQL, and expose them to the React dashboard. The frontend can explain and visualize queue pressure, task runtime duration, runtime health, and root causes in both dev and production Docker modes.
+The backend can execute fault and queue-pressure scenarios through `POST /api/runs`, persist the resulting run summaries/analysis in PostgreSQL, and expose them to the React dashboard. The frontend can explain and visualize queue pressure, task runtime duration, runtime health, and root causes in dev, production Docker, and local Kubernetes modes.
 
 ---
 

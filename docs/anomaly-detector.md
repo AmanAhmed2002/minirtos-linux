@@ -1,17 +1,17 @@
 # MiniRTOS-Linux AI-Style Anomaly Detector and ML Classifier
 
-**Updated:** June 5, 2026  
-**Current Phase:** Phase 30 — Full-Stack Docker Compose Hardening
+**Updated:** June 10, 2026
+**Current Phase:** Phase 33 — Local Kubernetes Deployment
 
 ---
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP that can display parsed analyzer summaries from the backend. Phase 29 added educational modules and visualizers that translate analyzer output into student-friendly explanations. Phase 30 hardened Docker Compose and Dockerfiles so the backend, dev frontend, and production frontend can run reliably through Docker.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP that can display parsed analyzer summaries from the backend. Phase 29 added educational modules and visualizers that translate analyzer output into student-friendly explanations. Phase 30 hardened Docker Compose and Dockerfiles so the backend, dev frontend, and production frontend can run reliably through Docker. Phase 31 added frontend automated tests. Phase 32 added Amplitude tracking. Phase 33 added local Kubernetes manifests for the same backend and frontend stack.
 
 The backend can run the deterministic analyzer after each simulation, parse the report, return structured JSON, persist the parsed analysis summary in PostgreSQL, and expose it to the React dashboard.
 
-The frontend can display analysis in two modes:
+The frontend can display analysis in three modes:
 
 ```text
 Dev frontend:
@@ -19,12 +19,16 @@ Dev frontend:
 
 Production frontend:
   http://localhost:3000
+
+Kubernetes frontend:
+  http://localhost:30080
 ```
 
-Both frontend modes use the same backend API:
+All frontend modes use the same backend API shape:
 
 ```text
-http://localhost:8081
+Docker/local backend: http://localhost:8081
+Kubernetes backend:   http://localhost:30081
 ```
 
 The frontend can now display:

@@ -287,8 +287,8 @@ Current limitations remain:
 - Synthetic ML labels are scenario-derived, not manually reviewed per-window labels.
 - ML metrics are not listed in this refresh because `model_metrics.json` was not included with the uploaded benchmark logs.
 - Phase 29 visualizers summarize parsed analyzer output but do not yet render a full event-by-event timeline.
-- Frontend automated tests are still recommended.
-- Phase 30 hardened local Docker workflows but did not add Kubernetes or cloud deployment yet.
+- Frontend automated tests were added in Phase 31.
+- Local Kubernetes manifests were added in Phase 33, but Kubernetes benchmark verification is not included in this report.
 
 ---
 
@@ -299,7 +299,6 @@ Recommended follow-up polish:
 1. Add or upload `priority_scheduler_runtime_logs.jsonl` and refresh the priority row.
 2. Paste or upload `reports/generated/model_metrics.json` if exact ML accuracy and confusion-matrix values should be included.
 3. Keep generated logs, datasets, metrics, `.joblib` files, frontend `node_modules`, frontend `dist`, and local `.env` files ignored by Git.
-4. Add automated frontend tests in Phase 31.
-5. Add CI Docker build smoke tests for backend and frontend-prod if not already committed.
-6. Add a frontend/API workflow screenshot showing both `localhost:5173` and `localhost:3000`.
-7. Begin Phase 31 frontend automated testing.
+4. Add CI Docker build smoke tests for backend and frontend-prod if not already committed.
+5. Add a frontend/API workflow screenshot showing `localhost:5173`, `localhost:3000`, and `localhost:30080`.
+6. Add a local Kubernetes smoke test covering `kind`, `kubectl apply`, and NodePort healthchecks.

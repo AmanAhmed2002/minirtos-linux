@@ -1,11 +1,11 @@
 # MiniRTOS-Linux / MiniRTOS Playground
 
-**Original Project:** Embedded Runtime Simulator with AI-Based Fault Detection  
-**Full-Stack Evolution:** MiniRTOS Playground — Full-Stack Embedded Systems Learning Platform  
-**Current Phase:** Phase 32 — Amplitude Analytics  
-**Updated:** June 7, 2026
+**Original Project:** Embedded Runtime Simulator with AI-Based Fault Detection
+**Full-Stack Evolution:** MiniRTOS Playground — Full-Stack Embedded Systems Learning Platform
+**Current Phase:** Phase 33 — Local Kubernetes Deployment
+**Updated:** June 10, 2026
 
-MiniRTOS-Linux is a software-only C++20 embedded runtime simulator that models periodic tasks, bounded message queues, configurable fault injection, task-crash simulation, watchdog monitoring, structured JSONL telemetry, Python-based runtime analysis, AI-style anomaly detection, synthetic training-dataset generation, a trained lightweight ML anomaly classifier, automated tests, Dockerized demos, benchmark reporting, a Java/Spring Boot backend with persistent PostgreSQL run history, and a React/TypeScript educational dashboard.
+MiniRTOS-Linux is a software-only C++20 embedded runtime simulator that models periodic tasks, bounded message queues, configurable fault injection, task-crash simulation, watchdog monitoring, structured JSONL telemetry, Python-based runtime analysis, AI-style anomaly detection, synthetic training-dataset generation, a trained lightweight ML anomaly classifier, automated tests, Dockerized demos, benchmark reporting, a Java/Spring Boot backend with persistent PostgreSQL run history, a React/TypeScript educational dashboard, and local Kubernetes manifests for the full stack.
 
 MiniRTOS Playground extends the project into a full-stack educational platform for students learning embedded systems, RTOS concepts, runtime telemetry, scheduling, queues, faults, watchdog behavior, Docker, Kubernetes, and ML-based anomaly detection.
 
@@ -13,7 +13,7 @@ MiniRTOS Playground extends the project into a full-stack educational platform f
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run storage. Phase 28 added the React Dashboard MVP, frontend Docker integration, and local frontend/backend debugging notes. Phase 29 added educational modules and visualizers to the React dashboard. Phase 30 hardened Docker Compose and Dockerfiles for backend, dev frontend, and production frontend workflows. Phase 31 added frontend automated tests using Vitest, React Testing Library, and jsdom. Phase 32 added Amplitude event tracking to the React dashboard.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run storage. Phase 28 added the React Dashboard MVP, frontend Docker integration, and local frontend/backend debugging notes. Phase 29 added educational modules and visualizers to the React dashboard. Phase 30 hardened Docker Compose and Dockerfiles for backend, dev frontend, and production frontend workflows. Phase 31 added frontend automated tests using Vitest, React Testing Library, and jsdom. Phase 32 added Amplitude event tracking to the React dashboard. Phase 33 added local Kubernetes manifests for PostgreSQL, backend, frontend, and a `kind` cluster entrypoint.
 
 Current verified backend behavior:
 
@@ -42,6 +42,7 @@ Current frontend behavior:
 - Queue pressure visualizer, task runtime timeline, fault/health explanation panel, and root-cause teaching notes work.
 - Backend CORS allows both dev and production local frontend origins.
 - Amplitude event tracking fires `dashboard_loaded`, `scenario_run_triggered`, `scenario_run_completed`, and `run_history_selected` when `VITE_AMPLITUDE_API_KEY` is set. All tracking is a no-op when the key is absent.
+- Local Kubernetes manifests exist under `k8s/` for namespace, secrets, config, PostgreSQL, backend, frontend, and `kind` port mapping.
 
 Important local decisions:
 
@@ -55,6 +56,9 @@ Important local decisions:
 - Phase 30 dev frontend uses Vite, which listens on container port `5173`.
 - Phase 32 Amplitude tracking is fully disabled (no SDK calls) when `VITE_AMPLITUDE_API_KEY` is missing — safe for local dev and CI.
 - Phase 32 does not include session replay; only structured event tracking is enabled.
+- Phase 33 backend NodePort is `http://localhost:30081` and frontend NodePort is `http://localhost:30080` when using the provided `kind` config.
+- Phase 33 backend CORS additionally allows `http://localhost:30080` and `http://127.0.0.1:30080`.
+- Phase 33 frontend Kubernetes deployment has no runtime API env injection; build the frontend image with `VITE_API_BASE_URL=http://localhost:30081` or another cluster-reachable backend URL before deploying it.
 
 ---
 
@@ -78,13 +82,14 @@ Important local decisions:
 | Analytics | Amplitude event tracking for dashboard load, run trigger, run completion, and history selection |
 | Testing | GoogleTest, CTest, pytest, Spring Boot tests, repository tests, Vitest + React Testing Library frontend component tests |
 | Docker | Runtime, analyzer, ML, backend, PostgreSQL, dev frontend, and production frontend services |
+| Kubernetes | Local namespace, Secret, ConfigMap, PostgreSQL StatefulSet, backend/frontend Deployments, Services, PVCs, and `kind` port mappings |
 
 ---
 
 ## Architecture
 
 ```text
-Docker Compose
+Docker Compose / Local Kubernetes
   ├── C++ Runtime Services
   │     -> logs/*.jsonl
   ├── Python Analyzer / ML Services
@@ -105,6 +110,15 @@ Docker Compose
   └── Nginx Production Frontend
         -> http://localhost:3000
         -> GET /health
+        -> Kubernetes NodePort: http://localhost:30080
+
+Kubernetes local manifests
+  ├── Namespace: minirtos
+  ├── PostgreSQL Service + StatefulSet + PVC
+  ├── Backend ConfigMap + Deployment + ClusterIP + NodePort
+  │     -> http://localhost:30081
+  └── Frontend Deployment + ClusterIP + NodePort
+        -> http://localhost:30080
 ```
 
 Future architecture:
@@ -115,7 +129,7 @@ React/TypeScript Frontend
   -> PostgreSQL
   -> C++ Runtime
   -> Python Analyzer + ML Predictor
-  -> Docker/Kubernetes deployment
+  -> Docker and local Kubernetes deployment
   -> Terraform/cloud infrastructure
 ```
 
@@ -138,6 +152,14 @@ minirtos-linux/
 │   ├── Dockerfile.frontend
 │   └── nginx.frontend.conf
 ├── docs/
+├── k8s/
+│   ├── 00-namespace.yml
+│   ├── 01-postgres-secret.yml
+│   ├── 02-backend-configmap.yml
+│   ├── 03-postgres-statefulset.yml
+│   ├── 04-backend-deployment.yml
+│   ├── 05-frontend-deployment.yml
+│   └── kind/kind-config.yml
 ├── logs/
 ├── models/
 ├── reports/generated/
@@ -163,6 +185,8 @@ scikit-learn
 joblib
 Docker
 Docker Compose
+kubectl
+kind
 ```
 
 Backend/database:
@@ -384,6 +408,55 @@ The production React bundle bakes in `VITE_API_BASE_URL` during `npm run build`.
 
 ---
 
+## Quick Start — Local Kubernetes with kind
+
+Build the images first:
+
+```bash
+docker build -f docker/Dockerfile.backend -t minirtos-playground-backend:phase32 .
+docker build \
+  -f docker/Dockerfile.frontend \
+  --target production \
+  --build-arg VITE_API_BASE_URL=http://localhost:30081 \
+  -t minirtos-playground-frontend:phase32 .
+```
+
+Create the cluster and load images:
+
+```bash
+kind create cluster --config k8s/kind/kind-config.yml
+kind load docker-image minirtos-playground-backend:phase32 --name minirtos
+kind load docker-image minirtos-playground-frontend:phase32 --name minirtos
+```
+
+Apply manifests:
+
+```bash
+kubectl apply -f k8s/00-namespace.yml
+kubectl apply -f k8s/01-postgres-secret.yml
+kubectl apply -f k8s/02-backend-configmap.yml
+kubectl apply -f k8s/03-postgres-statefulset.yml
+kubectl apply -f k8s/04-backend-deployment.yml
+kubectl apply -f k8s/05-frontend-deployment.yml
+```
+
+Validate:
+
+```bash
+kubectl get pods -n minirtos
+curl -i http://localhost:30081/actuator/health
+curl -i http://localhost:30080/health
+```
+
+Open:
+
+```text
+Frontend: http://localhost:30080
+Backend:  http://localhost:30081
+```
+
+---
+
 ## Backend API
 
 ### `GET /api/health`
@@ -513,6 +586,8 @@ http://localhost:5173
 http://127.0.0.1:5173
 http://localhost:3000
 http://127.0.0.1:3000
+http://localhost:30080
+http://127.0.0.1:30080
 ```
 
 Confirm production CORS:
@@ -539,7 +614,7 @@ Likely causes:
 
 1. Backend is not running on `http://localhost:8081`.
 2. Production frontend was built with the wrong `VITE_API_BASE_URL`.
-3. Backend CORS does not include `http://localhost:3000`.
+3. Backend CORS does not include the frontend origin (`http://localhost:3000` or `http://localhost:30080`).
 4. Browser is using HTTPS against the HTTP backend.
 5. Nginx production frontend is incorrectly mapped as `5173:5173`.
 
@@ -565,6 +640,7 @@ docker logs minirtos-playground-frontend-prod --tail=100
 | `docs/anomaly-detector.md` | Analyzer, anomaly, dataset, ML, backend, frontend analysis flow, and educational display |
 | `docs/performance-results.md` | Runtime/fault/benchmark results and dashboard verification notes |
 | `docs/docker-phase30-update-notes.md` | Phase 30 Docker Compose hardening notes |
+| `docs/kubernetes-phase33-update-notes.md` | Phase 33 local Kubernetes manifests, URLs, and image build assumptions |
 | `backend/README.md` | Backend-specific setup and API documentation |
 | `frontend/README.md` | Frontend-specific setup, dashboard documentation, and analytics setup |
 
@@ -573,7 +649,7 @@ docker logs minirtos-playground-frontend-prod --tail=100
 ## Next Phase
 
 ```text
-Phase 33 — TBD
+Phase 34 — TBD
 ```
 
 Completed recent phases:
@@ -589,4 +665,9 @@ Phase 32 — Amplitude Analytics
   scenario_run_completed, run_history_selected
   isAnalyticsEnabled guard — safe no-op without API key
   Session replay intentionally excluded
+
+Phase 33 — Local Kubernetes Deployment
+  k8s namespace, Secret, ConfigMap, PostgreSQL StatefulSet,
+  backend/frontend Deployments, ClusterIP + NodePort Services,
+  kind config with host ports 30080 and 30081
 ```

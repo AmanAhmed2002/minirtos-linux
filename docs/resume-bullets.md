@@ -1,13 +1,13 @@
 # MiniRTOS-Linux / MiniRTOS Playground Resume and Interview Notes
 
-**Updated:** June 5, 2026  
-**Current Phase:** Phase 30 — Full-Stack Docker Compose Hardening
+**Updated:** June 10, 2026
+**Current Phase:** Phase 33 — Local Kubernetes Deployment
 
 ---
 
-## Current Status After Phase 30
+## Current Status After Phase 33
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed backend run orchestration. Phase 27 added PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP. Phase 29 added educational modules and visualizers. Phase 30 hardened the full-stack Docker Compose workflow.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed backend run orchestration. Phase 27 added PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP. Phase 29 added educational modules and visualizers. Phase 30 hardened the full-stack Docker Compose workflow. Phase 31 added frontend automated tests. Phase 32 added frontend analytics. Phase 33 added local Kubernetes manifests and local cluster port exposure.
 
 Current project now includes:
 
@@ -32,8 +32,10 @@ Current project now includes:
 - Fault and health explanation panel.
 - Docker Compose dev frontend workflow on `localhost:5173`.
 - Docker Compose production frontend workflow on `localhost:3000` using Nginx.
+- Local Kubernetes frontend workflow on `localhost:30080`.
+- Local Kubernetes backend workflow on `localhost:30081`.
 - Backend Docker image that builds/includes the C++ runtime.
-- Backend CORS support for both dev and production frontend origins.
+- Backend CORS support for dev, production, and local Kubernetes frontend origins.
 
 Verified behavior:
 

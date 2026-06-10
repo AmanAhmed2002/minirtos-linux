@@ -335,15 +335,12 @@ CI workflow was updated to include frontend automated tests.
 
 ---
 
-## 13. Next Phase
+## 13. Later Follow-Up Areas
+
+At the time this Phase 31 note was written, likely next areas included:
 
 ```text
-Phase 32 — Kubernetes Local Deployment
-```
-
-Recommended scope:
-
-```text
+Frontend analytics
 Kubernetes manifests
 PostgreSQL deployment/service or external DB strategy
 Backend deployment/service
