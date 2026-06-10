@@ -1,0 +1,12 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minirtos-backend
+  namespace: minirtos
+spec:
+  template:
+    spec:
+      containers:
+        - name: backend
+          image: minirtos-playground-backend:phase32
+          imagePullPolicy: IfNotPresent

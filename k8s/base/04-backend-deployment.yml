@@ -68,8 +68,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: ghcr.io/amanahmed2002/minirtos-linux/backend:latest
-          imagePullPolicy: Always
+          image: minirtos-backend-placeholder:latest
           ports:
             - name: http
               containerPort: 8081

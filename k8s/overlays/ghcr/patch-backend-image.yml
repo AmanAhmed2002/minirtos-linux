@@ -1,0 +1,12 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minirtos-backend
+  namespace: minirtos
+spec:
+  template:
+    spec:
+      containers:
+        - name: backend
+          image: ghcr.io/amanahmed2002/minirtos-linux/backend:latest
+          imagePullPolicy: Always
