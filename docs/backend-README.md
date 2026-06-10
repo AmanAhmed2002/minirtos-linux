@@ -301,12 +301,16 @@ curl
 
 ## Run Backend Through Local Kubernetes
 
-Build the backend image and create the cluster:
+The backend manifest now pulls the published GHCR image:
+
+```text
+ghcr.io/amanahmed2002/minirtos-linux/backend:latest
+```
+
+Create the cluster:
 
 ```bash
-docker build -f docker/Dockerfile.backend -t minirtos-playground-backend:phase32 .
 kind create cluster --config k8s/kind/kind-config.yml
-kind load docker-image minirtos-playground-backend:phase32 --name minirtos
 ```
 
 Apply backend-related manifests:
@@ -338,9 +342,10 @@ curl -i http://localhost:30081/api/scenarios
 Important:
 
 ```text
+The backend manifest uses imagePullPolicy: Always and will pull the published image by default.
 The backend NodePort is 30081.
 The frontend NodePort is 30080.
-The frontend image must be built separately with VITE_API_BASE_URL=http://localhost:30081.
+The published frontend image is built with VITE_API_BASE_URL=http://localhost:30081.
 ```
 
 ---

@@ -410,23 +410,17 @@ The production React bundle bakes in `VITE_API_BASE_URL` during `npm run build`.
 
 ## Quick Start — Local Kubernetes with kind
 
-Build the images first:
+The committed manifests now pull published GHCR images:
 
-```bash
-docker build -f docker/Dockerfile.backend -t minirtos-playground-backend:phase32 .
-docker build \
-  -f docker/Dockerfile.frontend \
-  --target production \
-  --build-arg VITE_API_BASE_URL=http://localhost:30081 \
-  -t minirtos-playground-frontend:phase32 .
+```text
+ghcr.io/amanahmed2002/minirtos-linux/backend:latest
+ghcr.io/amanahmed2002/minirtos-linux/frontend:latest
 ```
 
-Create the cluster and load images:
+Create the cluster:
 
 ```bash
 kind create cluster --config k8s/kind/kind-config.yml
-kind load docker-image minirtos-playground-backend:phase32 --name minirtos
-kind load docker-image minirtos-playground-frontend:phase32 --name minirtos
 ```
 
 Apply manifests:
@@ -453,6 +447,14 @@ Open:
 ```text
 Frontend: http://localhost:30080
 Backend:  http://localhost:30081
+```
+
+Important:
+
+```text
+The frontend GHCR image is built with VITE_API_BASE_URL=http://localhost:30081 in CI.
+The manifests use imagePullPolicy: Always, so Kubernetes will pull the published images instead of using local tags.
+If you want to test unpublished local images in kind, retag the manifests or temporarily switch imagePullPolicy before deploying.
 ```
 
 ---

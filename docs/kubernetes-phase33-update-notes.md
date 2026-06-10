@@ -135,10 +135,10 @@ emptyDir mount at /app/logs
 The backend image referenced by the manifest is:
 
 ```text
-minirtos-playground-backend:phase32
+ghcr.io/amanahmed2002/minirtos-linux/backend:latest
 ```
 
-This means the image must exist locally and be loaded into the cluster before applying the Deployment.
+The CI workflow also publishes a commit-SHA tag for the same image namespace.
 
 ---
 
@@ -151,7 +151,7 @@ ClusterIP Service on port 80
 NodePort Service on port 30080
 readinessProbe -> /health
 livenessProbe  -> /health
-image: minirtos-playground-frontend:phase32
+image: ghcr.io/amanahmed2002/minirtos-linux/frontend:latest
 ```
 
 Important image-build constraint:
@@ -173,28 +173,10 @@ If you use another cluster exposure method, rebuild with the matching backend UR
 
 ## 6. Local kind Workflow
 
-Build images:
-
-```bash
-docker build -f docker/Dockerfile.backend -t minirtos-playground-backend:phase32 .
-docker build \
-  -f docker/Dockerfile.frontend \
-  --target production \
-  --build-arg VITE_API_BASE_URL=http://localhost:30081 \
-  -t minirtos-playground-frontend:phase32 .
-```
-
 Create cluster:
 
 ```bash
 kind create cluster --config k8s/kind/kind-config.yml
-```
-
-Load images:
-
-```bash
-kind load docker-image minirtos-playground-backend:phase32 --name minirtos
-kind load docker-image minirtos-playground-frontend:phase32 --name minirtos
 ```
 
 Apply manifests:
@@ -214,6 +196,20 @@ Verify:
 kubectl get all -n minirtos
 curl -i http://localhost:30081/actuator/health
 curl -i http://localhost:30080/health
+```
+
+Published image source:
+
+```text
+Backend:  ghcr.io/amanahmed2002/minirtos-linux/backend:latest
+Frontend: ghcr.io/amanahmed2002/minirtos-linux/frontend:latest
+```
+
+Local override note:
+
+```text
+The manifests now use imagePullPolicy: Always.
+If you need to test unpublished local images in kind, either change the manifests to local tags or temporarily switch the pull policy and image names before applying them.
 ```
 
 ---
@@ -246,7 +242,6 @@ Kubernetes frontend NodePort on 30080
 Phase 33 adds committed local manifests, but this repo state still assumes:
 
 ```text
-Images are built locally rather than pulled from a remote registry.
 Frontend API base URL is decided at image build time.
 The documented path targets kind-style local development, not production ingress.
 No HorizontalPodAutoscaler, Ingress, or TLS configuration is present yet.
@@ -282,7 +277,6 @@ Natural follow-up areas:
 
 ```text
 Ingress or gateway configuration
-Remote image registry publishing
 Helm or Kustomize overlays
 Environment-specific frontend API URLs
 Cloud infrastructure automation
