@@ -68,8 +68,8 @@ spec:
     spec:
       containers:
         - name: backend
-          image: minirtos-playground-backend:phase32
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/amanahmed2002/minirtos-linux/backend:latest
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8081

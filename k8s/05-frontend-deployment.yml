@@ -53,8 +53,8 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: minirtos-playground-frontend:phase32
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/amanahmed2002/minirtos-linux/frontend:latest
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 80
