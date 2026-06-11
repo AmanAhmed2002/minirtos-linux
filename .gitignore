@@ -67,3 +67,8 @@ frontend/.env
 *.tfstate.lock.info
 .terraform.lock.hcl
 terraform/environments/*/terraform.tfvars
+
+
+# Local installers / AWS CLI downloads
+awscliv2.zip
+aws/
