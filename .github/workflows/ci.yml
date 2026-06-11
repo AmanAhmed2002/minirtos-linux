@@ -167,7 +167,7 @@ jobs:
           target: production
           push: true
           build-args: |
-            VITE_API_BASE_URL=http://localhost:30081
+            VITE_API_BASE_URL=
           tags: |
             ${{ steps.image-vars.outputs.frontend_image }}:latest
             ${{ steps.image-vars.outputs.frontend_image }}:${{ github.sha }}
