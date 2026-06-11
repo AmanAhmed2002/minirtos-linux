@@ -26,14 +26,13 @@ The platform now includes:
 - Local Kubernetes manifests for namespace, secrets, config, StatefulSet, Deployments, Services, and PVCs.
 - Kustomize overlays for local images and GHCR-published images.
 - Terraform modules for AWS VPC and EKS infrastructure.
-- AWS EKS deployment with an EBS CSI addon, `gp3` StorageClass, and EBS-backed PostgreSQL persistence.
+- AWS EKS deployment with an EBS CSI addon, `gp3` StorageClass, EBS-backed PostgreSQL persistence, and AWS Load Balancer Controller IRSA.
 - Production Nginx frontend serving on `http://localhost:3000`.
 - Vite dev frontend serving on `http://localhost:5173`.
 - Local Kubernetes frontend NodePort serving on `http://localhost:30080`.
 - Local Kubernetes backend NodePort serving on `http://localhost:30081`.
-- AWS EKS frontend NodePort serving on `http://<worker-node-public-ip>:30080` for Phase 36.
-- AWS EKS backend NodePort serving on `http://<worker-node-public-ip>:30081` for Phase 36.
-- Backend CORS support for local dev, local production, local Kubernetes, and the Phase 36 EKS frontend origin.
+- AWS EKS ALB routing where `/` serves the frontend and `/api/*` reaches the backend.
+- Backend CORS support for local dev, local production, and local Kubernetes split-origin workflows.
 
 ---
 
@@ -113,8 +112,8 @@ AWS EKS Phase 36
   -> aws-ebs-csi-driver addon
   -> gp3 StorageClass with WaitForFirstConsumer
   -> PostgreSQL EBS-backed PVC
-  -> Backend NodePort 30081
-  -> Frontend NodePort 30080
+  -> AWS Load Balancer Controller IRSA role
+  -> ALB routes / to frontend and /api to backend
 ```
 
 ---
@@ -308,7 +307,6 @@ http://localhost:3000
 http://127.0.0.1:3000
 http://localhost:30080
 http://127.0.0.1:30080
-http://<worker-node-public-ip>:30080
 ```
 
 ---
@@ -808,7 +806,7 @@ k8s/base/03-postgres-statefulset.yml
 
 k8s/base/04-backend-deployment.yml
   -> ClusterIP Service minirtos-backend:8081
-  -> NodePort Service localhost:30081 or EKS node port 30081
+  -> NodePort Service localhost:30081 for local kind
   -> readinessProbe /actuator/health/readiness
   -> livenessProbe /actuator/health/liveness
   -> PVC-backed /app/runs
@@ -816,7 +814,7 @@ k8s/base/04-backend-deployment.yml
 
 k8s/base/05-frontend-deployment.yml
   -> ClusterIP Service minirtos-frontend:80
-  -> NodePort Service localhost:30080 or EKS node port 30080
+  -> NodePort Service localhost:30080 for local kind
   -> readinessProbe /health
   -> livenessProbe /health
 
@@ -830,7 +828,7 @@ k8s/overlays/ghcr
 Important deployment assumption:
 
 ```text
-The frontend image must be built ahead of time with `VITE_API_BASE_URL` set to a backend URL reachable from the browser, such as `http://localhost:30081` for kind or `http://<worker-node-public-ip>:30081` for the Phase 36 EKS NodePort workflow.
+The frontend image must be built ahead of time with `VITE_API_BASE_URL` set for the target routing mode: `http://localhost:30081` for local kind split-origin access, or an empty value for EKS ALB single-origin access.
 ```
 
 ---
@@ -854,6 +852,7 @@ terraform/environments/dev
        -> EKS OIDC provider
        -> EBS CSI IAM role for kube-system/ebs-csi-controller-sa
        -> aws-ebs-csi-driver addon
+       -> AWS Load Balancer Controller IAM policy and IRSA role
 ```
 
 Kubernetes deployment shape:
@@ -867,12 +866,14 @@ minirtos namespace
        -> gp3 EBS-backed PVC
   -> minirtos-backend Deployment
        -> ClusterIP 8081
-       -> NodePort 30081
+       -> local/kind NodePort 30081
+       -> ALB target for /api paths
   -> minirtos-frontend Deployment
        -> ClusterIP 80
-       -> NodePort 30080
+       -> local/kind NodePort 30080
+       -> ALB target for / paths
 ```
 
-Phase 36 intentionally uses NodePort access through public worker node IPs. This means the frontend image must be rebuilt with `VITE_API_BASE_URL=http://<worker-node-public-ip>:30081`, and backend CORS must allow `http://<worker-node-public-ip>:30080`.
+For EKS ALB routing, build the frontend with `VITE_API_BASE_URL=` so browser calls use relative `/api` paths on the same ALB origin. Local kind still uses `VITE_API_BASE_URL=http://localhost:30081` with frontend NodePort `http://localhost:30080`.
 
-Phase 37 should replace this with AWS Load Balancer Controller and ALB Ingress so the frontend and backend can share one ALB origin.
+Phase 37 should harden this path with HTTPS, DNS, immutable image tags, and remote Terraform state.

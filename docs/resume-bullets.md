@@ -34,9 +34,9 @@ Current project now includes:
 - Docker Compose production frontend workflow on `localhost:3000` using Nginx.
 - Local Kubernetes frontend workflow on `localhost:30080`.
 - Local Kubernetes backend workflow on `localhost:30081`.
-- AWS EKS workflow using Terraform, GHCR images, EBS CSI, and `gp3` persistent volumes.
+- AWS EKS workflow using Terraform, GHCR images, EBS CSI, `gp3` persistent volumes, and AWS Load Balancer Controller IAM wiring.
 - Backend Docker image that builds/includes the C++ runtime.
-- Backend CORS support for dev, production, local Kubernetes, and Phase 36 EKS frontend origins.
+- Backend CORS support for dev, production, and local Kubernetes split-origin workflows, with EKS ALB routing using one browser origin.
 
 Verified behavior:
 
@@ -62,7 +62,7 @@ Important local decisions:
 - Phase 29 visualizers use CSS and existing API response fields, with no new chart dependency.
 - Phase 30 production frontend uses Nginx and maps `3000:80`.
 - Dev frontend uses Vite and maps `5173:5173`.
-- Phase 36 uses NodePort/public worker node access for learning; Phase 37 should move to ALB Ingress.
+- Phase 36 moved EKS access toward ALB single-origin routing; Phase 37 should harden HTTPS, DNS, image tags, and Terraform state.
 
 ---
 

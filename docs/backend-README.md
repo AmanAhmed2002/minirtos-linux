@@ -2,14 +2,14 @@
 
 Java Spring Boot backend for the MiniRTOS Playground educational platform.
 
-**Updated:** June 10, 2026
-**Current Phase:** Phase 33 — Local Kubernetes Deployment
+**Updated:** June 11, 2026
+**Current Phase:** Phase 36 — AWS EKS Deployment with Terraform and ALB Routing
 
 ---
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React Dashboard MVP and required local CORS support for browser API calls. Phase 29 added frontend educational modules and visualizers without requiring backend API changes. Phase 30 hardened the Docker backend/frontend workflow. Phase 31 added frontend automated tests. Phase 32 added frontend Amplitude tracking without backend API changes. Phase 33 added local Kubernetes manifests and a Kubernetes frontend origin for browser access.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React Dashboard MVP and required local CORS support for browser API calls. Phase 29 added frontend educational modules and visualizers without requiring backend API changes. Phase 30 hardened the Docker backend/frontend workflow. Phase 31 added frontend automated tests. Phase 32 added frontend Amplitude tracking without backend API changes. Phase 33 added local Kubernetes manifests and a Kubernetes frontend origin for browser access. Phase 36 added EKS deployment support with AWS Load Balancer Controller IAM wiring and same-origin ALB routing.
 
 The backend can now:
 
@@ -24,7 +24,8 @@ The backend can now:
 - Return run history after backend restarts.
 - Serve APIs consumed by the React dev frontend running at `http://localhost:5173`.
 - Serve APIs consumed by the production Nginx frontend running at `http://localhost:3000`.
-- Serve APIs consumed by the Kubernetes frontend NodePort running at `http://localhost:30080`.
+- Serve APIs consumed by the local Kubernetes frontend NodePort running at `http://localhost:30080`.
+- Serve APIs through the EKS ALB `/api` path when frontend and backend share one ALB origin.
 - Provide the persisted analysis data used by Phase 29 learning and visualizer components.
 - Expose actuator liveness and readiness probe paths for Kubernetes.
 
@@ -41,7 +42,7 @@ Verified behavior:
 - `WARNING` is expected for `queue_overflow` because the scenario intentionally creates bounded queue pressure and dropped messages.
 - Phase 29 frontend visualizers work using existing `messageSummary`, `taskMetrics`, `runtimeHealth`, `scenarioId`, and `rootCauses` fields.
 - Phase 30 production frontend works on `http://localhost:3000` after CORS was updated.
-- Phase 33 backend CORS includes `http://localhost:30080` for the Kubernetes frontend NodePort.
+- Backend CORS includes `http://localhost:30080` for the local Kubernetes frontend NodePort. EKS ALB routing uses one browser origin and does not require a worker-node frontend CORS entry.
 
 Important implementation notes:
 
@@ -146,7 +147,7 @@ Expected file:
 backend/src/main/java/com/minirtos/playground/config/CorsConfig.java
 ```
 
-Expected allowed origins after Phase 33:
+Expected allowed origins for local split-origin workflows:
 
 ```text
 http://localhost:5173
@@ -161,7 +162,9 @@ This allows:
 
 - Vite dev frontend at `http://localhost:5173`.
 - Nginx production frontend at `http://localhost:3000`.
-- Kubernetes frontend NodePort at `http://localhost:30080`.
+- Local Kubernetes frontend NodePort at `http://localhost:30080`.
+
+EKS ALB routing should send frontend and backend requests through the same origin, with API calls using `/api` paths.
 
 Confirm CORS for production frontend:
 
@@ -301,7 +304,7 @@ curl
 
 ## Run Backend Through Local Kubernetes
 
-The backend manifest now pulls the published GHCR image:
+The local overlay uses workstation-built images loaded into kind. The GHCR overlay pulls the published backend image:
 
 ```text
 ghcr.io/amanahmed2002/minirtos-linux/backend:latest
@@ -313,14 +316,10 @@ Create the cluster:
 kind create cluster --config k8s/kind/kind-config.yml
 ```
 
-Apply backend-related manifests:
+Apply backend-related manifests through Kustomize:
 
 ```bash
-kubectl apply -f k8s/00-namespace.yml
-kubectl apply -f k8s/01-postgres-secret.yml
-kubectl apply -f k8s/02-backend-configmap.yml
-kubectl apply -f k8s/03-postgres-statefulset.yml
-kubectl apply -f k8s/04-backend-deployment.yml
+kubectl apply -k k8s/overlays/local
 ```
 
 Check backend resources:
@@ -342,10 +341,11 @@ curl -i http://localhost:30081/api/scenarios
 Important:
 
 ```text
-The backend manifest uses imagePullPolicy: Always and will pull the published image by default.
+The local overlay uses local images with `imagePullPolicy: IfNotPresent`.
 The backend NodePort is 30081.
 The frontend NodePort is 30080.
-The published frontend image is built with VITE_API_BASE_URL=http://localhost:30081.
+For local kind, build the frontend image with `VITE_API_BASE_URL=http://localhost:30081`.
+For EKS ALB, build the frontend image with `VITE_API_BASE_URL=`.
 ```
 
 ---

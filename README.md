@@ -46,8 +46,9 @@ Current frontend behavior:
 - AWS EKS deployment works through Terraform-provisioned infrastructure in `us-east-1`.
 - EKS uses two `t3.small` worker nodes, the EBS CSI addon, and a `gp3` StorageClass for dynamic EBS-backed PVCs.
 - The GHCR Kustomize overlay deploys backend and frontend images to EKS.
-- Phase 36 exposes backend and frontend through NodePort services on `30081` and `30080`.
-- The EKS frontend bundle must be rebuilt with the public backend URL through `VITE_API_BASE_URL` because Vite embeds this value at build time.
+- Phase 36 exposes local kind through NodePort services on `30081` and `30080`.
+- The EKS deployment now supports a single-origin ALB path where `/` serves the frontend and `/api/*` routes to the backend.
+- For ALB deployments, the frontend is built with an empty `VITE_API_BASE_URL` so browser API calls stay relative to the ALB origin.
 
 Important local decisions:
 
@@ -63,8 +64,8 @@ Important local decisions:
 - Phase 32 does not include session replay; only structured event tracking is enabled.
 - Local kind backend NodePort is `http://localhost:30081` and frontend NodePort is `http://localhost:30080` when using the provided `kind` config.
 - Backend CORS allows the local kind frontend origins `http://localhost:30080` and `http://127.0.0.1:30080`.
-- Phase 36 AWS NodePort access requires EC2 worker node security group inbound rules for `30080` and `30081`.
-- Phase 36 is a learning deployment, not production-grade exposure. Phase 37 should replace NodePort/public worker node access with AWS Load Balancer Controller and ALB Ingress.
+- Terraform creates the AWS Load Balancer Controller IAM policy and IRSA role, and exports the role ARN for the controller service account.
+- Phase 36 is a learning deployment. The current ALB path still uses plain HTTP and `latest` images; HTTPS, DNS, and immutable image tags remain future hardening work.
 
 ---
 
@@ -131,10 +132,13 @@ AWS EKS Phase 36
   ├── Terraform VPC + EKS in us-east-1
   ├── 2x t3.small worker nodes
   ├── EBS CSI addon with IRSA/OIDC
+  ├── AWS Load Balancer Controller IRSA role
   ├── gp3 StorageClass for PostgreSQL EBS persistence
   ├── GHCR Kustomize overlay
-  ├── Backend NodePort: http://<worker-node-public-ip>:30081
-  └── Frontend NodePort: http://<worker-node-public-ip>:30080
+  └── ALB origin
+        -> http://<alb-dns-name>/
+        -> http://<alb-dns-name>/api/scenarios
+        -> http://<alb-dns-name>/api/runs
 ```
 
 Future architecture:
@@ -471,7 +475,7 @@ Important:
 ```text
 The frontend image must be built with a backend URL that the browser can reach.
 For local kind, use `VITE_API_BASE_URL=http://localhost:30081`.
-For EKS NodePort, rebuild with `VITE_API_BASE_URL=http://<worker-node-public-ip>:30081`.
+For EKS behind one ALB origin, build with `VITE_API_BASE_URL=` so API calls use relative `/api` paths.
 ```
 
 ---
@@ -527,21 +531,22 @@ kubectl get svc -n minirtos
 kubectl get pvc -n minirtos
 ```
 
-Phase 36 uses NodePort exposure:
+Phase 36 now uses ALB-oriented exposure for EKS. Terraform creates the IAM role used by the AWS Load Balancer Controller service account:
 
-```text
-Frontend: http://<worker-node-public-ip>:30080
-Backend:  http://<worker-node-public-ip>:30081
+```bash
+terraform output aws_load_balancer_controller_role_arn
 ```
 
-Allow browser access by adding inbound EC2 worker node security group rules for your public IP:
+Install or update the AWS Load Balancer Controller with a service account annotated with that role ARN, then apply the application manifests and ingress for the cluster.
+
+With ALB routing, the public URLs share one origin:
 
 ```text
-TCP 30080 from <your-public-ip>/32
-TCP 30081 from <your-public-ip>/32
+Frontend: http://<alb-dns-name>/
+Backend:  http://<alb-dns-name>/api/health
 ```
 
-Build and push images when API origins change:
+Build and push images:
 
 ```bash
 docker build -f docker/Dockerfile.backend \
@@ -551,7 +556,7 @@ kubectl rollout restart deployment/minirtos-backend -n minirtos
 kubectl rollout status deployment/minirtos-backend -n minirtos
 
 docker build -f docker/Dockerfile.frontend \
-  --build-arg VITE_API_BASE_URL=http://<worker-node-public-ip>:30081 \
+  --build-arg VITE_API_BASE_URL= \
   -t ghcr.io/amanahmed2002/minirtos-linux/frontend:latest .
 docker push ghcr.io/amanahmed2002/minirtos-linux/frontend:latest
 kubectl rollout restart deployment/minirtos-frontend -n minirtos
@@ -561,9 +566,7 @@ kubectl rollout status deployment/minirtos-frontend -n minirtos
 Smoke test:
 
 ```bash
-./scripts/k8s_smoke_test.sh \
-  "http://<worker-node-public-ip>:30081" \
-  "http://<worker-node-public-ip>:30080"
+./scripts/k8s_smoke_test.sh "http://<alb-dns-name>"
 ```
 
 Stop AWS billing when finished:
@@ -700,7 +703,7 @@ http://localhost:5173
 
 ## CORS and Troubleshooting
 
-Allowed browser origins should include the local frontend origins and, for Phase 36 NodePort testing, the current EKS frontend origin:
+Allowed browser origins should include the local frontend origins. ALB deployments route frontend and backend through one origin, so they do not need a per-worker-node CORS entry for normal browser API calls:
 
 ```text
 http://localhost:5173
@@ -709,7 +712,6 @@ http://localhost:3000
 http://127.0.0.1:3000
 http://localhost:30080
 http://127.0.0.1:30080
-http://<worker-node-public-ip>:30080
 ```
 
 Confirm production CORS:
@@ -736,7 +738,7 @@ Likely causes:
 
 1. Backend is not running on `http://localhost:8081`.
 2. Production frontend was built with the wrong `VITE_API_BASE_URL`.
-3. Backend CORS does not include the frontend origin (`http://localhost:3000`, `http://localhost:30080`, or `http://<worker-node-public-ip>:30080`).
+3. Backend CORS does not include the frontend origin for split-origin local testing (`http://localhost:3000` or `http://localhost:30080`).
 4. Browser is using HTTPS against the HTTP backend.
 5. Nginx production frontend is incorrectly mapped as `5173:5173`.
 
@@ -772,7 +774,7 @@ docker logs minirtos-playground-frontend-prod --tail=100
 ## Next Phase
 
 ```text
-Phase 37 — Production-grade AWS exposure with AWS Load Balancer Controller and ALB Ingress
+Phase 37 — Production hardening for AWS exposure: HTTPS, DNS, immutable images, and Terraform state hardening
 ```
 
 Completed recent phases:
@@ -799,6 +801,7 @@ Phase 35 — Kubernetes Kustomize Overlays
 
 Phase 36 — AWS EKS Deployment with Terraform
   Terraform VPC/EKS, 2x t3.small nodes, EBS CSI addon,
-  gp3 StorageClass, GHCR overlay deployment, NodePort verification,
+  gp3 StorageClass, AWS Load Balancer Controller IRSA,
+  GHCR overlay deployment, ALB single-origin routing,
   and browser-tested dashboard fetch behavior
 ```

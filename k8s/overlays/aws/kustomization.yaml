@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - storageclass-gp3.yml
+  - minirtos-ingress.yml
+
+images:
+  - name: minirtos-backend-placeholder
+    newName: ghcr.io/amanahmed2002/minirtos-linux/backend
+    newTag: latest
+  - name: minirtos-frontend-placeholder
+    newName: ghcr.io/amanahmed2002/minirtos-linux/frontend
+    newTag: latest
