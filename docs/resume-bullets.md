@@ -1,13 +1,13 @@
 # MiniRTOS-Linux / MiniRTOS Playground Resume and Interview Notes
 
-**Updated:** June 10, 2026
-**Current Phase:** Phase 33 — Local Kubernetes Deployment
+**Updated:** June 11, 2026
+**Current Phase:** Phase 36 — AWS EKS Deployment with Terraform
 
 ---
 
-## Current Status After Phase 33
+## Current Status After Phase 36
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed backend run orchestration. Phase 27 added PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP. Phase 29 added educational modules and visualizers. Phase 30 hardened the full-stack Docker Compose workflow. Phase 31 added frontend automated tests. Phase 32 added frontend analytics. Phase 33 added local Kubernetes manifests and local cluster port exposure.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed backend run orchestration. Phase 27 added PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP. Phase 29 added educational modules and visualizers. Phase 30 hardened the full-stack Docker Compose workflow. Phase 31 added frontend automated tests. Phase 32 added frontend analytics. Phase 33 added local Kubernetes manifests and local cluster port exposure. Phase 35 added Kustomize overlays and GHCR image deployment. Phase 36 added Terraform-managed AWS EKS infrastructure with EBS-backed PostgreSQL persistence.
 
 Current project now includes:
 
@@ -34,8 +34,9 @@ Current project now includes:
 - Docker Compose production frontend workflow on `localhost:3000` using Nginx.
 - Local Kubernetes frontend workflow on `localhost:30080`.
 - Local Kubernetes backend workflow on `localhost:30081`.
+- AWS EKS workflow using Terraform, GHCR images, EBS CSI, and `gp3` persistent volumes.
 - Backend Docker image that builds/includes the C++ runtime.
-- Backend CORS support for dev, production, and local Kubernetes frontend origins.
+- Backend CORS support for dev, production, local Kubernetes, and Phase 36 EKS frontend origins.
 
 Verified behavior:
 
@@ -61,6 +62,7 @@ Important local decisions:
 - Phase 29 visualizers use CSS and existing API response fields, with no new chart dependency.
 - Phase 30 production frontend uses Nginx and maps `3000:80`.
 - Dev frontend uses Vite and maps `5173:5173`.
+- Phase 36 uses NodePort/public worker node access for learning; Phase 37 should move to ALB Ingress.
 
 ---
 
@@ -102,7 +104,7 @@ Built MiniRTOS Playground, a Dockerized full-stack embedded-systems learning pla
 ```text
 - Built a C++20 embedded-runtime simulator on Linux with periodic task scheduling, priority and earliest-deadline-first scheduling, bounded message queues, structured JSONL telemetry, configurable fault injection, watchdog monitoring, queue-overflow benchmarking, task-crash simulation, and simulated recovery events.
 - Developed a Python analysis/ML pipeline with deterministic health reporting, explainable time-windowed anomaly detection, synthetic dataset generation, and a lightweight Random Forest classifier trained on scenario telemetry.
-- Delivered a Dockerized full-stack MiniRTOS Playground using Spring Boot, PostgreSQL, Docker Compose, Nginx, and React/TypeScript, enabling browser-based scenario execution, persisted run history, analyzer summaries, guided learning modules, queue visualizations, task runtime visualizations, and dev/prod frontend workflows.
+- Delivered a Dockerized and Kubernetes-deployable MiniRTOS Playground using Spring Boot, PostgreSQL, Docker Compose, Nginx, React/TypeScript, Kustomize, Terraform, AWS EKS, and GHCR, enabling browser-based scenario execution, persisted run history, analyzer summaries, guided learning modules, visual telemetry explanations, and cloud deployment workflows.
 ```
 
 ---
@@ -110,7 +112,7 @@ Built MiniRTOS Playground, a Dockerized full-stack embedded-systems learning pla
 ## 5. Compact One-Bullet Version
 
 ```text
-- Built MiniRTOS Playground, a Dockerized C++20/Python/Java/React embedded-systems learning platform with RTOS-style scheduling, bounded queues, fault injection, watchdog telemetry, JSONL log analysis, synthetic ML dataset generation, lightweight anomaly classification, Spring Boot orchestration APIs, PostgreSQL run persistence, Docker Compose dev/prod workflows, and a React dashboard with educational visualizers.
+- Built MiniRTOS Playground, a Dockerized and AWS-deployable C++20/Python/Java/React embedded-systems learning platform with RTOS-style scheduling, bounded queues, fault injection, watchdog telemetry, JSONL log analysis, synthetic ML dataset generation, lightweight anomaly classification, Spring Boot orchestration APIs, PostgreSQL run persistence, Docker Compose workflows, Kustomize manifests, Terraform-managed EKS infrastructure, and a React dashboard with educational visualizers.
 ```
 
 ---
@@ -118,13 +120,13 @@ Built MiniRTOS Playground, a Dockerized full-stack embedded-systems learning pla
 ## 6. Technologies
 
 ```text
-C++20, Python, Java, Spring Boot, Maven, React, TypeScript, Vite, PostgreSQL, Flyway, Linux, CMake, Ninja, GoogleTest, CTest, pytest, Docker, Docker Compose, Nginx, JSONL, CSV, scikit-learn, joblib, Random Forest, Bash, Git, GitHub Actions
+C++20, Python, Java, Spring Boot, Maven, React, TypeScript, Vite, PostgreSQL, Flyway, Linux, CMake, Ninja, GoogleTest, CTest, pytest, Docker, Docker Compose, Nginx, Kubernetes, Kustomize, Terraform, AWS EKS, EBS CSI, GHCR, JSONL, CSV, scikit-learn, joblib, Random Forest, Bash, Git, GitHub Actions
 ```
 
 Future additions:
 
 ```text
-Kubernetes, Terraform, GHCR, CI/CD image publishing, Vitest, React Testing Library
+Kubernetes, Kustomize, Terraform, AWS, EKS, EBS CSI, GHCR, CI/CD image publishing, Vitest, React Testing Library
 ```
 
 ---

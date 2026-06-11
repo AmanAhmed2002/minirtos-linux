@@ -1,13 +1,13 @@
 # MiniRTOS-Linux / MiniRTOS Playground Architecture
 
-**Updated:** June 10, 2026
-**Current Phase:** Phase 33 — Local Kubernetes Deployment
+**Updated:** June 11, 2026
+**Current Phase:** Phase 36 — AWS EKS Deployment with Terraform
 
 ---
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP layer and frontend Docker integration. Phase 29 added educational learning modules and frontend visualizers. Phase 30 hardened the Docker Compose architecture for backend, dev frontend, and production frontend workflows. Phase 31 added frontend automated tests with Vitest and React Testing Library. Phase 32 added Amplitude event tracking to the React dashboard. Phase 33 added local Kubernetes manifests for PostgreSQL, backend, frontend, and `kind` host port exposure.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP layer and frontend Docker integration. Phase 29 added educational learning modules and frontend visualizers. Phase 30 hardened the Docker Compose architecture for backend, dev frontend, and production frontend workflows. Phase 31 added frontend automated tests with Vitest and React Testing Library. Phase 32 added Amplitude event tracking to the React dashboard. Phase 33 added local Kubernetes manifests for PostgreSQL, backend, frontend, and `kind` host port exposure. Phase 35 added Kustomize overlays for local and GHCR Kubernetes deployments. Phase 36 added Terraform-managed AWS infrastructure and verified the full stack on EKS with EBS-backed PostgreSQL persistence.
 
 The platform now includes:
 
@@ -24,12 +24,16 @@ The platform now includes:
 - Amplitude event tracking for key dashboard interactions.
 - Docker Compose services for runtime, analyzer, ML, backend, database, dev frontend, and production frontend.
 - Local Kubernetes manifests for namespace, secrets, config, StatefulSet, Deployments, Services, and PVCs.
+- Kustomize overlays for local images and GHCR-published images.
+- Terraform modules for AWS VPC and EKS infrastructure.
+- AWS EKS deployment with an EBS CSI addon, `gp3` StorageClass, and EBS-backed PostgreSQL persistence.
 - Production Nginx frontend serving on `http://localhost:3000`.
 - Vite dev frontend serving on `http://localhost:5173`.
-- Kubernetes frontend NodePort serving on `http://localhost:30080`.
-- Kubernetes backend NodePort serving on `http://localhost:30081`.
-- Backend CORS support for both dev and production frontend origins.
-- Backend CORS support for the Kubernetes frontend NodePort origin.
+- Local Kubernetes frontend NodePort serving on `http://localhost:30080`.
+- Local Kubernetes backend NodePort serving on `http://localhost:30081`.
+- AWS EKS frontend NodePort serving on `http://<worker-node-public-ip>:30080` for Phase 36.
+- AWS EKS backend NodePort serving on `http://<worker-node-public-ip>:30081` for Phase 36.
+- Backend CORS support for local dev, local production, local Kubernetes, and the Phase 36 EKS frontend origin.
 
 ---
 
@@ -99,6 +103,18 @@ Local Kubernetes
   -> Backend Deployment + ClusterIP + NodePort 30081
   -> Frontend Deployment + ClusterIP + NodePort 30080
   -> kind extraPortMappings 30080/30081
+
+AWS EKS Phase 36
+  -> Terraform VPC and EKS cluster in us-east-1
+  -> Cluster name: minirtos-eks
+  -> Kubernetes version: 1.30
+  -> Managed node group: 2x t3.small
+  -> OIDC provider + IRSA role for EBS CSI
+  -> aws-ebs-csi-driver addon
+  -> gp3 StorageClass with WaitForFirstConsumer
+  -> PostgreSQL EBS-backed PVC
+  -> Backend NodePort 30081
+  -> Frontend NodePort 30080
 ```
 
 ---
@@ -283,7 +299,7 @@ docker/Dockerfile.backend
 
 CORS is needed because the browser frontend runs on a different origin from the backend.
 
-Allowed local origins after Phase 33:
+Allowed browser origins after Phase 36:
 
 ```text
 http://localhost:5173
@@ -292,6 +308,7 @@ http://localhost:3000
 http://127.0.0.1:3000
 http://localhost:30080
 http://127.0.0.1:30080
+http://<worker-node-public-ip>:30080
 ```
 
 ---
@@ -668,7 +685,8 @@ React/TypeScript Frontend
   -> ML Predictor
   -> Docker Compose
   -> Local Kubernetes Deployments
-  -> Terraform/cloud infrastructure
+  -> AWS EKS deployment
+  -> Terraform-managed cloud infrastructure
 ```
 
 ---
@@ -765,46 +783,96 @@ If it changes, rebuild the production frontend image.
 
 ---
 
-## 16. Phase 33 Kubernetes Architecture
+## 16. Phase 33/35 Kubernetes Architecture
 
-Phase 33 adds local deployment manifests under `k8s/`.
+Phase 33 added local deployment manifests under `k8s/`. Phase 35 moved them into a Kustomize base and overlays.
 
 Kubernetes resource flow:
 
 ```text
-k8s/00-namespace.yml
+k8s/base/00-namespace.yml
   -> Namespace minirtos
 
-k8s/01-postgres-secret.yml
+k8s/base/01-postgres-secret.yml
   -> DB name/user/password
 
-k8s/02-backend-configmap.yml
+k8s/base/02-backend-configmap.yml
   -> datasource URL
   -> runtime/analyzer paths
   -> logs/runs directories
 
-k8s/03-postgres-statefulset.yml
+k8s/base/03-postgres-statefulset.yml
   -> ClusterIP Service minirtos-postgres:5432
   -> PVC minirtos-postgres-data
   -> StatefulSet minirtos-postgres
 
-k8s/04-backend-deployment.yml
+k8s/base/04-backend-deployment.yml
   -> ClusterIP Service minirtos-backend:8081
-  -> NodePort Service localhost:30081
+  -> NodePort Service localhost:30081 or EKS node port 30081
   -> readinessProbe /actuator/health/readiness
   -> livenessProbe /actuator/health/liveness
   -> PVC-backed /app/runs
   -> emptyDir /app/logs
 
-k8s/05-frontend-deployment.yml
+k8s/base/05-frontend-deployment.yml
   -> ClusterIP Service minirtos-frontend:80
-  -> NodePort Service localhost:30080
+  -> NodePort Service localhost:30080 or EKS node port 30080
   -> readinessProbe /health
   -> livenessProbe /health
+
+k8s/overlays/local
+  -> local image tags and IfNotPresent pull policy
+
+k8s/overlays/ghcr
+  -> ghcr.io/amanahmed2002/minirtos-linux images
 ```
 
 Important deployment assumption:
 
 ```text
-The frontend image must be built ahead of time with VITE_API_BASE_URL set to a backend URL reachable from the browser, such as http://localhost:30081 for the provided kind workflow.
+The frontend image must be built ahead of time with `VITE_API_BASE_URL` set to a backend URL reachable from the browser, such as `http://localhost:30081` for kind or `http://<worker-node-public-ip>:30081` for the Phase 36 EKS NodePort workflow.
 ```
+
+---
+
+## 17. Phase 36 AWS EKS Architecture
+
+Terraform provisions the AWS infrastructure under `terraform/environments/dev` using reusable `vpc` and `eks` modules.
+
+Infrastructure shape:
+
+```text
+terraform/environments/dev
+  -> module.vpc
+       -> VPC
+       -> Internet Gateway
+       -> public subnets in us-east-1a/us-east-1b
+       -> public route table
+  -> module.eks
+       -> EKS control plane: minirtos-eks
+       -> managed node group: 2x t3.small
+       -> EKS OIDC provider
+       -> EBS CSI IAM role for kube-system/ebs-csi-controller-sa
+       -> aws-ebs-csi-driver addon
+```
+
+Kubernetes deployment shape:
+
+```text
+kubectl apply -f k8s/aws/storageclass-gp3.yml
+kubectl apply -k k8s/overlays/ghcr
+
+minirtos namespace
+  -> minirtos-postgres StatefulSet
+       -> gp3 EBS-backed PVC
+  -> minirtos-backend Deployment
+       -> ClusterIP 8081
+       -> NodePort 30081
+  -> minirtos-frontend Deployment
+       -> ClusterIP 80
+       -> NodePort 30080
+```
+
+Phase 36 intentionally uses NodePort access through public worker node IPs. This means the frontend image must be rebuilt with `VITE_API_BASE_URL=http://<worker-node-public-ip>:30081`, and backend CORS must allow `http://<worker-node-public-ip>:30080`.
+
+Phase 37 should replace this with AWS Load Balancer Controller and ALB Ingress so the frontend and backend can share one ALB origin.
