@@ -20,6 +20,9 @@ metadata:
   namespace: minirtos
   labels:
     app.kubernetes.io/name: minirtos-backend
+  annotations:
+    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health/readiness
+    alb.ingress.kubernetes.io/success-codes: "200"
 spec:
   type: ClusterIP
   selector:

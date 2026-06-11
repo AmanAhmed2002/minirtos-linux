@@ -20,8 +20,10 @@ Completed outcomes:
 - Kubernetes uses a default `gp3` StorageClass backed by `ebs.csi.aws.com`.
 - PostgreSQL runs in-cluster with EBS-backed persistence.
 - Backend and frontend deploy from GHCR images through the `k8s/overlays/ghcr` Kustomize overlay.
-- Frontend and backend are exposed with NodePort services for this phase.
-- The dashboard loads in a browser and fetches backend data after rebuilding the frontend with the AWS backend URL.
+- Terraform creates the AWS Load Balancer Controller IAM policy and IRSA role.
+- Terraform exports the controller role ARN, VPC ID, and public subnet IDs needed during controller and ALB setup.
+- Frontend and backend still keep local/kind NodePort services, but EKS browser traffic is intended to flow through one ALB origin.
+- The dashboard loads in a browser and fetches backend data with relative `/api` calls when the frontend is built with an empty `VITE_API_BASE_URL`.
 
 ---
 
@@ -43,7 +45,8 @@ terraform/
     └── eks/
         ├── main.tf
         ├── variables.tf
-        └── outputs.tf
+        ├── outputs.tf
+        └── aws-load-balancer-controller-policy.json
 ```
 
 Important dev values:
@@ -73,6 +76,7 @@ Terraform creates:
 - EKS OIDC provider.
 - EBS CSI IAM role and policy attachment.
 - `aws-ebs-csi-driver` EKS addon.
+- AWS Load Balancer Controller IAM policy and IRSA role for `system:serviceaccount:kube-system:aws-load-balancer-controller`.
 
 ---
 
@@ -162,9 +166,10 @@ parameters:
 
 ## Deploy the Application
 
-Deploy the GHCR overlay:
+Deploy the GHCR overlay and the EKS storage class:
 
 ```bash
+kubectl apply -f k8s/aws/storageclass-gp3.yml
 kubectl apply -k k8s/overlays/ghcr
 ```
 
@@ -197,44 +202,41 @@ minirtos-frontend-nodeport   NodePort    80:30080
 
 ---
 
-## NodePort Access
+## ALB Access
 
-Phase 36 uses public worker node IPs and NodePort services:
-
-```text
-Frontend: http://<worker-node-public-ip>:30080
-Backend:  http://<worker-node-public-ip>:30081
-```
-
-During Phase 36 testing the working node IP was:
-
-```text
-44.204.251.13
-```
-
-That IP is not stable. Re-check node IPs after recreating infrastructure:
+Phase 36 now prepares the EKS cluster for AWS Load Balancer Controller and ALB Ingress. Terraform creates the controller IAM policy and IRSA role; use the exported role ARN when installing the controller service account:
 
 ```bash
-kubectl get nodes -o wide
+cd terraform/environments/dev
+terraform output aws_load_balancer_controller_role_arn
+terraform output vpc_id
+terraform output public_subnet_ids
 ```
 
-AWS EC2 worker node security groups must allow inbound access from your public IP:
+After the AWS Load Balancer Controller is installed and the application ingress is applied, use the ALB DNS name as the public app URL:
 
 ```text
-TCP 30080 from <your-public-ip>/32
-TCP 30081 from <your-public-ip>/32
+Frontend: http://<alb-dns-name>/
+Backend:  http://<alb-dns-name>/api/health
 ```
 
-`/32` means exactly one public IP address.
+The frontend and backend share the same browser origin through the ALB, so normal dashboard API calls do not require an EKS worker-node frontend origin in backend CORS.
+
+The local kind workflow still uses NodePort services:
+
+```text
+Frontend: http://localhost:30080
+Backend:  http://localhost:30081
+```
 
 ---
 
 ## Verify the Deployment
 
-Backend health:
+Backend health through the ALB `/api` path:
 
 ```bash
-curl http://<worker-node-public-ip>:30081/actuator/health
+curl http://<alb-dns-name>/api/health
 ```
 
 Expected:
@@ -246,54 +248,47 @@ Expected:
 Scenarios API:
 
 ```bash
-curl http://<worker-node-public-ip>:30081/api/scenarios
+curl http://<alb-dns-name>/api/scenarios
 ```
 
 Frontend health:
 
 ```bash
-curl http://<worker-node-public-ip>:30080/health
+curl http://<alb-dns-name>/health
 ```
 
 Smoke test:
 
 ```bash
-./scripts/k8s_smoke_test.sh \
-  "http://<worker-node-public-ip>:30081" \
-  "http://<worker-node-public-ip>:30080"
+./scripts/k8s_smoke_test.sh "http://<alb-dns-name>"
 ```
 
-The smoke test checks backend health, readiness, liveness, `/api/health`, `/api/scenarios`, frontend `/health`, CORS preflight, and `/api/runs`. Browser testing is still required because `/health` does not prove that the React dashboard bundle is calling the correct backend URL.
+The smoke test now accepts one app URL and checks frontend root, frontend `/health`, backend `/api/health`, `/api/scenarios`, and `/api/runs` through the same ALB origin. Browser testing is still required because `/health` does not prove that the React dashboard bundle is using relative `/api` calls.
 
 ---
 
 ## CORS and Frontend API URL
 
-The backend CORS config must allow the frontend origin used by the browser. For NodePort EKS testing, this means:
-
-```text
-http://<worker-node-public-ip>:30080
-```
-
-CORS preflight test:
+For ALB deployments, frontend and backend traffic share one origin. Build the frontend with an empty API base URL so `frontend/src/api/minirtosApi.ts` sends requests to relative `/api` paths:
 
 ```bash
-curl -i -X OPTIONS "http://<worker-node-public-ip>:30081/api/scenarios" \
-  -H "Origin: http://<worker-node-public-ip>:30080" \
-  -H "Access-Control-Request-Method: GET" \
-  -H "Access-Control-Request-Headers: content-type"
+docker build -f docker/Dockerfile.frontend \
+  --build-arg VITE_API_BASE_URL= \
+  -t ghcr.io/amanahmed2002/minirtos-linux/frontend:latest .
 ```
 
-Expected successful headers include:
+Local split-origin workflows still require backend CORS entries for the browser frontend origins:
 
 ```text
-HTTP/1.1 200
-Access-Control-Allow-Origin: http://<worker-node-public-ip>:30080
-Access-Control-Allow-Methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
-Access-Control-Allow-Headers: content-type
+http://localhost:5173
+http://127.0.0.1:5173
+http://localhost:3000
+http://127.0.0.1:3000
+http://localhost:30080
+http://127.0.0.1:30080
 ```
 
-The frontend is a Vite static bundle. `VITE_API_BASE_URL` is baked into the JavaScript at build time. If the deployed frontend is still calling `localhost:30081`, rebuild and push it with the AWS backend URL.
+If the deployed EKS frontend is still calling `localhost:30081` or a worker-node IP, rebuild and push it with `VITE_API_BASE_URL=` for ALB routing.
 
 ---
 
@@ -313,7 +308,7 @@ Frontend:
 
 ```bash
 docker build -f docker/Dockerfile.frontend \
-  --build-arg VITE_API_BASE_URL=http://<worker-node-public-ip>:30081 \
+  --build-arg VITE_API_BASE_URL= \
   -t ghcr.io/amanahmed2002/minirtos-linux/frontend:latest .
 docker push ghcr.io/amanahmed2002/minirtos-linux/frontend:latest
 kubectl rollout restart deployment/minirtos-frontend -n minirtos
@@ -361,9 +356,9 @@ kubectl rollout restart deployment/minirtos-backend -n minirtos
 kubectl rollout status deployment/minirtos-backend -n minirtos
 ```
 
-Browser timeouts on `30080` or `30081` usually mean the EC2 worker node security group does not allow those NodePort ports from your public IP.
+Browser timeouts to the ALB usually mean the AWS Load Balancer Controller has not reconciled the Ingress, the ALB security group/listener is not ready, or the target groups are unhealthy.
 
-Dashboard `Failed to fetch` can be either CORS or a frontend bundle built with the wrong `VITE_API_BASE_URL`. Check the browser network tab for the actual URL being called.
+Dashboard `Failed to fetch` usually means the frontend bundle was built with the wrong `VITE_API_BASE_URL`, the `/api` ALB rule is missing, or the backend target group is unhealthy. Check the browser network tab for the actual URL being called.
 
 ---
 
@@ -422,28 +417,24 @@ terraform destroy
 
 Phase 36 is intentionally not production-grade:
 
-- Uses NodePort and public EC2 worker node IPs.
-- Frontend API URL is hardcoded into the build.
-- Backend CORS includes concrete frontend origins.
-- Worker node public IPs can change when infrastructure is recreated.
-- NodePort security group rules were edited manually during testing.
+- ALB is currently HTTP-only.
+- Frontend API URL is still baked into the build, but ALB deployments use an empty value for relative `/api` calls.
+- Backend CORS still includes concrete local frontend origins for split-origin dev and kind workflows.
 - PostgreSQL runs in-cluster instead of RDS.
 - Terraform state is local.
-- No HTTPS, DNS, ALB, or Ingress.
+- No HTTPS or DNS yet.
 - Images still use `latest` instead of immutable version tags.
 
 ---
 
 ## Phase 37 Direction
 
-Phase 37 should replace NodePort access with AWS Load Balancer Controller and ALB Ingress.
-
-Recommended target:
+Phase 37 should harden the ALB deployment for production-style access:
 
 ```text
-http://<alb-dns-name>/
-http://<alb-dns-name>/api/scenarios
-http://<alb-dns-name>/api/runs
+https://<dns-name>/
+https://<dns-name>/api/scenarios
+https://<dns-name>/api/runs
 ```
 
-That would allow the frontend and backend to share one browser origin, reducing CORS issues and removing hardcoded public worker node IPs from the frontend build.
+Recommended next work includes ACM-managed TLS, Route 53 DNS, immutable image tags, remote Terraform state, and a tracked Kubernetes Ingress overlay if the deployment manifest is kept in this repository.

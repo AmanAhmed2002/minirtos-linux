@@ -22,6 +22,9 @@ metadata:
   namespace: minirtos
   labels:
     app.kubernetes.io/name: minirtos-frontend
+  annotations:
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/success-codes: "200"
 spec:
   type: NodePort
   selector:

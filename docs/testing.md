@@ -1,13 +1,13 @@
 # MiniRTOS-Linux / MiniRTOS Playground Testing Guide
 
-**Updated:** June 10, 2026
-**Current Phase:** Phase 33 — Local Kubernetes Deployment
+**Updated:** June 11, 2026
+**Current Phase:** Phase 36 — AWS EKS Deployment with Terraform and ALB Routing
 
 ---
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP and frontend Docker integration. Phase 29 added educational modules and CSS-based frontend visualizers. Phase 30 hardened Docker Compose and Dockerfiles for backend, dev frontend, and production frontend workflows. Phase 31 added frontend automated tests with Vitest and React Testing Library. Phase 32 added Amplitude event tracking with a safe `isAnalyticsEnabled` guard. Phase 33 added local Kubernetes manifests and `kind` host port mappings.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP and frontend Docker integration. Phase 29 added educational modules and CSS-based frontend visualizers. Phase 30 hardened Docker Compose and Dockerfiles for backend, dev frontend, and production frontend workflows. Phase 31 added frontend automated tests with Vitest and React Testing Library. Phase 32 added Amplitude event tracking with a safe `isAnalyticsEnabled` guard. Phase 33 added local Kubernetes manifests and `kind` host port mappings. Phase 35 added Kustomize overlays. Phase 36 added Terraform-managed EKS, EBS-backed PostgreSQL storage, AWS Load Balancer Controller IAM wiring, and ALB-oriented smoke testing.
 
 Verified Phase 27 behavior:
 
@@ -74,7 +74,8 @@ Verified Phase 33 repo state:
 - `k8s/` contains committed manifests for namespace, secret, config, PostgreSQL, backend, frontend, and `kind`.
 - Backend CORS now includes `http://localhost:30080` and `http://127.0.0.1:30080`.
 - Backend actuator probe paths are present in `application.yml` for readiness and liveness probes.
-- Frontend Kubernetes deployment depends on a production image built with `VITE_API_BASE_URL=http://localhost:30081` or another browser-reachable backend URL.
+- Local kind frontend deployment depends on a production image built with `VITE_API_BASE_URL=http://localhost:30081`.
+- EKS ALB frontend deployment depends on a production image built with `VITE_API_BASE_URL=` so API calls use relative `/api` paths.
 
 ---
 
@@ -680,7 +681,7 @@ Passing tests prove:
 - PostgreSQL can store and return run metadata and parsed analysis summaries.
 - Frontend TypeScript compiles.
 - Frontend production build succeeds.
-- Frontend can consume backend APIs when backend, CORS, and `VITE_API_BASE_URL` are configured correctly.
+- Frontend can consume backend APIs when backend, CORS, routing, and `VITE_API_BASE_URL` are configured correctly.
 - Phase 29 educational and visualizer components render using existing API data.
 - Phase 30 dev and production Docker frontend workflows both work.
 - Phase 31 frontend component tests pass (Vitest + React Testing Library, 16 tests).

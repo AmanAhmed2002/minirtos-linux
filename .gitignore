@@ -71,4 +71,4 @@ terraform/environments/*/terraform.tfvars
 
 # Local installers / AWS CLI downloads
 awscliv2.zip
-aws/
+/aws/
