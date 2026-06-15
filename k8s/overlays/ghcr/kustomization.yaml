@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - ../../base
+  - nodeports.yml
 
 patches:
   - path: patch-backend-image.yml

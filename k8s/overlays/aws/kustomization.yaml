@@ -9,7 +9,7 @@ resources:
 images:
   - name: minirtos-backend-placeholder
     newName: ghcr.io/amanahmed2002/minirtos-linux/backend
-    newTag: latest
+    newTag: aws-release-placeholder
   - name: minirtos-frontend-placeholder
     newName: ghcr.io/amanahmed2002/minirtos-linux/frontend
-    newTag: latest
+    newTag: aws-release-placeholder

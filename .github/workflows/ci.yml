@@ -92,13 +92,16 @@ jobs:
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
         with:
-          version: "v1.30.0"
+          version: "v1.34.0"
 
       - name: Validate local overlay
         run: kubectl kustomize k8s/overlays/local
-
+      
       - name: Validate ghcr overlay
         run: kubectl kustomize k8s/overlays/ghcr
+      
+      - name: Validate aws overlay
+        run: kubectl kustomize k8s/overlays/aws 
   terraform-validate:
     name: Validate Terraform
     runs-on: ubuntu-24.04

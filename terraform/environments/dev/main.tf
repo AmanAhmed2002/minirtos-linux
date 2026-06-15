@@ -29,4 +29,5 @@ module "eks" {
   vpc_id             = module.vpc.vpc_id
   subnet_ids         = module.vpc.public_subnet_ids
   node_instance_type = "t3.small"
+  kubernetes_version = var.kubernetes_version
 }

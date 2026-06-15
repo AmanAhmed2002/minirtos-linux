@@ -12,3 +12,9 @@ variable "availability_zones" {
   description = "AZs to deploy into (must be in the chosen region)"
   type        = list(string)
 }
+
+variable "kubernetes_version" {
+  description = "Kubernetes version for the EKS cluster"
+  type        = string
+  default     = "1.34"
+}
