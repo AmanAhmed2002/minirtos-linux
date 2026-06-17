@@ -1,13 +1,13 @@
 # MiniRTOS-Linux / MiniRTOS Playground Architecture
 
 **Updated:** June 17, 2026
-**Current Phase:** Phase 38 — AWS release hardening and EKS version upgrade
+**Current Phase:** Phase 39 — HTTPS, custom domain, and production deployment polish
 
 ---
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 added PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP layer and frontend Docker integration. Phase 29 added educational learning modules and frontend visualizers. Phase 30 hardened the Docker Compose architecture for backend, dev frontend, and production frontend workflows. Phase 31 added frontend automated tests with Vitest and React Testing Library. Phase 32 added Amplitude event tracking to the React dashboard. Phase 33 added local Kubernetes manifests for PostgreSQL, backend, frontend, and `kind` host port exposure. Phase 35 added Kustomize overlays for local and GHCR Kubernetes deployments. Phase 36 added Terraform-managed AWS infrastructure and verified the full stack on EKS with EBS-backed PostgreSQL persistence. Phase 37 added AWS ALB single-origin routing. Phase 38 updated the EKS target to `1.34`, kept NodePorts out of the shared base and AWS overlay, and added immutable Git SHA deployment for AWS.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 added PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP layer and frontend Docker integration. Phase 29 added educational learning modules and frontend visualizers. Phase 30 hardened the Docker Compose architecture for backend, dev frontend, and production frontend workflows. Phase 31 added frontend automated tests with Vitest and React Testing Library. Phase 32 added Amplitude event tracking to the React dashboard. Phase 33 added local Kubernetes manifests for PostgreSQL, backend, frontend, and `kind` host port exposure. Phase 35 added Kustomize overlays for local and GHCR Kubernetes deployments. Phase 36 added Terraform-managed AWS infrastructure and verified the full stack on EKS with EBS-backed PostgreSQL persistence. Phase 37 added AWS ALB single-origin routing. Phase 38 updated the EKS target to `1.34`, kept NodePorts out of the shared base and AWS overlay, and added immutable Git SHA deployment for AWS. Phase 39 added HTTPS at `https://app.minirtos.biz` with GoDaddy DNS, AWS ACM, ALB HTTPS listeners, and HTTP-to-HTTPS redirect.
 
 The platform now includes:
 
@@ -31,7 +31,7 @@ The platform now includes:
 - Vite dev frontend serving on `http://localhost:5173`.
 - Local Kubernetes frontend NodePort serving on `http://localhost:30080`.
 - Local Kubernetes backend NodePort serving on `http://localhost:30081`.
-- AWS EKS ALB routing where `/` serves the frontend and `/api/*` reaches the backend.
+- AWS EKS ALB HTTPS routing where `/` serves the frontend and `/api/*` reaches the backend through `https://app.minirtos.biz`.
 - Backend CORS support for local dev, local production, and local Kubernetes split-origin workflows.
 
 ---
@@ -103,7 +103,7 @@ Local Kubernetes
   -> Frontend Deployment + ClusterIP + overlay-owned NodePort 30080
   -> kind extraPortMappings 30080/30081
 
-AWS EKS Phase 38
+AWS EKS Phase 39
   -> Terraform VPC and EKS cluster in us-east-1
   -> Cluster name: minirtos-eks
   -> Kubernetes version: 1.34
@@ -114,7 +114,11 @@ AWS EKS Phase 38
   -> PostgreSQL EBS-backed PVC
   -> AWS Load Balancer Controller IRSA role
   -> AWS overlay uses ClusterIP services only
-  -> ALB routes / to frontend and /api to backend
+  -> GoDaddy DNS points app.minirtos.biz to the ALB
+  -> AWS ACM certificate for app.minirtos.biz is validated in us-east-1
+  -> ALB listens on HTTP 80 and HTTPS 443
+  -> HTTP redirects to HTTPS
+  -> HTTPS routes / to frontend and /api to backend
   -> AWS images are deployed by Git SHA tag
 ```
 
@@ -828,7 +832,10 @@ k8s/overlays/ghcr
 
 k8s/overlays/aws
   -> gp3 StorageClass
-  -> ALB Ingress
+  -> ALB Ingress with HTTP and HTTPS listeners
+  -> ACM certificate ARN annotation
+  -> ssl-redirect annotation
+  -> host rule for app.minirtos.biz
   -> GHCR image names with an aws-release-placeholder tag
   -> no NodePort services
 ```
@@ -841,7 +848,7 @@ The frontend image must be built ahead of time with `VITE_API_BASE_URL` set for 
 
 ---
 
-## 17. Phase 36/37/38 AWS EKS Architecture
+## 17. Phase 36/37/38/39 AWS EKS Architecture
 
 Terraform provisions the AWS infrastructure under `terraform/environments/dev` using reusable `vpc` and `eks` modules.
 
@@ -879,8 +886,12 @@ minirtos namespace
   -> minirtos-frontend Deployment
        -> ClusterIP 80
        -> ALB target for / paths
+  -> minirtos-ingress
+       -> host app.minirtos.biz
+       -> HTTP 80 listener with redirect to HTTPS
+       -> HTTPS 443 listener with ACM certificate
 ```
 
-For EKS ALB routing, build the frontend with `VITE_API_BASE_URL=` so browser calls use relative `/api` paths on the same ALB origin. Local kind still uses `VITE_API_BASE_URL=http://localhost:30081` with frontend NodePort `http://localhost:30080`.
+For EKS ALB/HTTPS routing, build the frontend with `VITE_API_BASE_URL=` so browser calls use relative `/api` paths on the same `https://app.minirtos.biz` origin. Local kind still uses `VITE_API_BASE_URL=http://localhost:30081` with frontend NodePort `http://localhost:30080`.
 
-Phase 39 should harden this path with HTTPS, a custom domain, deployment automation, and remote Terraform state.
+Phase 39 completed the custom-domain and HTTPS portion of this path. Phase 40 should focus on manual GitHub Actions deployment with AWS OIDC, remote Terraform state with S3/DynamoDB, cost guardrails, and production operations polish.

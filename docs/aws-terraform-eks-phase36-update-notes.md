@@ -8,7 +8,7 @@
 
 ## What Changed
 
-Phase 36 moved MiniRTOS Playground from local Kubernetes to an AWS EKS learning deployment managed by Terraform. Phase 37 added ALB single-origin routing. Phase 38 updated the EKS target version, removed NodePorts from the shared base, and switched AWS deployment to immutable Git SHA image tags.
+Phase 36 moved MiniRTOS Playground from local Kubernetes to an AWS EKS learning deployment managed by Terraform. Phase 37 added ALB single-origin routing. Phase 38 updated the EKS target version, removed NodePorts from the shared base, and switched AWS deployment to immutable Git SHA image tags. Phase 39 added HTTPS custom-domain access at `https://app.minirtos.biz`.
 
 Completed outcomes:
 
@@ -215,12 +215,15 @@ terraform output vpc_id
 terraform output public_subnet_ids
 ```
 
-After the AWS Load Balancer Controller is installed and the application ingress is applied, use the ALB DNS name as the public app URL:
+After the AWS Load Balancer Controller is installed and the application ingress is applied, Phase 39 uses the custom domain as the public app URL:
 
 ```text
-Frontend: http://<alb-dns-name>/
-Backend:  http://<alb-dns-name>/api/health
+Frontend: https://app.minirtos.biz/
+Backend:  https://app.minirtos.biz/api/health
+HTTP:     http://app.minirtos.biz redirects to HTTPS
 ```
+
+The GoDaddy DNS zone points the `app` CNAME to the ALB hostname. AWS ACM provides the TLS certificate for `app.minirtos.biz` in `us-east-1`.
 
 The frontend and backend share the same browser origin through the ALB, so normal dashboard API calls do not require an EKS worker-node frontend origin in backend CORS.
 
@@ -238,7 +241,7 @@ Backend:  http://localhost:30081
 Backend health through the ALB `/api` path:
 
 ```bash
-curl http://<alb-dns-name>/api/health
+curl https://app.minirtos.biz/api/health
 ```
 
 Expected:
@@ -250,22 +253,22 @@ Expected:
 Scenarios API:
 
 ```bash
-curl http://<alb-dns-name>/api/scenarios
+curl https://app.minirtos.biz/api/scenarios
 ```
 
 Frontend health:
 
 ```bash
-curl http://<alb-dns-name>/health
+curl https://app.minirtos.biz/health
 ```
 
 Smoke test:
 
 ```bash
-./scripts/k8s_smoke_test.sh "http://<alb-dns-name>"
+./scripts/k8s_smoke_test.sh "https://app.minirtos.biz"
 ```
 
-The smoke test now accepts one app URL, auto-adds `http://` when needed, follows redirects, and checks frontend root, backend `/api/health`, and `/api/runs` through the same ALB origin. Browser testing is still required because a lightweight smoke test does not prove the full scenario/run/analysis workflow.
+The smoke test accepts one app URL, follows redirects, and checks frontend root, backend `/api/health`, and `/api/runs` through the same HTTPS custom-domain origin. Browser testing is still required because a lightweight smoke test does not prove the full scenario/run/analysis workflow.
 
 ---
 
@@ -407,26 +410,26 @@ terraform destroy
 
 ## Current Limitations
 
-Phase 38 is still intentionally not production-grade:
+Phase 39 is still intentionally not production-grade:
 
-- ALB is currently HTTP-only.
 - Frontend API URL is still baked into the build, but ALB deployments use an empty value for relative `/api` calls.
 - Backend CORS still includes concrete local frontend origins for split-origin dev and kind workflows.
 - PostgreSQL runs in-cluster instead of RDS.
 - Terraform state is local.
-- No HTTPS or DNS yet.
+- HTTPS and `app.minirtos.biz` are configured, but DNS and ACM certificate management are still manual.
 - AWS image deployment now uses immutable Git SHA tags, but there is not yet an automated GitHub Actions deployment workflow.
 
 ---
 
-## Phase 39 Direction
+## Phase 40 Direction
 
-Phase 39 should harden the ALB deployment for production-style access:
+Phase 40 should harden deployment operations:
 
 ```text
-https://<dns-name>/
-https://<dns-name>/api/scenarios
-https://<dns-name>/api/runs
+Manual GitHub Actions deployment with workflow_dispatch
+AWS OIDC without static AWS keys
+Remote Terraform state with S3 and DynamoDB locking
+Cost guardrails and safe apply/destroy documentation
 ```
 
-Recommended next work includes ACM-managed TLS, Route 53 DNS or another custom domain flow, remote Terraform state, AWS Load Balancer Controller automation, and a deployment workflow that can promote a selected Git SHA without running local commands.
+ACM and GoDaddy DNS are currently manual. A future phase can decide whether to keep them manual or manage them with Terraform/ExternalDNS.

@@ -219,19 +219,18 @@ Look for healthy cluster components such as `aws-node`, `coredns`, `kube-proxy`,
 
 ## Remaining Production Gaps
 
-Phase 38 is still not a full production setup:
+Phase 38 closed the release-hardening gaps it targeted. Phase 39 later completed the HTTPS and custom-domain gap with `https://app.minirtos.biz`. Remaining gaps after Phase 39 are:
 
-- ALB is HTTP-only.
-- No custom domain or ACM certificate is configured yet.
 - AWS Load Balancer Controller installation is still a manual Helm step.
 - Terraform state is local.
 - PostgreSQL still runs in-cluster instead of RDS.
 - Secrets are Kubernetes Secrets, not AWS Secrets Manager or External Secrets.
 - AWS deployment is manual from a local machine, not GitOps or GitHub Actions deployment.
+- DNS and ACM certificate management are manual.
 - Cost control still depends on manual teardown.
 
 Recommended next phase:
 
 ```text
-Phase 39 — HTTPS, Custom Domain, and Production Deployment Polish
+Phase 40 — Deployment Automation, Remote Terraform State, and Production Ops Polish
 ```
