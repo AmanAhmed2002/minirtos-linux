@@ -1,14 +1,14 @@
 # Phase 36 AWS EKS and Terraform Update Notes
 
-**Updated:** June 11, 2026
+**Updated:** June 17, 2026
 **Project:** MiniRTOS Playground
-**Phase:** Phase 36 — AWS EKS Deployment with Terraform
+**Phase:** Phase 36 with Phase 37/38 AWS deployment hardening notes
 
 ---
 
 ## What Changed
 
-Phase 36 moved MiniRTOS Playground from local Kubernetes to an AWS EKS learning deployment managed by Terraform.
+Phase 36 moved MiniRTOS Playground from local Kubernetes to an AWS EKS learning deployment managed by Terraform. Phase 37 added ALB single-origin routing. Phase 38 updated the EKS target version, removed NodePorts from the shared base, and switched AWS deployment to immutable Git SHA image tags.
 
 Completed outcomes:
 
@@ -19,10 +19,11 @@ Completed outcomes:
 - Terraform creates the EKS OIDC provider and an IRSA IAM role for `system:serviceaccount:kube-system:ebs-csi-controller-sa`.
 - Kubernetes uses a default `gp3` StorageClass backed by `ebs.csi.aws.com`.
 - PostgreSQL runs in-cluster with EBS-backed persistence.
-- Backend and frontend deploy from GHCR images through the `k8s/overlays/ghcr` Kustomize overlay.
+- Backend and frontend deploy to AWS from GHCR images through the `k8s/overlays/aws` Kustomize overlay.
+- AWS deployments use immutable Git SHA image tags rendered by `scripts/deploy_aws_release.sh`; local GHCR testing can still use `k8s/overlays/ghcr` and `latest`.
 - Terraform creates the AWS Load Balancer Controller IAM policy and IRSA role.
 - Terraform exports the controller role ARN, VPC ID, and public subnet IDs needed during controller and ALB setup.
-- Frontend and backend still keep local/kind NodePort services, but EKS browser traffic is intended to flow through one ALB origin.
+- Local and GHCR overlays keep NodePort services for kind/browser testing, but the shared base and AWS overlay are ClusterIP-only. EKS browser traffic flows through one ALB origin.
 - The dashboard loads in a browser and fetches backend data with relative `/api` calls when the frontend is built with an empty `VITE_API_BASE_URL`.
 
 ---
@@ -55,13 +56,14 @@ Important dev values:
 aws_region         = "us-east-1"
 project_name       = "minirtos"
 availability_zones = ["us-east-1a", "us-east-1b"]
+kubernetes_version = "1.34"
 ```
 
 Important EKS values:
 
 ```text
 Cluster name: minirtos-eks
-Kubernetes version: 1.30
+Kubernetes version: 1.34
 Worker nodes: 2x t3.small
 StorageClass: gp3
 EBS CSI provisioner: ebs.csi.aws.com
@@ -166,11 +168,11 @@ parameters:
 
 ## Deploy the Application
 
-Deploy the GHCR overlay and the EKS storage class:
+Deploy the AWS release overlay with an immutable Git SHA image tag after CI has published the matching GHCR images:
 
 ```bash
-kubectl apply -f k8s/aws/storageclass-gp3.yml
-kubectl apply -k k8s/overlays/ghcr
+RELEASE_SHA="$(git rev-parse HEAD)"
+./scripts/deploy_aws_release.sh "$RELEASE_SHA"
 ```
 
 Check status:
@@ -190,15 +192,15 @@ minirtos-backend-...       1/1 Running
 minirtos-frontend-...      1/1 Running
 ```
 
-Expected services:
+Expected AWS services:
 
 ```text
 minirtos-postgres            ClusterIP   5432
 minirtos-backend             ClusterIP   8081
-minirtos-backend-nodeport    NodePort    8081:30081
 minirtos-frontend            ClusterIP   80
-minirtos-frontend-nodeport   NodePort    80:30080
 ```
+
+NodePort services should appear only in the local and GHCR overlays, not in AWS.
 
 ---
 
@@ -263,7 +265,7 @@ Smoke test:
 ./scripts/k8s_smoke_test.sh "http://<alb-dns-name>"
 ```
 
-The smoke test now accepts one app URL and checks frontend root, frontend `/health`, backend `/api/health`, `/api/scenarios`, and `/api/runs` through the same ALB origin. Browser testing is still required because `/health` does not prove that the React dashboard bundle is using relative `/api` calls.
+The smoke test now accepts one app URL, auto-adds `http://` when needed, follows redirects, and checks frontend root, backend `/api/health`, and `/api/runs` through the same ALB origin. Browser testing is still required because a lightweight smoke test does not prove the full scenario/run/analysis workflow.
 
 ---
 
@@ -274,7 +276,7 @@ For ALB deployments, frontend and backend traffic share one origin. Build the fr
 ```bash
 docker build -f docker/Dockerfile.frontend \
   --build-arg VITE_API_BASE_URL= \
-  -t ghcr.io/amanahmed2002/minirtos-linux/frontend:latest .
+  -t ghcr.io/amanahmed2002/minirtos-linux/frontend:<git-sha> .
 ```
 
 Local split-origin workflows still require backend CORS entries for the browser frontend origins:
@@ -288,32 +290,20 @@ http://localhost:30080
 http://127.0.0.1:30080
 ```
 
-If the deployed EKS frontend is still calling `localhost:30081` or a worker-node IP, rebuild and push it with `VITE_API_BASE_URL=` for ALB routing.
+If the deployed EKS frontend is still calling `localhost:30081` or a worker-node IP, rebuild and push it with `VITE_API_BASE_URL=` for ALB routing, then redeploy with the matching Git SHA tag.
 
 ---
 
-## Rebuild and Push Images
+## Release Images
 
-Backend:
-
-```bash
-docker build -f docker/Dockerfile.backend \
-  -t ghcr.io/amanahmed2002/minirtos-linux/backend:latest .
-docker push ghcr.io/amanahmed2002/minirtos-linux/backend:latest
-kubectl rollout restart deployment/minirtos-backend -n minirtos
-kubectl rollout status deployment/minirtos-backend -n minirtos
-```
-
-Frontend:
+GitHub Actions publishes backend and frontend images as both `latest` and `<github.sha>`. AWS should consume the immutable SHA tag, not `latest`:
 
 ```bash
-docker build -f docker/Dockerfile.frontend \
-  --build-arg VITE_API_BASE_URL= \
-  -t ghcr.io/amanahmed2002/minirtos-linux/frontend:latest .
-docker push ghcr.io/amanahmed2002/minirtos-linux/frontend:latest
-kubectl rollout restart deployment/minirtos-frontend -n minirtos
-kubectl rollout status deployment/minirtos-frontend -n minirtos
+RELEASE_SHA="$(git rev-parse HEAD)"
+./scripts/deploy_aws_release.sh "$RELEASE_SHA"
 ```
+
+The `latest` tag remains useful for local GHCR overlay testing, but it should not be the AWS release contract.
 
 If the old frontend pod keeps serving stale assets, force pod replacement:
 
@@ -330,7 +320,9 @@ PVCs stuck `Pending` usually means the StorageClass or EBS CSI driver is missing
 ```bash
 kubectl get storageclass
 kubectl get pvc -n minirtos
-aws eks describe-addon --cluster-name minirtos-eks --addon-name aws-ebs-csi-driver
+aws eks list-addons --region us-east-1 --cluster-name minirtos-eks
+aws eks describe-addon --region us-east-1 --cluster-name minirtos-eks --addon-name aws-ebs-csi-driver
+kubectl get pods -n kube-system
 ```
 
 EBS CSI addon `DEGRADED` with `InsufficientNumberOfReplicas` can be caused by undersized nodes or missing IRSA. Phase 36 fixed this with OIDC, a dedicated EBS CSI IAM role, `AmazonEBSCSIDriverPolicy`, and `t3.small` nodes.
@@ -415,7 +407,7 @@ terraform destroy
 
 ## Current Limitations
 
-Phase 36 is intentionally not production-grade:
+Phase 38 is still intentionally not production-grade:
 
 - ALB is currently HTTP-only.
 - Frontend API URL is still baked into the build, but ALB deployments use an empty value for relative `/api` calls.
@@ -423,13 +415,13 @@ Phase 36 is intentionally not production-grade:
 - PostgreSQL runs in-cluster instead of RDS.
 - Terraform state is local.
 - No HTTPS or DNS yet.
-- Images still use `latest` instead of immutable version tags.
+- AWS image deployment now uses immutable Git SHA tags, but there is not yet an automated GitHub Actions deployment workflow.
 
 ---
 
-## Phase 37 Direction
+## Phase 39 Direction
 
-Phase 37 should harden the ALB deployment for production-style access:
+Phase 39 should harden the ALB deployment for production-style access:
 
 ```text
 https://<dns-name>/
@@ -437,4 +429,4 @@ https://<dns-name>/api/scenarios
 https://<dns-name>/api/runs
 ```
 
-Recommended next work includes ACM-managed TLS, Route 53 DNS, immutable image tags, remote Terraform state, and a tracked Kubernetes Ingress overlay if the deployment manifest is kept in this repository.
+Recommended next work includes ACM-managed TLS, Route 53 DNS or another custom domain flow, remote Terraform state, AWS Load Balancer Controller automation, and a deployment workflow that can promote a selected Git SHA without running local commands.

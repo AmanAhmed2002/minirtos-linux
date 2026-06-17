@@ -2,14 +2,14 @@
 
 React + TypeScript dashboard for MiniRTOS Playground.
 
-**Updated:** June 11, 2026
-**Current Phase:** Phase 36 — AWS EKS Deployment with Terraform and ALB Routing
+**Updated:** June 17, 2026
+**Current Phase:** Phase 38 — AWS release hardening and EKS version upgrade
 
 ---
 
 ## Current Phase
 
-Phase 28 added the React Dashboard MVP. Phase 29 expanded it into a more student-friendly learning dashboard by adding guided scenario education and CSS-based visualizations. Phase 30 added separate dev and production Docker frontend workflows. Phase 31 added frontend automated tests with Vitest and React Testing Library. Phase 32 added Amplitude event tracking with a safe `isAnalyticsEnabled` guard. Phase 33 added a local Kubernetes deployment path using frontend and backend NodePorts. Phase 36 added EKS deployment support where the frontend can use relative `/api` calls behind one ALB origin.
+Phase 28 added the React Dashboard MVP. Phase 29 expanded it into a more student-friendly learning dashboard by adding guided scenario education and CSS-based visualizations. Phase 30 added separate dev and production Docker frontend workflows. Phase 31 added frontend automated tests with Vitest and React Testing Library. Phase 32 added Amplitude event tracking with a safe `isAnalyticsEnabled` guard. Phase 33 added a local Kubernetes deployment path using frontend and backend NodePorts. Phase 36 added EKS deployment support where the frontend can use relative `/api` calls behind one ALB origin. Phase 38 kept that frontend behavior and hardened AWS deployment by using immutable Git SHA image tags instead of `latest`.
 
 The frontend can now run in three supported modes:
 
@@ -53,6 +53,7 @@ EKS frontend:
 - Track key user actions via Amplitude when `VITE_AMPLITUDE_API_KEY` is configured: `dashboard_loaded`, `scenario_run_triggered`, `scenario_run_completed`, and `run_history_selected`. All tracking is a no-op without the key — safe for local dev, CI, and test environments.
 - Run through a local Kubernetes NodePort on `http://localhost:30080` when the production image is built for the local Kubernetes backend URL.
 - Run behind an EKS ALB with relative `/api` calls when the production image is built with an empty `VITE_API_BASE_URL`.
+- Deploy to AWS by Git SHA tag through `scripts/deploy_aws_release.sh`; local GHCR testing can still use `latest`.
 
 ---
 
@@ -112,6 +113,8 @@ For the EKS ALB workflow, build the production image with:
 ```env
 VITE_API_BASE_URL=
 ```
+
+In AWS, use the image tag produced for the selected Git commit rather than relying on `latest`.
 
 The Kubernetes manifests do not override this value at runtime.
 

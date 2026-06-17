@@ -1,13 +1,13 @@
 # MiniRTOS-Linux / MiniRTOS Playground Resume and Interview Notes
 
-**Updated:** June 11, 2026
-**Current Phase:** Phase 36 — AWS EKS Deployment with Terraform
+**Updated:** June 17, 2026
+**Current Phase:** Phase 38 — Production Deployment Hardening, Release Versioning, and EKS Version Upgrade
 
 ---
 
-## Current Status After Phase 36
+## Current Status After Phase 38
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed backend run orchestration. Phase 27 added PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP. Phase 29 added educational modules and visualizers. Phase 30 hardened the full-stack Docker Compose workflow. Phase 31 added frontend automated tests. Phase 32 added frontend analytics. Phase 33 added local Kubernetes manifests and local cluster port exposure. Phase 35 added Kustomize overlays and GHCR image deployment. Phase 36 added Terraform-managed AWS EKS infrastructure with EBS-backed PostgreSQL persistence.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed backend run orchestration. Phase 27 added PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP. Phase 29 added educational modules and visualizers. Phase 30 hardened the full-stack Docker Compose workflow. Phase 31 added frontend automated tests. Phase 32 added frontend analytics. Phase 33 added local Kubernetes manifests and local cluster port exposure. Phase 35 added Kustomize overlays and GHCR image deployment. Phase 36 added Terraform-managed AWS EKS infrastructure with EBS-backed PostgreSQL persistence. Phase 37 added AWS ALB single-origin routing. Phase 38 updated the EKS target to `1.34`, moved NodePorts into local/GHCR overlays only, and added immutable Git SHA AWS deployment.
 
 Current project now includes:
 
@@ -62,7 +62,7 @@ Important local decisions:
 - Phase 29 visualizers use CSS and existing API response fields, with no new chart dependency.
 - Phase 30 production frontend uses Nginx and maps `3000:80`.
 - Dev frontend uses Vite and maps `5173:5173`.
-- Phase 36 moved EKS access toward ALB single-origin routing; Phase 37 should harden HTTPS, DNS, image tags, and Terraform state.
+- Phase 38 hardened AWS release deployment with Git SHA image tags; Phase 39 should add HTTPS, a custom domain, deployment automation, and Terraform state hardening.
 
 ---
 

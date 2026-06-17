@@ -2,14 +2,14 @@
 
 Java Spring Boot backend for the MiniRTOS Playground educational platform.
 
-**Updated:** June 11, 2026
-**Current Phase:** Phase 36 — AWS EKS Deployment with Terraform and ALB Routing
+**Updated:** June 17, 2026
+**Current Phase:** Phase 38 — AWS release hardening and EKS version upgrade
 
 ---
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React Dashboard MVP and required local CORS support for browser API calls. Phase 29 added frontend educational modules and visualizers without requiring backend API changes. Phase 30 hardened the Docker backend/frontend workflow. Phase 31 added frontend automated tests. Phase 32 added frontend Amplitude tracking without backend API changes. Phase 33 added local Kubernetes manifests and a Kubernetes frontend origin for browser access. Phase 36 added EKS deployment support with AWS Load Balancer Controller IAM wiring and same-origin ALB routing.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React Dashboard MVP and required local CORS support for browser API calls. Phase 29 added frontend educational modules and visualizers without requiring backend API changes. Phase 30 hardened the Docker backend/frontend workflow. Phase 31 added frontend automated tests. Phase 32 added frontend Amplitude tracking without backend API changes. Phase 33 added local Kubernetes manifests and a Kubernetes frontend origin for browser access. Phase 36 added EKS deployment support with AWS Load Balancer Controller IAM wiring and same-origin ALB routing. Phase 38 kept backend behavior unchanged while hardening the AWS overlay to ClusterIP-only services and immutable Git SHA image deployment.
 
 The backend can now:
 
@@ -42,7 +42,7 @@ Verified behavior:
 - `WARNING` is expected for `queue_overflow` because the scenario intentionally creates bounded queue pressure and dropped messages.
 - Phase 29 frontend visualizers work using existing `messageSummary`, `taskMetrics`, `runtimeHealth`, `scenarioId`, and `rootCauses` fields.
 - Phase 30 production frontend works on `http://localhost:3000` after CORS was updated.
-- Backend CORS includes `http://localhost:30080` for the local Kubernetes frontend NodePort. EKS ALB routing uses one browser origin and does not require a worker-node frontend CORS entry.
+- Backend CORS includes `http://localhost:30080` for the local Kubernetes frontend NodePort. EKS ALB routing uses one browser origin and does not require a worker-node frontend CORS entry or NodePort service.
 
 Important implementation notes:
 
@@ -304,7 +304,7 @@ curl
 
 ## Run Backend Through Local Kubernetes
 
-The local overlay uses workstation-built images loaded into kind. The GHCR overlay pulls the published backend image:
+The local overlay uses workstation-built images loaded into kind. The GHCR overlay pulls the published backend image for local GHCR-image testing:
 
 ```text
 ghcr.io/amanahmed2002/minirtos-linux/backend:latest
@@ -345,7 +345,7 @@ The local overlay uses local images with `imagePullPolicy: IfNotPresent`.
 The backend NodePort is 30081.
 The frontend NodePort is 30080.
 For local kind, build the frontend image with `VITE_API_BASE_URL=http://localhost:30081`.
-For EKS ALB, build the frontend image with `VITE_API_BASE_URL=`.
+For EKS ALB, build the frontend image with `VITE_API_BASE_URL=` and deploy the matching Git SHA tag with `scripts/deploy_aws_release.sh`.
 ```
 
 ---

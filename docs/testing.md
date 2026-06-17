@@ -1,13 +1,13 @@
 # MiniRTOS-Linux / MiniRTOS Playground Testing Guide
 
-**Updated:** June 11, 2026
-**Current Phase:** Phase 36 — AWS EKS Deployment with Terraform and ALB Routing
+**Updated:** June 17, 2026
+**Current Phase:** Phase 38 — AWS release hardening and EKS version upgrade
 
 ---
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP and frontend Docker integration. Phase 29 added educational modules and CSS-based frontend visualizers. Phase 30 hardened Docker Compose and Dockerfiles for backend, dev frontend, and production frontend workflows. Phase 31 added frontend automated tests with Vitest and React Testing Library. Phase 32 added Amplitude event tracking with a safe `isAnalyticsEnabled` guard. Phase 33 added local Kubernetes manifests and `kind` host port mappings. Phase 35 added Kustomize overlays. Phase 36 added Terraform-managed EKS, EBS-backed PostgreSQL storage, AWS Load Balancer Controller IAM wiring, and ALB-oriented smoke testing.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP and frontend Docker integration. Phase 29 added educational modules and CSS-based frontend visualizers. Phase 30 hardened Docker Compose and Dockerfiles for backend, dev frontend, and production frontend workflows. Phase 31 added frontend automated tests with Vitest and React Testing Library. Phase 32 added Amplitude event tracking with a safe `isAnalyticsEnabled` guard. Phase 33 added local Kubernetes manifests and `kind` host port mappings. Phase 35 added Kustomize overlays. Phase 36 added Terraform-managed EKS, EBS-backed PostgreSQL storage, AWS Load Balancer Controller IAM wiring, and ALB-oriented smoke testing. Phase 38 updated the EKS target to `1.34`, moved NodePorts into local/GHCR overlays only, added AWS SHA-tag deployment, and simplified the smoke test to lightweight production health checks.
 
 Verified Phase 27 behavior:
 
@@ -75,7 +75,7 @@ Verified Phase 33 repo state:
 - Backend CORS now includes `http://localhost:30080` and `http://127.0.0.1:30080`.
 - Backend actuator probe paths are present in `application.yml` for readiness and liveness probes.
 - Local kind frontend deployment depends on a production image built with `VITE_API_BASE_URL=http://localhost:30081`.
-- EKS ALB frontend deployment depends on a production image built with `VITE_API_BASE_URL=` so API calls use relative `/api` paths.
+- EKS ALB frontend deployment depends on a production image built with `VITE_API_BASE_URL=` so API calls use relative `/api` paths. AWS deployment should use the Git SHA image tag rendered by `scripts/deploy_aws_release.sh`, not `latest`.
 
 ---
 
@@ -664,7 +664,35 @@ python3 ai-analyzer/ml/predict_model.py \
 
 ---
 
-## 13. What Passing Tests Prove
+## 13. Kubernetes and AWS Smoke Checks
+
+Render all Kustomize overlays before applying them:
+
+```bash
+kubectl kustomize k8s/overlays/local
+kubectl kustomize k8s/overlays/ghcr
+kubectl kustomize k8s/overlays/aws
+```
+
+Expected exposure behavior:
+
+```text
+local overlay: NodePort services are present
+ghcr overlay: NodePort services are present for local GHCR-image testing
+aws overlay: no NodePort services; ClusterIP services plus ALB Ingress only
+```
+
+For an AWS ALB deployment, run the lightweight smoke check after `scripts/deploy_aws_release.sh` and ALB reconciliation complete:
+
+```bash
+./scripts/k8s_smoke_test.sh "http://<alb-dns-name>"
+```
+
+The smoke script checks frontend root, `/api/health`, and `/api/runs`. It is a deployment-health helper, not a full integration test. Final AWS verification should still include the browser flow: dashboard load, scenario execution, run history, and analysis loading through the ALB origin.
+
+---
+
+## 14. What Passing Tests Prove
 
 Passing tests prove:
 
@@ -689,7 +717,7 @@ Passing tests prove:
 
 ---
 
-## 14. What Tests Do Not Prove Yet
+## 15. What Tests Do Not Prove Yet
 
 Current tests do not fully prove:
 
@@ -701,11 +729,11 @@ Current tests do not fully prove:
 - End-to-end local Kubernetes deployment from these manifests has not been re-run in this documentation pass.
 - Full async job execution under concurrent users.
 - Production-grade database migrations beyond the initial schema.
-- Cloud deployment readiness.
+- Full production cloud readiness; the AWS smoke test is intentionally lightweight and does not replace browser scenario/run/analysis verification.
 
 ---
 
-## 15. Recommended CI Updates
+## 16. Recommended CI Updates
 
 Future GitHub Actions improvements:
 

@@ -1,6 +1,6 @@
 # Phase 35 Kubernetes Kustomize Overlays Update Notes
 
-**Updated:** June 11, 2026
+**Updated:** June 17, 2026
 **Project:** MiniRTOS Playground
 **Phase:** Phase 35 — Kubernetes Deployment Hardening with Kustomize
 
@@ -38,7 +38,7 @@ k8s/
 
 ## Local Overlay
 
-Use the local overlay when testing images built on the workstation and loaded into kind. This workflow still uses split frontend/backend NodePort origins.
+Use the local overlay when testing images built on the workstation and loaded into kind. This workflow still uses split frontend/backend NodePort origins owned by `k8s/overlays/local/nodeports.yml`.
 
 Typical flow:
 
@@ -71,7 +71,7 @@ ghcr.io/amanahmed2002/minirtos-linux/backend:latest
 ghcr.io/amanahmed2002/minirtos-linux/frontend:latest
 ```
 
-Phase 36 EKS uses the same published GHCR images. For ALB deployments, build the frontend image with `VITE_API_BASE_URL=` so `/api` calls stay on the ALB origin.
+Phase 38 AWS deployment uses the AWS overlay with immutable Git SHA GHCR image tags rendered by `scripts/deploy_aws_release.sh`. For ALB deployments, build the frontend image with `VITE_API_BASE_URL=` so `/api` calls stay on the ALB origin. The GHCR overlay keeps NodePorts only for local GHCR-image testing.
 
 ---
 
@@ -82,6 +82,7 @@ Render manifests locally:
 ```bash
 kubectl kustomize k8s/overlays/local
 kubectl kustomize k8s/overlays/ghcr
+kubectl kustomize k8s/overlays/aws
 ```
 
 Deploy and verify:
@@ -96,8 +97,9 @@ kubectl get svc -n minirtos
 
 ## Related Phase 36 AWS EKS Notes
 
-Phase 35 introduced the Kustomize overlay structure used by Phase 36. For AWS/EKS setup, Terraform commands, `gp3` StorageClass setup, AWS Load Balancer Controller IAM wiring, ALB access, image rebuild commands, smoke tests, troubleshooting, and teardown, see:
+Phase 35 introduced the Kustomize overlay structure used by later AWS phases. For AWS/EKS setup, Terraform commands, `gp3` StorageClass setup, AWS Load Balancer Controller IAM wiring, ALB access, immutable image deployment, smoke tests, troubleshooting, and teardown, see:
 
 ```text
 docs/aws-terraform-eks-phase36-update-notes.md
+docs/phase38-release-hardening-update-notes.md
 ```
