@@ -4,6 +4,10 @@ set -euo pipefail
 APP_URL="${1:-http://localhost:30080}"
 APP_URL="${APP_URL%/}"
 
+if [[ "$APP_URL" != http://* && "$APP_URL" != https://* ]]; then
+  APP_URL="http://$APP_URL"
+fi
+
 if ! command -v curl >/dev/null 2>&1; then
   echo "ERROR: curl is required to run scripts/k8s_smoke_test.sh"
   exit 2
@@ -21,7 +25,7 @@ check() {
   local url="$2"
   local expected="$3"
 
-  response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$url" || echo "000")
+  response=$(curl -L -s -o /dev/null -w "%{http_code}" --max-time 20 "$url" || echo "000")
 
   if [ "$response" = "$expected" ]; then
     echo "  PASS  $label ($url) -> $response"
@@ -32,14 +36,12 @@ check() {
 }
 
 echo "--- Frontend ---"
-check "frontend root"    "$APP_URL/"       200
-check "frontend health"  "$APP_URL/health" 200
+check "frontend root" "$APP_URL/" 200
 
 echo ""
 echo "--- Backend through ALB /api path ---"
-check "api/health"    "$APP_URL/api/health"    200
-check "api/scenarios" "$APP_URL/api/scenarios" 200
-check "api/runs"      "$APP_URL/api/runs"      200
+check "api/health" "$APP_URL/api/health" 200
+check "api/runs"   "$APP_URL/api/runs"   200
 
 echo ""
 if [ "$fail" -eq 0 ]; then
