@@ -124,7 +124,23 @@ jobs:
           chmod +x scripts/deploy_aws_release.sh
           ./scripts/deploy_aws_release.sh "${{ inputs.image_sha }}"
 
+      - name: Wait before smoke test
+        run: sleep 30
+
       - name: Smoke test HTTPS app
         run: |
           chmod +x scripts/k8s_smoke_test.sh
           ./scripts/k8s_smoke_test.sh "${{ vars.APP_URL }}"
+
+      - name: Show diagnostics on failure
+        if: failure()
+        run: |
+          echo "=== Kubernetes diagnostics ==="
+          kubectl get nodes || true
+          kubectl get pods -n minirtos -o wide || true
+          kubectl get svc -n minirtos || true
+          kubectl get ingress -n minirtos || true
+          kubectl describe ingress minirtos-ingress -n minirtos || true
+          kubectl describe deployment minirtos-backend -n minirtos || true
+          kubectl logs deployment/minirtos-backend -n minirtos --tail=200 || true
+          kubectl get events -n minirtos --sort-by=.lastTimestamp | tail -50 || true
