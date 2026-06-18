@@ -1,0 +1,130 @@
+name: Deploy AWS
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_sha:
+        description: "Git SHA image tag to deploy. Must already exist in GHCR."
+        required: true
+        type: string
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+      confirm:
+        description: "Type deploy to confirm this AWS deployment"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+
+concurrency:
+  group: minirtos-aws-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy MiniRTOS to AWS EKS
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Validate confirmation
+        run: |
+          if [[ "${{ inputs.confirm }}" != "deploy" ]]; then
+            echo "ERROR: You must type 'deploy' in the confirm input."
+            exit 1
+          fi
+
+      - name: Validate branch
+        run: |
+          if [[ "${GITHUB_REF}" != "refs/heads/main" ]]; then
+            echo "ERROR: AWS deployment workflow must be run from main."
+            echo "Current ref: ${GITHUB_REF}"
+            exit 1
+          fi
+
+      - name: Validate image SHA input
+        run: |
+          IMAGE_SHA="${{ inputs.image_sha }}"
+
+          if [[ -z "$IMAGE_SHA" ]]; then
+            echo "ERROR: image_sha is required."
+            exit 1
+          fi
+
+          if [[ "$IMAGE_SHA" == "latest" ]]; then
+            echo "ERROR: Do not deploy latest to AWS. Use a concrete Git SHA."
+            exit 1
+          fi
+
+          if ! [[ "$IMAGE_SHA" =~ ^[0-9a-f]{7,40}$ ]]; then
+            echo "ERROR: image_sha must look like a Git SHA."
+            echo "Received: $IMAGE_SHA"
+            exit 1
+          fi
+
+          echo "Deploying image SHA: $IMAGE_SHA"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Compute GHCR image names
+        id: image-vars
+        run: |
+          IMAGE_NAMESPACE="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "backend_image=${IMAGE_NAMESPACE}/backend:${{ inputs.image_sha }}" >> "$GITHUB_OUTPUT"
+          echo "frontend_image=${IMAGE_NAMESPACE}/frontend:${{ inputs.image_sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io \
+            -u "${{ github.actor }}" \
+            --password-stdin
+
+      - name: Verify backend image exists
+        run: |
+          docker manifest inspect "${{ steps.image-vars.outputs.backend_image }}" >/dev/null
+
+      - name: Verify frontend image exists
+        run: |
+          docker manifest inspect "${{ steps.image-vars.outputs.frontend_image }}" >/dev/null
+
+      - name: Configure AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: "v1.34.0"
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region "${{ vars.AWS_REGION }}" \
+            --name "${{ vars.EKS_CLUSTER_NAME }}"
+
+      - name: Show current cluster state
+        run: |
+          kubectl get nodes
+          kubectl get pods -n minirtos
+          kubectl get svc -n minirtos
+          kubectl get ingress -n minirtos
+
+      - name: Deploy selected image SHA
+        run: |
+          chmod +x scripts/deploy_aws_release.sh
+          ./scripts/deploy_aws_release.sh "${{ inputs.image_sha }}"
+
+      - name: Smoke test HTTPS app
+        run: |
+          chmod +x scripts/k8s_smoke_test.sh
+          ./scripts/k8s_smoke_test.sh "${{ vars.APP_URL }}"
