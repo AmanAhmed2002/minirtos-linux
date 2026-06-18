@@ -73,6 +73,20 @@ data "aws_iam_policy_document" "github_actions_deploy_permissions" {
       module.eks.cluster_arn
     ]
   }
+
+  statement {
+    sid    = "AllowReadRdsMasterSecret"
+    effect = "Allow"
+
+    actions = [
+      "secretsmanager:DescribeSecret",
+      "secretsmanager:GetSecretValue"
+    ]
+
+    resources = [
+      module.rds.master_user_secret_arn
+    ]
+  }
 }
 
 resource "aws_iam_policy" "github_actions_deploy" {

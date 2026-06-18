@@ -45,7 +45,7 @@ resource "aws_eks_cluster" "main" {
     subnet_ids         = var.subnet_ids
     security_group_ids = [aws_security_group.eks_cluster.id]
   }
-  
+
   lifecycle {
     prevent_destroy = true
   }
@@ -101,7 +101,7 @@ resource "aws_eks_node_group" "main" {
   node_role_arn   = aws_iam_role.eks_nodes.arn
   subnet_ids      = var.subnet_ids
   instance_types  = [var.node_instance_type]
-  version = var.kubernetes_version
+  version         = var.kubernetes_version
 
   scaling_config {
     desired_size = var.node_desired_count

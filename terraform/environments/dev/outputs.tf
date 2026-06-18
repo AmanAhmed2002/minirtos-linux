@@ -38,3 +38,33 @@ output "github_actions_deploy_role_arn" {
   description = "IAM role ARN assumed by GitHub Actions through OIDC for AWS EKS deployments"
   value       = aws_iam_role.github_actions_deploy.arn
 }
+
+output "rds_endpoint" {
+  description = "RDS PostgreSQL endpoint."
+  value       = module.rds.endpoint
+}
+
+output "rds_port" {
+  description = "RDS PostgreSQL port."
+  value       = module.rds.port
+}
+
+output "rds_database_name" {
+  description = "RDS database name."
+  value       = module.rds.database_name
+}
+
+output "rds_username" {
+  description = "RDS username."
+  value       = module.rds.username
+}
+
+output "rds_security_group_id" {
+  description = "RDS security group ID."
+  value       = module.rds.security_group_id
+}
+
+output "rds_master_user_secret_arn" {
+  description = "Secrets Manager ARN for the RDS master password."
+  value       = module.rds.master_user_secret_arn
+}

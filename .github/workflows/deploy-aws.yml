@@ -118,8 +118,14 @@ jobs:
           kubectl get pods -n minirtos
           kubectl get svc -n minirtos
           kubectl get ingress -n minirtos
-
+      
       - name: Deploy selected image SHA
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          RDS_ENDPOINT: ${{ vars.RDS_ENDPOINT }}
+          RDS_DATABASE_NAME: ${{ vars.RDS_DATABASE_NAME }}
+          RDS_USERNAME: ${{ vars.RDS_USERNAME }}
+          RDS_SECRET_ARN: ${{ vars.RDS_SECRET_ARN }}
         run: |
           chmod +x scripts/deploy_aws_release.sh
           ./scripts/deploy_aws_release.sh "${{ inputs.image_sha }}"

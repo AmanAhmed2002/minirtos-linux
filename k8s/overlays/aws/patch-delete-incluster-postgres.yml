@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: minirtos-postgres
+  namespace: minirtos
+$patch: delete
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minirtos-postgres
+  namespace: minirtos
+$patch: delete
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minirtos-postgres-data
+  namespace: minirtos
+$patch: delete
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: minirtos-postgres-secret
+  namespace: minirtos
+$patch: delete

@@ -6,6 +6,10 @@ resources:
   - storageclass-gp3.yml
   - minirtos-ingress.yml
 
+patches:
+  - path: patch-delete-incluster-postgres.yml
+  - path: patch-backend-rds-configmap.yml
+
 images:
   - name: minirtos-backend-placeholder
     newName: ghcr.io/amanahmed2002/minirtos-linux/backend
