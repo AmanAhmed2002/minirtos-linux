@@ -23,3 +23,7 @@ output "aws_load_balancer_controller_role_arn" {
   description = "IAM role ARN for AWS Load Balancer Controller"
   value       = aws_iam_role.aws_load_balancer_controller.arn
 }
+output "cluster_arn" {
+  description = "EKS cluster ARN"
+  value       = aws_eks_cluster.main.arn
+}

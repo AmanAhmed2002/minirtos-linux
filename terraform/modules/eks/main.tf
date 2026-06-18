@@ -45,6 +45,10 @@ resource "aws_eks_cluster" "main" {
     subnet_ids         = var.subnet_ids
     security_group_ids = [aws_security_group.eks_cluster.id]
   }
+  
+  lifecycle {
+    prevent_destroy = true
+  }
 
   depends_on = [
     aws_iam_role_policy_attachment.eks_cluster_policy

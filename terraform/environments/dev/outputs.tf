@@ -34,3 +34,7 @@ output "aws_load_balancer_controller_role_arn" {
 }
 
 
+output "github_actions_deploy_role_arn" {
+  description = "IAM role ARN assumed by GitHub Actions through OIDC for AWS EKS deployments"
+  value       = aws_iam_role.github_actions_deploy.arn
+}

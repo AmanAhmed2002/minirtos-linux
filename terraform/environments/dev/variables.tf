@@ -18,3 +18,14 @@ variable "kubernetes_version" {
   type        = string
   default     = "1.34"
 }
+variable "github_repository" {
+  description = "GitHub repository allowed to deploy to AWS through OIDC, in owner/repo format"
+  type        = string
+  default     = "AmanAhmed2002/minirtos-linux"
+}
+
+variable "github_deploy_branch" {
+  description = "Git branch allowed to assume the GitHub Actions AWS deploy role"
+  type        = string
+  default     = "main"
+}

@@ -42,3 +42,4 @@ variable "node_max_count" {
   type        = number
   default     = 2
 }
+
