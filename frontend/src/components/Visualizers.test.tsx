@@ -42,8 +42,9 @@ describe("Phase 29/31 dashboard components", () => {
     render(<LearningModulePanel scenario={scenarioFixtures[0]} />);
 
     expect(screen.getByRole("heading", { name: "What this scenario teaches" })).toBeInTheDocument();
-    expect(screen.getAllByText("Queue pressure").length).toBeGreaterThan(0);
-    expect(screen.getByText("Warning health state")).toBeInTheDocument();
+    expect(screen.getByText("Prerequisite")).toBeInTheDocument();
+    expect(screen.getByText("Producers, consumer, and bounded memory")).toBeInTheDocument();
+    expect(screen.getByText("Check your understanding")).toBeInTheDocument();
   });
 
   it("renders fault and health explanations", () => {

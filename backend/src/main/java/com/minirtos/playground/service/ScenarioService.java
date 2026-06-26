@@ -103,18 +103,18 @@ public class ScenarioService {
                 "CPU Spike Fault",
                 "round_robin",
                 "Advanced",
-                "Transient CPU load anomaly",
-                "Injects a simulated CPU spike into NetworkTask so students can observe abnormal execution behavior.",
+                "Sustained CPU timing anomaly",
+                "Injects sustained extra execution time into NetworkTask after the configured start time so students can observe abnormal timing behavior.",
                 "configs/cpu_spike.json",
                 List.of(
-                    "How CPU spikes affect runtime stability",
+                    "How sustained CPU timing pressure affects runtime stability",
                     "How timing anomalies appear in structured logs",
                     "Why observability matters in embedded systems"
                 ),
                 List.of(
                     "fault_injected",
                     "task_completed",
-                    "deadline_missed",
+                    "deadlineMisses",
                     "runtime_summary"
                 )
             ),
@@ -156,7 +156,7 @@ public class ScenarioService {
                 List.of(
                     "fault_injected",
                     "task_completed",
-                    "deadline_missed",
+                    "deadlineMisses",
                     "runtime_summary"
                 )
             ),

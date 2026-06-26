@@ -21,7 +21,7 @@ export const scenarioFixtures: ScenarioResponse[] = [
     description: "Adds simulated CPU timing pressure to a runtime task.",
     configPath: "configs/cpu_spike.json",
     teaches: ["CPU timing pressure", "Deadline misses"],
-    expectedSignals: ["fault_injected", "deadline_missed"],
+    expectedSignals: ["fault_injected", "deadlineMisses"],
   },
 ];
 

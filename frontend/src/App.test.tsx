@@ -44,7 +44,7 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Choose a simulation" })).toBeInTheDocument();
     expect(screen.getByLabelText("Scenario")).toHaveValue("queue_overflow");
     expect(screen.getAllByText("Queue Overflow").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Queue pressure").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Producers, consumer, and bounded memory").length).toBeGreaterThan(0);
     expect(screen.getByText(completedRunFixture.runId)).toBeInTheDocument();
 
     expect(await screen.findByRole("heading", { name: "queue_overflow" })).toBeInTheDocument();
