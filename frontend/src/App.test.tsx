@@ -1,7 +1,8 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import App from "./App";
+import { AppRoutes } from "./App";
 import {
   analysisFixture,
   completedRunFixture,
@@ -9,6 +10,7 @@ import {
 } from "./test/testData";
 import {
   createRun,
+  getRunLog,
   getRunAnalysis,
   getRuns,
   getScenarios,
@@ -16,6 +18,7 @@ import {
 
 vi.mock("./api/minirtosApi", () => ({
   createRun: vi.fn(),
+  getRunLog: vi.fn(),
   getRunAnalysis: vi.fn(),
   getRuns: vi.fn(),
   getScenarios: vi.fn(),
@@ -24,94 +27,133 @@ vi.mock("./api/minirtosApi", () => ({
 const mockGetScenarios = vi.mocked(getScenarios);
 const mockGetRuns = vi.mocked(getRuns);
 const mockCreateRun = vi.mocked(createRun);
+const mockGetRunLog = vi.mocked(getRunLog);
 const mockGetRunAnalysis = vi.mocked(getRunAnalysis);
 
-describe("App", () => {
+function renderAt(path: string) {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <AppRoutes />
+    </MemoryRouter>
+  );
+}
+
+describe("App routing", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-
     mockGetScenarios.mockResolvedValue(scenarioFixtures);
     mockGetRuns.mockResolvedValue([completedRunFixture]);
     mockGetRunAnalysis.mockResolvedValue(analysisFixture);
     mockCreateRun.mockResolvedValue(completedRunFixture);
-  });
-
-  it("loads scenarios, persisted runs, guided learning, and selected run analysis", async () => {
-    render(<App />);
-
-    expect(screen.getByText("Loading MiniRTOS Playground...")).toBeInTheDocument();
-
-    expect(await screen.findByRole("heading", { name: "Choose a simulation" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Scenario")).toHaveValue("queue_overflow");
-    expect(screen.getAllByText("Queue Overflow").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Producers, consumer, and bounded memory").length).toBeGreaterThan(0);
-    expect(screen.getByText(completedRunFixture.runId)).toBeInTheDocument();
-
-    expect(await screen.findByRole("heading", { name: "queue_overflow" })).toBeInTheDocument();
-    expect(screen.getAllByText("Queue pressure detected").length).toBeGreaterThan(0);
-    expect(mockGetScenarios).toHaveBeenCalledTimes(1);
-    expect(mockGetRuns).toHaveBeenCalledTimes(1);
-    expect(mockGetRunAnalysis).toHaveBeenCalledWith(completedRunFixture.runId);
-  });
-
-  it("creates a run for the selected scenario and refreshes persisted history", async () => {
-    const user = userEvent.setup();
-    const refreshedRun = {
-      ...completedRunFixture,
-      runId: "new-run-id",
-    };
-
-    mockCreateRun.mockResolvedValue(refreshedRun);
-    mockGetRuns
-      .mockResolvedValueOnce([completedRunFixture])
-      .mockResolvedValueOnce([refreshedRun, completedRunFixture]);
-    mockGetRunAnalysis.mockResolvedValue({
-      ...analysisFixture,
-      runId: refreshedRun.runId,
+    mockGetRunLog.mockResolvedValue({
+      runId: completedRunFixture.runId,
+      logPath: completedRunFixture.logPath ?? "",
+      content:
+        '{"event_type":"runtime_started","scenario_id":"queue_overflow"}\n{"event_type":"message_dropped"}',
     });
-
-    render(<App />);
-
-    await screen.findByRole("heading", { name: "Choose a simulation" });
-    await user.selectOptions(screen.getByLabelText("Scenario"), "cpu_spike");
-    await user.click(screen.getByRole("button", { name: "Run selected scenario" }));
-
-    await waitFor(() => expect(mockCreateRun).toHaveBeenCalledWith("cpu_spike"));
-    await waitFor(() => expect(screen.getByText("new-run-id")).toBeInTheDocument());
-    expect(mockGetRuns).toHaveBeenCalledTimes(2);
   });
 
-  it("shows a dashboard error when the initial API load fails", async () => {
-    mockGetScenarios.mockRejectedValue(new Error("Backend unavailable"));
+  it("renders a learning-first homepage with both CTAs", () => {
+    renderAt("/");
 
-    render(<App />);
-
-    const banner = await screen.findByText(/Dashboard error:/i);
-    expect(banner).toBeInTheDocument();
-    expect(screen.getByText("Backend unavailable")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "MiniRTOS Playground" })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Start Learning" })).toHaveAttribute(
+      "href",
+      "/learn"
+    );
+    expect(screen.getByRole("link", { name: "Run Simulator" })).toHaveAttribute(
+      "href",
+      "/simulator"
+    );
   });
 
-  it("shows a failed-run error box when a failed run is selected", async () => {
+  it("lists the module path on the Learn page", () => {
+    renderAt("/learn");
+
+    expect(
+      screen.getByRole("heading", { name: "The MiniRTOS learning path" })
+    ).toBeInTheDocument();
+    expect(screen.getByText("What is an embedded system?")).toBeInTheDocument();
+    expect(screen.getAllByText("Open Lesson").length).toBeGreaterThan(0);
+  });
+
+  it("shows lesson detail with concept, analogy, and run button", () => {
+    renderAt("/learn/queues-and-message-passing");
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Queues and message passing" })
+    ).toBeInTheDocument();
+    expect(screen.getByText("Beginner analogy")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Run matching scenario" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders scenario concept cards on the Simulator page", async () => {
+    renderAt("/simulator");
+
+    expect(
+      await screen.findByRole("heading", { name: "RTOS Simulator" })
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { level: 3, name: "Queue Overflow" })
+    ).toBeInTheDocument();
+    expect(screen.getByText(/New here\?/)).toBeInTheDocument();
+  });
+
+  it("runs a scenario from the Simulator and creates a run", async () => {
     const user = userEvent.setup();
-    const failedRun = {
-      ...completedRunFixture,
-      runId: "failed-run",
-      scenarioName: "Task Crash",
-      status: "FAILED" as const,
-      errorMessage: "Runtime process failed.",
-    };
+    renderAt("/simulator");
 
-    mockGetRuns.mockResolvedValue([completedRunFixture, failedRun]);
+    const heading = await screen.findByRole("heading", {
+      level: 3,
+      name: "Queue Overflow",
+    });
+    const card = heading.closest("article");
+    expect(card).not.toBeNull();
 
-    render(<App />);
+    await user.click(
+      within(card as HTMLElement).getByRole("button", { name: "Run scenario" })
+    );
 
-    const historyPanel = await screen.findByRole("heading", { name: "Previous runs" });
-    const panel = historyPanel.closest("section");
-    expect(panel).not.toBeNull();
+    await waitFor(() =>
+      expect(mockCreateRun).toHaveBeenCalledWith("queue_overflow")
+    );
+  });
 
-    await user.click(within(panel as HTMLElement).getByRole("button", { name: /Task Crash/i }));
+  it("explains a completed run on the Analysis page", async () => {
+    renderAt("/analysis");
 
-    expect(screen.getByText(/Selected run failed:/i)).toBeInTheDocument();
-    expect(screen.getAllByText("Runtime process failed.").length).toBeGreaterThan(0);
+    expect(
+      await screen.findByRole("heading", { name: "What this run means" })
+    ).toBeInTheDocument();
+    expect(screen.getByText("Plain-English summary")).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/dropped messages/i).length
+    ).toBeGreaterThan(0);
+  });
+
+  it("shows a beginner summary tab and a raw logs tab on the Runs page", async () => {
+    const user = userEvent.setup();
+    renderAt("/runs");
+
+    expect(
+      await screen.findByRole("tab", { name: "Beginner Summary" })
+    ).toBeInTheDocument();
+    expect(screen.getByText("Concept tested")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Raw Logs" }));
+    expect(await screen.findByText(/runtime_started/)).toBeInTheDocument();
+    expect(mockGetRunLog).toHaveBeenCalledWith(completedRunFixture.runId);
+  });
+
+  it("surfaces a load error on the Simulator page", async () => {
+    mockGetScenarios.mockRejectedValue(new Error("Backend unavailable"));
+    renderAt("/simulator");
+
+    expect(await screen.findByText(/Simulator error:/i)).toBeInTheDocument();
+    expect(screen.getByText("Backend unavailable")).toBeInTheDocument();
   });
 });

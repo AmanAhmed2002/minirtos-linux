@@ -9,11 +9,6 @@ export function DashboardHeader() {
           scheduler modes, queues, faults, watchdogs, and telemetry behave.
         </p>
       </div>
-
-      <div className="phase-badge">
-        <span>Phase 28</span>
-        <strong>React Dashboard MVP</strong>
-      </div>
     </header>
   );
 }

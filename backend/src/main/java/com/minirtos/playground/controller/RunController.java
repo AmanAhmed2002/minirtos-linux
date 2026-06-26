@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.minirtos.playground.dto.AnalysisResponse;
 import com.minirtos.playground.dto.CreateRunRequest;
+import com.minirtos.playground.dto.RunLogResponse;
 import com.minirtos.playground.dto.RunSummaryResponse;
 import com.minirtos.playground.service.RunService;
 
@@ -45,5 +46,10 @@ public class RunController {
     @GetMapping("/api/runs/{runId}/analysis")
     public AnalysisResponse getAnalysis(@PathVariable String runId) {
         return runService.getAnalysis(runId);
+    }
+
+    @GetMapping("/api/runs/{runId}/logs")
+    public RunLogResponse getRunLog(@PathVariable String runId) {
+        return runService.getRunLog(runId);
     }
 }

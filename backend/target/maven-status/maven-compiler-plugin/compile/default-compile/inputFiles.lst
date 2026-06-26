@@ -8,6 +8,7 @@
 /home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/dto/CommandResult.java
 /home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/dto/CreateRunRequest.java
 /home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/dto/MessageSummaryResponse.java
+/home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/dto/RunLogResponse.java
 /home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/dto/RunSummaryResponse.java
 /home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/dto/ScenarioResponse.java
 /home/aahmed/projects/minirtos-linux/backend/src/main/java/com/minirtos/playground/dto/TaskMetricResponse.java

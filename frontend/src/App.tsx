@@ -1,241 +1,51 @@
-import { useEffect, useMemo, useState } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./App.css";
-import {
-  createRun,
-  getRunAnalysis,
-  getRuns,
-  getScenarios,
-} from "./api/minirtosApi";
-import {
-  trackDashboardLoaded,
-  trackRunHistorySelected,
-  trackScenarioRunCompleted,
-  trackScenarioRunTriggered,
-} from "./analytics/amplitude";
-import { AnalysisPanel } from "./components/AnalysisPanel";
-import { DashboardHeader } from "./components/DashboardHeader";
-import { LearningModulePanel } from "./components/LearningModulePanel";
-import { RunHistory } from "./components/RunHistory";
-import { RunResultCard } from "./components/RunResultCard";
-import { ScenarioSelector } from "./components/ScenarioSelector";
-import type {
-  AnalysisResponse,
-  RunSummaryResponse,
-  ScenarioResponse,
-} from "./types/api";
+import { MiniRtosDataProvider } from "./context/MiniRtosDataContext";
+import { AppNav } from "./components/AppNav";
+import { HomePage } from "./pages/HomePage";
+import { LearnPage } from "./pages/LearnPage";
+import { LessonDetailPage } from "./pages/LessonDetailPage";
+import { GlossaryPage } from "./pages/GlossaryPage";
+import { SimulatorPage } from "./pages/SimulatorPage";
+import { RunsPage } from "./pages/RunsPage";
+import { AnalysisPage } from "./pages/AnalysisPage";
 
-function App() {
-  const [scenarios, setScenarios] = useState<ScenarioResponse[]>([]);
-  const [runs, setRuns] = useState<RunSummaryResponse[]>([]);
-  const [latestRun, setLatestRun] = useState<RunSummaryResponse | null>(null);
-  const [selectedScenarioId, setSelectedScenarioId] = useState("");
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
-
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [isRunning, setIsRunning] = useState(false);
-  const [isAnalysisLoading, setIsAnalysisLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const selectedRun = useMemo(
-    () => runs.find((run) => run.runId === selectedRunId) ?? null,
-    [runs, selectedRunId]
-  );
-
-  const selectedScenario = useMemo(
-    () =>
-      scenarios.find((scenario) => scenario.id === selectedScenarioId) ?? null,
-    [scenarios, selectedScenarioId]
-  );
-
-  async function refreshRuns() {
-    const runHistory = await getRuns();
-    setRuns(runHistory);
-    return runHistory;
-  }
-
-  useEffect(() => {
-    async function loadDashboard() {
-      try {
-        setError(null);
-
-        const [scenarioList, runHistory] = await Promise.all([
-          getScenarios(),
-          getRuns(),
-        ]);
-
-        setScenarios(scenarioList);
-        setRuns(runHistory);
-        trackDashboardLoaded(scenarioList.length, runHistory.length);
-
-        if (scenarioList.length > 0) {
-          setSelectedScenarioId(scenarioList[0].id);
-        }
-
-        if (runHistory.length > 0) {
-          setLatestRun(runHistory[0]);
-          setSelectedRunId(runHistory[0].runId);
-        }
-      } catch (loadError) {
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Failed to load dashboard data."
-        );
-      } finally {
-        setIsInitialLoading(false);
-      }
-    }
-
-    loadDashboard();
-  }, []);
-
-  useEffect(() => {
-    async function loadAnalysis() {
-      if (!selectedRunId) {
-        setAnalysis(null);
-        return;
-      }
-
-      const run = runs.find((item) => item.runId === selectedRunId);
-      if (run?.status !== "COMPLETED") {
-        setAnalysis(null);
-        return;
-      }
-
-      try {
-        setIsAnalysisLoading(true);
-        setError(null);
-
-        const result = await getRunAnalysis(selectedRunId);
-        setAnalysis(result);
-      } catch (analysisError) {
-        setAnalysis(null);
-        setError(
-          analysisError instanceof Error
-            ? analysisError.message
-            : "Failed to load run analysis."
-        );
-      } finally {
-        setIsAnalysisLoading(false);
-      }
-    }
-
-    loadAnalysis();
-  }, [selectedRunId, runs]);
-
-  async function handleRunScenario() {
-    if (!selectedScenarioId) return;
-
-    const runStartTime = Date.now();
-    const runningScenarioName =
-      scenarios.find((s) => s.id === selectedScenarioId)?.name ??
-      selectedScenarioId;
-    trackScenarioRunTriggered(selectedScenarioId, runningScenarioName);
-
-    try {
-      setIsRunning(true);
-      setError(null);
-
-      const createdRun = await createRun(selectedScenarioId);
-      setLatestRun(createdRun);
-      setSelectedRunId(createdRun.runId);
-
-      const updatedRuns = await refreshRuns();
-
-      const persistedRun =
-        updatedRuns.find((run) => run.runId === createdRun.runId) ??
-        createdRun;
-
-      setLatestRun(persistedRun);
-      trackScenarioRunCompleted({
-        scenarioId: selectedScenarioId,
-        scenarioName: persistedRun.scenarioName,
-        status: persistedRun.status,
-        runtimeHealth: persistedRun.runtimeHealth,
-        durationMs: Date.now() - runStartTime,
-      });
-    } catch (runError) {
-      setError(
-        runError instanceof Error
-          ? runError.message
-          : "Failed to create simulation run."
-      );
-    } finally {
-      setIsRunning(false);
-    }
-  }
-
-  function handleSelectRun(runId: string) {
-    setSelectedRunId(runId);
-
-    const run = runs.find((item) => item.runId === runId);
-    if (run) {
-      setLatestRun(run);
-      trackRunHistorySelected({
-        scenarioId: run.scenarioId,
-        scenarioName: run.scenarioName,
-        status: run.status,
-      });
-    }
-  }
-
-  if (isInitialLoading) {
-    return (
-      <main className="app-shell">
-        <DashboardHeader />
-        <section className="panel">
-          <h2>Loading MiniRTOS Playground...</h2>
-          <p>Connecting to the Spring Boot API.</p>
-        </section>
-      </main>
-    );
-  }
-
+/**
+ * Layout + routes. Exported separately from the default <App> so tests can
+ * mount it inside a MemoryRouter with a chosen initial route.
+ */
+export function AppRoutes() {
   return (
-    <main className="app-shell">
-      <DashboardHeader />
-
-      {error && (
-        <section className="error-banner">
-          <strong>Dashboard error:</strong> {error}
-        </section>
-      )}
-
-      <div className="dashboard-grid">
-        <div className="left-column">
-          <ScenarioSelector
-            scenarios={scenarios}
-            selectedScenarioId={selectedScenarioId}
-            isRunning={isRunning}
-            onSelectScenario={setSelectedScenarioId}
-            onRunScenario={handleRunScenario}
-          />
-
-          <LearningModulePanel scenario={selectedScenario} />
-
-          <RunResultCard run={latestRun} />
-        </div>
-
-        <div className="right-column">
-          <RunHistory
-            runs={runs}
-            selectedRunId={selectedRunId}
-            onSelectRun={handleSelectRun}
-          />
-
-          {selectedRun?.status === "FAILED" && (
-            <section className="error-box">
-              <strong>Selected run failed:</strong>{" "}
-              {selectedRun.errorMessage ?? "No error message was provided."}
-            </section>
-          )}
-        </div>
+    <MiniRtosDataProvider>
+      <div className="app-shell">
+        <AppNav />
+        <main className="app-main">
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/learn" element={<LearnPage />} />
+            <Route path="/learn/:lessonId" element={<LessonDetailPage />} />
+            <Route path="/simulator" element={<SimulatorPage />} />
+            <Route path="/runs" element={<RunsPage />} />
+            <Route path="/analysis" element={<AnalysisPage />} />
+            <Route path="/glossary" element={<GlossaryPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+        <footer className="app-footer">
+          <p>
+            MiniRTOS Playground — a guided way to learn embedded systems and
+            RTOS scheduling by running real simulations.
+          </p>
+        </footer>
       </div>
-
-      <AnalysisPanel analysis={analysis} isLoading={isAnalysisLoading} />
-    </main>
+    </MiniRtosDataProvider>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
+  );
+}

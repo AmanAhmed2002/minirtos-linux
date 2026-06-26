@@ -29,6 +29,12 @@ export interface RunSummaryResponse {
   errorMessage: string | null;
 }
 
+export interface RunLogResponse {
+  runId: string;
+  logPath: string;
+  content: string;
+}
+
 export interface MessageSummaryResponse {
   sent: number;
   received: number;

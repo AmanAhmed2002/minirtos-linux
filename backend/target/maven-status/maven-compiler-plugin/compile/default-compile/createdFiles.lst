@@ -7,12 +7,14 @@ com/minirtos/playground/dto/CommandResult.class
 com/minirtos/playground/persistence/RunEntity.class
 com/minirtos/playground/dto/TaskMetricResponse.class
 com/minirtos/playground/persistence/TaskMetricEntity.class
+com/minirtos/playground/dto/RunLogResponse.class
 com/minirtos/playground/persistence/RunRepository.class
 com/minirtos/playground/service/AnalyzerExecutionService.class
 com/minirtos/playground/MiniRtosPlaygroundApplication.class
 com/minirtos/playground/service/RunService.class
 com/minirtos/playground/service/ScenarioService.class
 com/minirtos/playground/config/MiniRtosProperties.class
+com/minirtos/playground/config/CorsConfig$1.class
 com/minirtos/playground/dto/AnalysisResponse.class
 com/minirtos/playground/controller/HealthController.class
 com/minirtos/playground/service/RuntimeExecutionService.class

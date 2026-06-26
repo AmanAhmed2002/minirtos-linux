@@ -17,6 +17,7 @@ import com.minirtos.playground.config.MiniRtosProperties;
 import com.minirtos.playground.dto.AnalysisResponse;
 import com.minirtos.playground.dto.CommandResult;
 import com.minirtos.playground.dto.CreateRunRequest;
+import com.minirtos.playground.dto.RunLogResponse;
 import com.minirtos.playground.dto.RunSummaryResponse;
 import com.minirtos.playground.dto.ScenarioResponse;
 import com.minirtos.playground.persistence.RunEntity;
@@ -135,6 +136,42 @@ public class RunService {
         }
 
         return entity.toAnalysisResponse();
+    }
+
+    @Transactional(readOnly = true)
+    public RunLogResponse getRunLog(String runId) {
+        RunEntity entity = getEntity(runId);
+        Path logPath = properties.resolvedProjectRoot()
+            .resolve(entity.getLogPath())
+            .normalize();
+
+        if (!logPath.startsWith(properties.resolvedRunsDir())) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Run log path is outside the runs directory for runId: " + runId
+            );
+        }
+
+        try {
+            if (!Files.exists(logPath)) {
+                throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Runtime log is not available for runId: " + runId
+                );
+            }
+
+            return new RunLogResponse(
+                entity.getRunId(),
+                entity.getLogPath(),
+                Files.readString(logPath)
+            );
+        } catch (IOException exc) {
+            throw new ResponseStatusException(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Failed to read runtime log for runId: " + runId,
+                exc
+            );
+        }
     }
 
     private RunEntity getEntity(String runId) {

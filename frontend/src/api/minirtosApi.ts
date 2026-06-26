@@ -1,6 +1,7 @@
 import type {
   AnalysisResponse,
   CreateRunRequest,
+  RunLogResponse,
   RunSummaryResponse,
   ScenarioResponse,
 } from "../types/api";
@@ -53,4 +54,8 @@ export async function getRunAnalysis(
   runId: string
 ): Promise<AnalysisResponse> {
   return request<AnalysisResponse>(`/api/runs/${encodeURIComponent(runId)}/analysis`);
+}
+
+export async function getRunLog(runId: string): Promise<RunLogResponse> {
+  return request<RunLogResponse>(`/api/runs/${encodeURIComponent(runId)}/logs`);
 }

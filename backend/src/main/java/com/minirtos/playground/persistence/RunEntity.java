@@ -161,6 +161,10 @@ public class RunEntity {
         return analysisPath;
     }
 
+    public String getLogPath() {
+        return logPath;
+    }
+
     public String getRawReport() {
         return rawReport;
     }
