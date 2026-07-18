@@ -1,6 +1,6 @@
 # Phase 38 Release Hardening and EKS Version Update Notes
 
-**Updated:** June 17, 2026
+**Updated:** June 26, 2026
 **Project:** MiniRTOS Playground
 **Phase:** Phase 38 — Production Deployment Hardening, Release Versioning, and EKS Version Upgrade
 
@@ -219,18 +219,18 @@ Look for healthy cluster components such as `aws-node`, `coredns`, `kube-proxy`,
 
 ## Remaining Production Gaps
 
-Phase 38 closed the release-hardening gaps it targeted. Phase 39 later completed the HTTPS and custom-domain gap with `https://app.minirtos.biz`. Remaining gaps after Phase 39 are:
+Phase 38 closed the release-hardening gaps it targeted. Phase 39 later completed the HTTPS and custom-domain gap with `https://app.minirtos.biz`. Remaining gaps after Phase 40/41 are:
 
 - AWS Load Balancer Controller installation is still a manual Helm step.
-- Terraform state is local.
-- PostgreSQL still runs in-cluster instead of RDS.
-- Secrets are Kubernetes Secrets, not AWS Secrets Manager or External Secrets.
-- AWS deployment is manual from a local machine, not GitOps or GitHub Actions deployment.
+- Terraform state is remote in S3 with DynamoDB locking, but bootstrap and state migration remain operator-managed.
+- AWS PostgreSQL now runs on RDS; local Docker and local Kubernetes still use the in-cluster/project PostgreSQL service.
+- RDS password is managed by AWS Secrets Manager and synced into a Kubernetes Secret during deployment; External Secrets is not implemented.
+- AWS deployment can be run through a manual GitHub Actions OIDC workflow, but it is not continuous GitOps.
 - DNS and ACM certificate management are manual.
 - Cost control still depends on manual teardown.
 
 Recommended next phase:
 
 ```text
-Phase 40 — Deployment Automation, Remote Terraform State, and Production Ops Polish
+Phase 42 — Production operations polish, externalized secrets, and cost guardrails
 ```

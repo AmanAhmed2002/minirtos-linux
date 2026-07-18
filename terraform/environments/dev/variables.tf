@@ -18,6 +18,62 @@ variable "kubernetes_version" {
   type        = string
   default     = "1.34"
 }
+
+variable "eks_node_desired_count" {
+  description = "Worker-node capacity restored when the dev environment starts."
+  type        = number
+  default     = 2
+
+  validation {
+    condition     = var.eks_node_desired_count >= 0
+    error_message = "eks_node_desired_count must be zero or greater."
+  }
+}
+
+variable "eks_node_min_count" {
+  description = "Worker-node minimum restored when the dev environment starts."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.eks_node_min_count >= 0
+    error_message = "eks_node_min_count must be zero or greater."
+  }
+}
+
+variable "eks_node_max_count" {
+  description = "Worker-node maximum restored when the dev environment starts."
+  type        = number
+  default     = 2
+
+  validation {
+    condition     = var.eks_node_max_count > 0
+    error_message = "eks_node_max_count must be greater than zero."
+  }
+}
+
+variable "cost_alert_start_usd" {
+  description = "Actual month-to-date AWS spend that triggers the first SMS alert."
+  type        = number
+  default     = 50
+
+  validation {
+    condition     = var.cost_alert_start_usd > 0
+    error_message = "cost_alert_start_usd must be greater than zero."
+  }
+}
+
+variable "cost_alert_increment_usd" {
+  description = "Additional month-to-date spend between repeat SMS alerts."
+  type        = number
+  default     = 25
+
+  validation {
+    condition     = var.cost_alert_increment_usd > 0
+    error_message = "cost_alert_increment_usd must be greater than zero."
+  }
+}
+
 variable "github_repository" {
   description = "GitHub repository allowed to deploy to AWS through OIDC, in owner/repo format"
   type        = string

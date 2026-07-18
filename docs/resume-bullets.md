@@ -1,7 +1,7 @@
 # MiniRTOS-Linux / MiniRTOS Playground Resume and Interview Notes
 
 **Updated:** June 17, 2026
-**Current Phase:** Phase 39 — HTTPS, Custom Domain, and Production Deployment Polish
+**Current Phase:** Phase 41 — Learning Platform Expansion and AWS Deployment Automation
 
 ---
 
@@ -94,7 +94,7 @@ Built MiniRTOS Playground, a Dockerized full-stack embedded-systems learning pla
 - Built MiniRTOS-Linux, a C++20 embedded-runtime simulator on Linux with periodic tasks, round-robin, priority, and earliest-deadline-first scheduling, bounded message queues, structured JSONL telemetry, configurable fault injection, watchdog monitoring, task-crash simulation, and simulated recovery events.
 - Developed a Python analysis and ML pipeline that parses runtime logs, computes task/message/fault/watchdog metrics, performs explainable time-windowed anomaly detection, generates labeled synthetic datasets, trains a Random Forest classifier, and reports prediction confidence.
 - Extended the simulator into MiniRTOS Playground with a Java Spring Boot REST API, trusted scenario execution, Python analyzer orchestration, PostgreSQL/Flyway run persistence, Docker Compose services, and tests across C++, Python, backend, and frontend build layers.
-- Built and hardened a React/TypeScript educational dashboard with guided RTOS learning cards, queue pressure visualizers, task runtime timelines, fault/health explanations, Vite dev serving, and production Nginx Docker serving.
+- Built and hardened a React/TypeScript educational learning app with routed lesson, simulator, run-history, analysis, and glossary pages; guided RTOS learning cards; queue pressure visualizers; task runtime timelines; fault/health explanations; Vite dev serving; and production Nginx Docker serving.
 ```
 
 ---

@@ -1,6 +1,6 @@
 # Phase 39 HTTPS Custom Domain Update Notes
 
-**Updated:** June 17, 2026
+**Updated:** June 26, 2026
 **Project:** MiniRTOS Playground
 **Phase:** Phase 39 — HTTPS, Custom Domain, and Production Deployment Polish
 
@@ -206,16 +206,15 @@ No NodePort output appears for the AWS overlay.
 
 ---
 
-## Known Limitations
+## Current Limitations
 
-Acceptable limitations after Phase 39:
+Phase 40/41 completed several limitations that were listed after Phase 39. Current remaining limitations are:
 
 - AWS Load Balancer Controller is still installed manually with Helm.
-- Terraform state is still local unless changed separately.
-- Postgres still runs in-cluster instead of RDS.
-- Secrets are Kubernetes Secrets, not AWS Secrets Manager or External Secrets.
-- GitHub Actions does not deploy to AWS yet.
-- No `workflow_dispatch` AWS deployment workflow exists yet.
+- Terraform remote state is now implemented with S3 and DynamoDB, but the backend must be bootstrapped before first use.
+- AWS persistence now uses RDS PostgreSQL; local Docker and local Kubernetes still use the in-repo PostgreSQL service.
+- RDS master password is managed by AWS Secrets Manager and synced into a Kubernetes Secret during deployment; External Secrets or AWS Secrets Manager CSI integration is not implemented yet.
+- GitHub Actions now has a manual `workflow_dispatch` AWS deployment workflow through OIDC; it is not a continuous GitOps deployment.
 - DNS is manually managed through GoDaddy.
 - ACM certificate creation and validation are manual.
 - Root domain `minirtos.biz` is not configured; only `app.minirtos.biz` is configured.
@@ -239,20 +238,20 @@ After destroy, the GoDaddy domain remains owned, but the `app` CNAME may point t
 
 ---
 
-## Phase 40 Direction
+## Phase 40/41 Completion
+
+Completed after Phase 39:
+
+- Added S3 remote Terraform state with DynamoDB locking under `terraform/bootstrap/remote-state` and `terraform/environments/dev/backend.tf`.
+- Added a GitHub Actions OIDC provider, deploy role, EKS access entry, and manual `Deploy AWS` workflow.
+- Added `workflow_dispatch` inputs for image SHA, environment, and explicit `deploy` confirmation.
+- Deploys the AWS Kustomize overlay from CI using `scripts/deploy_aws_release.sh`.
+- Runs the HTTPS smoke test from CI.
+- Added Terraform-managed RDS PostgreSQL and removed in-cluster PostgreSQL from the AWS overlay.
+- Expanded the frontend into a routed learning platform with lesson and glossary pages.
 
 Recommended next phase:
 
 ```text
-Phase 40 — Deployment Automation, Remote Terraform State, and Production Ops Polish
+Phase 42 — Production operations polish, externalized secrets, and cost guardrails
 ```
-
-Recommended goals:
-
-- Add a manual GitHub Actions AWS deployment workflow.
-- Use GitHub Actions OIDC instead of static AWS keys.
-- Add `workflow_dispatch` inputs for image SHA, environment, and explicit confirmation.
-- Deploy the AWS Kustomize overlay from CI using `scripts/deploy_aws_release.sh`.
-- Run the HTTPS smoke test from CI when appropriate.
-- Add remote Terraform state with S3 and DynamoDB locking.
-- Document safe Terraform apply/destroy and cost guardrails.

@@ -2,10 +2,10 @@
 
 **Original Project:** Embedded Runtime Simulator with AI-Based Fault Detection
 **Full-Stack Evolution:** MiniRTOS Playground — Full-Stack Embedded Systems Learning Platform
-**Current Phase:** Phase 39 — HTTPS, Custom Domain, and Production Deployment Polish
-**Updated:** June 17, 2026
+**Current Phase:** Phase 41 — Learning Platform Expansion and AWS Deployment Automation
+**Updated:** June 26, 2026
 
-MiniRTOS-Linux is a software-only C++20 embedded runtime simulator that models periodic tasks, bounded message queues, configurable fault injection, task-crash simulation, watchdog monitoring, structured JSONL telemetry, Python-based runtime analysis, AI-style anomaly detection, synthetic training-dataset generation, a trained lightweight ML anomaly classifier, automated tests, Dockerized demos, benchmark reporting, a Java/Spring Boot backend with persistent PostgreSQL run history, a React/TypeScript educational dashboard, local Kubernetes manifests, Kustomize overlays, Terraform AWS infrastructure, and an AWS EKS deployment path.
+MiniRTOS-Linux is a software-only C++20 embedded runtime simulator that models periodic tasks, bounded message queues, configurable fault injection, task-crash simulation, watchdog monitoring, structured JSONL telemetry, Python-based runtime analysis, AI-style anomaly detection, synthetic training-dataset generation, a trained lightweight ML anomaly classifier, automated tests, Dockerized demos, benchmark reporting, a Java/Spring Boot backend with persistent PostgreSQL run history, a React/TypeScript educational learning application, local Kubernetes manifests, Kustomize overlays, Terraform AWS infrastructure, and an AWS EKS deployment path.
 
 MiniRTOS Playground extends the project into a full-stack educational platform for students learning embedded systems, RTOS concepts, runtime telemetry, scheduling, queues, faults, watchdog behavior, Docker, Kubernetes, and ML-based anomaly detection.
 
@@ -13,7 +13,7 @@ MiniRTOS Playground extends the project into a full-stack educational platform f
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run storage. Phase 28 added the React Dashboard MVP, frontend Docker integration, and local frontend/backend debugging notes. Phase 29 added educational modules and visualizers to the React dashboard. Phase 30 hardened Docker Compose and Dockerfiles for backend, dev frontend, and production frontend workflows. Phase 31 added frontend automated tests using Vitest, React Testing Library, and jsdom. Phase 32 added Amplitude event tracking to the React dashboard. Phase 33 added local Kubernetes manifests for PostgreSQL, backend, frontend, and a `kind` cluster entrypoint. Phase 35 added Kustomize overlays for local and GHCR image workflows. Phase 36 added Terraform-managed AWS infrastructure and verified the full application on EKS with EBS-backed PostgreSQL storage. Phase 37 moved AWS browser access to one ALB origin. Phase 38 hardened the AWS deployment flow with EKS `1.34`, ClusterIP-only AWS manifests, and immutable Git SHA image deployment. Phase 39 added HTTPS through the custom domain `app.minirtos.biz` using GoDaddy DNS, AWS ACM, and ALB HTTP-to-HTTPS redirect.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run storage. Phase 28 added the React Dashboard MVP, frontend Docker integration, and local frontend/backend debugging notes. Phase 29 added educational modules and visualizers to the React dashboard. Phase 30 hardened Docker Compose and Dockerfiles for backend, dev frontend, and production frontend workflows. Phase 31 added frontend automated tests using Vitest, React Testing Library, and jsdom. Phase 32 added Amplitude event tracking to the React dashboard. Phase 33 added local Kubernetes manifests for PostgreSQL, backend, frontend, and a `kind` cluster entrypoint. Phase 35 added Kustomize overlays for local and GHCR image workflows. Phase 36 added Terraform-managed AWS infrastructure and verified the full application on EKS with EBS-backed PostgreSQL storage. Phase 37 moved AWS browser access to one ALB origin. Phase 38 hardened the AWS deployment flow with EKS `1.34`, ClusterIP-only AWS manifests, and immutable Git SHA image deployment. Phase 39 added HTTPS through the custom domain `app.minirtos.biz` using GoDaddy DNS, AWS ACM, and ALB HTTP-to-HTTPS redirect. Phase 40 added remote Terraform state, GitHub Actions OIDC deployment, and RDS PostgreSQL for AWS. Phase 41 expanded the frontend into a routed learning platform with beginner modules, glossary pages, scenario-linked lessons, run analysis pages, and run-log retrieval.
 
 Current verified backend behavior:
 
@@ -24,20 +24,25 @@ Current verified backend behavior:
 - `GET /api/runs` returns persisted run summaries from PostgreSQL.
 - `GET /api/runs/{runId}` returns one persisted run.
 - `GET /api/runs/{runId}/analysis` returns persisted parsed analyzer data.
+- `GET /api/runs/{runId}/logs` returns the saved runtime log path and content for a persisted run.
 - `queue_overflow` returns `status=COMPLETED`, `runtimeHealth=WARNING`, and `errorMessage=null`.
 - Run history survives backend restarts.
 - Backend Docker image builds the C++ runtime inside the Docker build using CMake and Ninja.
 
 Current frontend behavior:
 
-- Vite + React + TypeScript dashboard under `frontend/`.
+- Vite + React + TypeScript learning application under `frontend/`.
 - Dev frontend runs on `http://localhost:5173`.
 - Production frontend runs through Nginx on `http://localhost:3000`.
 - Production frontend exposes `GET /health`.
+- React Router pages exist for Home, Learn, Lesson Detail, Simulator, Runs, Analysis, and Glossary.
+- Shared scenario, run, and analysis state lives in `MiniRtosDataProvider` so the routed pages reuse one API/data layer.
 - Scenario selector uses `GET /api/scenarios`.
 - Run trigger uses `POST /api/runs`.
 - Persisted history uses `GET /api/runs`.
 - Analyzer panel uses `GET /api/runs/{runId}/analysis`.
+- Runtime log retrieval uses `GET /api/runs/{runId}/logs`.
+- Lesson catalog and glossary metadata are frontend-owned, scenario-linked, and designed for beginner learning modules.
 - Guided Learning panel changes by selected scenario.
 - Queue pressure visualizer, task runtime timeline, fault/health explanation panel, and root-cause teaching notes work.
 - Backend CORS allows both dev and production local frontend origins.
@@ -45,8 +50,13 @@ Current frontend behavior:
 - Local Kubernetes manifests exist under `k8s/` for namespace, secrets, config, PostgreSQL, backend, frontend, and `kind` port mapping.
 - AWS EKS deployment works through Terraform-provisioned infrastructure in `us-east-1`.
 - New EKS clusters target Kubernetes `1.34`.
-- EKS uses two `t3.small` worker nodes, the EBS CSI addon, and a `gp3` StorageClass for dynamic EBS-backed PVCs.
+- EKS uses two `t3.small` worker nodes, the EBS CSI addon, and a `gp3` StorageClass for Kubernetes volumes.
+- AWS PostgreSQL persistence now uses Terraform-managed RDS PostgreSQL. The AWS overlay removes the in-cluster PostgreSQL StatefulSet and points the backend at the RDS endpoint.
+- Terraform dev state uses S3 remote state with DynamoDB locking after the remote-state bootstrap is applied.
 - The AWS Kustomize overlay deploys GHCR backend and frontend images by immutable Git SHA tag through `scripts/deploy_aws_release.sh`.
+- `scripts/deploy_aws_release.sh` renders the selected image SHA, reads RDS outputs, fetches the RDS password from AWS Secrets Manager, syncs the Kubernetes database Secret, applies the AWS manifest, and restarts the backend rollout.
+- `.github/workflows/deploy-aws.yml` provides a manual `workflow_dispatch` AWS deployment path with OIDC credentials, SHA validation, GHCR image existence checks, deployment, and HTTPS smoke testing.
+- The RDS master password is AWS-managed in Secrets Manager and rotates automatically every 7 days. `scripts/sync_rds_db_secret.sh` re-syncs the Kubernetes database Secret after a rotation and restarts the backend; it is a no-op when the password is unchanged. `.github/workflows/sync-rds-secret.yml` runs it hourly through the same OIDC role so rotations no longer break the deployed backend.
 - Local and GHCR testing overlays expose NodePort services on `30081` and `30080`; the shared base and AWS overlay remain ClusterIP-only.
 - The EKS deployment supports a single HTTPS custom-domain origin where `/` serves the frontend and `/api/*` routes to the backend.
 - The current production URL is `https://app.minirtos.biz`. For ALB/HTTPS deployments, the frontend is built with an empty `VITE_API_BASE_URL` so browser API calls stay relative to the same origin.
@@ -66,7 +76,7 @@ Important local decisions:
 - Local kind backend NodePort is `http://localhost:30081` and frontend NodePort is `http://localhost:30080` when using the provided `kind` config.
 - Backend CORS allows the local kind frontend origins `http://localhost:30080` and `http://127.0.0.1:30080`.
 - Terraform creates the AWS Load Balancer Controller IAM policy and IRSA role, and exports the role ARN for the controller service account.
-- Phase 39 is still a learning deployment. HTTPS and the custom subdomain are working, but remote Terraform state, deployment automation, RDS, ExternalDNS, and fuller production operations remain future hardening work.
+- Phase 41 is still a learning deployment. HTTPS, the custom subdomain, remote Terraform state, GitHub Actions OIDC deployment, and RDS are implemented, but AWS Load Balancer Controller installation, DNS/ACM automation, ExternalDNS, secrets externalization, scheduled cost guardrails, and fuller production operations remain future hardening work.
 
 ---
 
@@ -85,13 +95,13 @@ Important local decisions:
 | ML | Synthetic dataset generation and Random Forest classifier |
 | Backend | Java Spring Boot API for health, scenarios, and runs |
 | Persistence | PostgreSQL run history with Flyway migrations |
-| Frontend | React/TypeScript educational dashboard |
-| Learning UI | Scenario learning cards, queue visualizer, task timeline, health/fault explanations |
+| Frontend | React/TypeScript educational application with routed pages |
+| Learning UI | Beginner lesson path, scenario learning cards, glossary, queue visualizer, task timeline, health/fault explanations |
 | Analytics | Amplitude event tracking for dashboard load, run trigger, run completion, and history selection |
 | Testing | GoogleTest, CTest, pytest, Spring Boot tests, repository tests, Vitest + React Testing Library frontend component tests |
 | Docker | Runtime, analyzer, ML, backend, PostgreSQL, dev frontend, and production frontend services |
 | Kubernetes | Local and EKS namespace, Secret, ConfigMap, PostgreSQL StatefulSet, backend/frontend Deployments, ClusterIP Services, local/GHCR NodePort overlays, AWS ALB HTTPS Ingress, PVCs, Kustomize overlays, and `kind` port mappings |
-| AWS/Terraform | VPC, public subnets, EKS `1.34` cluster, managed node group, OIDC provider, EBS CSI IRSA role, EBS CSI addon, AWS Load Balancer Controller IRSA role, and `gp3` EBS-backed storage |
+| AWS/Terraform | VPC, public subnets, EKS `1.34` cluster, managed node group, OIDC provider, EBS CSI IRSA role, EBS CSI addon, AWS Load Balancer Controller IRSA role, RDS PostgreSQL, remote state, and GitHub Actions OIDC deploy role |
 
 ---
 
@@ -114,6 +124,7 @@ Docker Compose / Local Kubernetes / AWS EKS
   │     -> GET  /api/runs
   │     -> GET  /api/runs/{runId}
   │     -> GET  /api/runs/{runId}/analysis
+  │     -> GET  /api/runs/{runId}/logs
   ├── React/Vite Dev Frontend
   │     -> http://localhost:5173
   └── Nginx Production Frontend
@@ -129,13 +140,16 @@ Kubernetes local/GHCR overlays
   └── Frontend Deployment + ClusterIP + local/GHCR NodePort
         -> http://localhost:30080
 
-AWS EKS Phase 39
+AWS EKS Phase 41
   ├── Terraform VPC + EKS in us-east-1
   ├── Kubernetes version 1.34
   ├── 2x t3.small worker nodes
   ├── EBS CSI addon with IRSA/OIDC
   ├── AWS Load Balancer Controller IRSA role
-  ├── gp3 StorageClass for PostgreSQL EBS persistence
+  ├── gp3 StorageClass for Kubernetes volumes
+  ├── Terraform-managed RDS PostgreSQL with Secrets Manager master password
+  ├── S3 remote Terraform state with DynamoDB locking
+  ├── GitHub Actions OIDC deployment role and manual deploy workflow
   ├── AWS Kustomize overlay with ClusterIP services only
   ├── Immutable GHCR image tags rendered by scripts/deploy_aws_release.sh
   └── ALB HTTPS custom-domain origin
@@ -185,9 +199,11 @@ minirtos-linux/
 │   ├── aws/storageclass-gp3.yml
 │   └── kind/kind-config.yml
 ├── terraform/
+│   ├── bootstrap/remote-state/
 │   ├── environments/dev/
 │   └── modules/
 │       ├── eks/
+│       ├── rds/
 │       └── vpc/
 ├── logs/
 ├── models/
@@ -300,6 +316,7 @@ Inspect a run and its analysis:
 ```bash
 curl http://localhost:8081/api/runs/<runId>
 curl http://localhost:8081/api/runs/<runId>/analysis
+curl http://localhost:8081/api/runs/<runId>/logs
 ```
 
 ---
@@ -487,7 +504,7 @@ For EKS behind one ALB origin, build with `VITE_API_BASE_URL=` so API calls use 
 
 ## Quick Start — AWS EKS with Terraform
 
-Phase 39 runs the app on AWS EKS behind an ALB with HTTPS at `https://app.minirtos.biz`. Terraform provisions the core AWS infrastructure, while the app deployment uses GHCR images pinned to an immutable Git SHA tag.
+Phase 41 runs the app on AWS EKS behind an ALB with HTTPS at `https://app.minirtos.biz`. Terraform provisions the core AWS infrastructure, remote state, GitHub Actions OIDC deploy role, and RDS PostgreSQL, while the app deployment uses GHCR images pinned to an immutable Git SHA tag.
 
 Configure AWS credentials first:
 
@@ -503,6 +520,14 @@ aws_region         = "us-east-1"
 project_name       = "minirtos"
 availability_zones = ["us-east-1a", "us-east-1b"]
 kubernetes_version = "1.34"
+```
+
+Bootstrap remote Terraform state once if the S3/DynamoDB backend does not already exist:
+
+```bash
+cd terraform/bootstrap/remote-state
+terraform init
+terraform apply
 ```
 
 Provision infrastructure:
@@ -529,15 +554,17 @@ RELEASE_SHA="$(git rev-parse HEAD)"
 ./scripts/deploy_aws_release.sh "$RELEASE_SHA"
 ```
 
+The deployment script reads RDS outputs from Terraform unless `RDS_ENDPOINT`, `RDS_DATABASE_NAME`, `RDS_USERNAME`, `RDS_SECRET_ARN`, and `RDS_PASSWORD` are provided in the environment. In GitHub Actions, the manual `Deploy AWS` workflow validates the SHA, assumes the Terraform-created OIDC role, verifies both GHCR images exist, deploys the selected release, and runs the HTTPS smoke test.
+
 Check the deployment:
 
 ```bash
 kubectl get pods -n minirtos
 kubectl get svc -n minirtos
-kubectl get pvc -n minirtos
+kubectl get ingress -n minirtos
 ```
 
-Phase 36 now uses ALB-oriented exposure for EKS. Terraform creates the IAM role used by the AWS Load Balancer Controller service account:
+Terraform creates the IAM role used by the AWS Load Balancer Controller service account:
 
 ```bash
 terraform output aws_load_balancer_controller_role_arn
@@ -562,6 +589,14 @@ Smoke test:
 ```bash
 ./scripts/k8s_smoke_test.sh "https://app.minirtos.biz"
 ```
+
+The RDS master password is AWS-managed and rotates automatically every 7 days. Because the deployment script only syncs the password into the Kubernetes Secret at deploy time, a rotation between deployments previously left the backend failing every database call with `password authentication failed` (HTTP 500 from `/api/runs` and the analysis endpoints). The scheduled `Sync RDS Secret` workflow now re-syncs the Secret hourly; to fix a stale Secret manually:
+
+```bash
+./scripts/sync_rds_db_secret.sh
+```
+
+The script compares the current Secrets Manager password with the Kubernetes Secret, and only when they differ does it update the Secret, restart the backend rollout, and wait for it to become ready.
 
 Stop AWS billing when finished:
 
@@ -637,6 +672,10 @@ Returns one persisted run summary.
 ### `GET /api/runs/{runId}/analysis`
 
 Returns persisted parsed analyzer JSON plus the raw analyzer report.
+
+### `GET /api/runs/{runId}/logs`
+
+Returns the saved runtime log path and log content for the selected run.
 
 ---
 
@@ -762,6 +801,7 @@ docker logs minirtos-playground-frontend-prod --tail=100
 | `docs/aws-terraform-eks-phase36-update-notes.md` | AWS/Terraform/EKS setup, deployment, verification, troubleshooting, and teardown |
 | `docs/phase38-release-hardening-update-notes.md` | EKS `1.34`, overlay ownership, immutable AWS release deployment, smoke test scope, and add-on validation notes |
 | `docs/aws-https-custom-domain-phase39-update-notes.md` | Phase 39 HTTPS custom-domain setup with GoDaddy DNS, AWS ACM, ALB redirect, verification, limitations, and Phase 40 direction |
+| `docs/phase40-aws-automation-rds-update-notes.md` | Phase 40/41 remote Terraform state, GitHub Actions OIDC deployment, RDS-backed AWS persistence, and learning-platform expansion notes |
 | `backend/README.md` | Backend-specific setup and API documentation |
 | `frontend/README.md` | Frontend-specific setup, dashboard documentation, and analytics setup |
 
@@ -770,7 +810,7 @@ docker logs minirtos-playground-frontend-prod --tail=100
 ## Next Phase
 
 ```text
-Phase 40 — Deployment automation, remote Terraform state, and production ops polish
+Phase 42 — Production operations polish, secret management, and cost guardrails
 ```
 
 Completed recent phases:
@@ -811,4 +851,15 @@ Phase 39 — HTTPS, Custom Domain, and Production Deployment Polish
   AWS ACM TLS certificate, ALB HTTP-to-HTTPS redirect,
   same-origin HTTPS /api routing, and smoke testing at
   https://app.minirtos.biz
+
+Phase 40 — Deployment Automation, Remote Terraform State, and RDS
+  S3 remote Terraform state with DynamoDB locking, GitHub Actions
+  OIDC deploy role, manual AWS deploy workflow, SHA image validation,
+  RDS PostgreSQL, Secrets Manager password retrieval, and AWS overlay
+  removal of in-cluster PostgreSQL
+
+Phase 41 — Learning Platform Expansion
+  Routed React app, beginner lesson catalog, glossary, lesson detail
+  pages, shared MiniRtosDataProvider state, run analysis pages, and
+  runtime log retrieval through GET /api/runs/{runId}/logs
 ```

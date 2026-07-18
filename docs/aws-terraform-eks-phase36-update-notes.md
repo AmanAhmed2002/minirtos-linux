@@ -1,14 +1,14 @@
 # Phase 36 AWS EKS and Terraform Update Notes
 
-**Updated:** June 17, 2026
+**Updated:** June 26, 2026
 **Project:** MiniRTOS Playground
-**Phase:** Phase 36 with Phase 37/38 AWS deployment hardening notes
+**Phase:** Phase 36 with Phase 37/38/39/40 AWS deployment hardening notes
 
 ---
 
 ## What Changed
 
-Phase 36 moved MiniRTOS Playground from local Kubernetes to an AWS EKS learning deployment managed by Terraform. Phase 37 added ALB single-origin routing. Phase 38 updated the EKS target version, removed NodePorts from the shared base, and switched AWS deployment to immutable Git SHA image tags. Phase 39 added HTTPS custom-domain access at `https://app.minirtos.biz`.
+Phase 36 moved MiniRTOS Playground from local Kubernetes to an AWS EKS learning deployment managed by Terraform. Phase 37 added ALB single-origin routing. Phase 38 updated the EKS target version, removed NodePorts from the shared base, and switched AWS deployment to immutable Git SHA image tags. Phase 39 added HTTPS custom-domain access at `https://app.minirtos.biz`. Phase 40 added S3/DynamoDB remote Terraform state, GitHub Actions OIDC deployment, and Terraform-managed RDS PostgreSQL for the AWS database path.
 
 Completed outcomes:
 
@@ -18,13 +18,15 @@ Completed outcomes:
 - The EBS CSI driver is installed as an EKS addon.
 - Terraform creates the EKS OIDC provider and an IRSA IAM role for `system:serviceaccount:kube-system:ebs-csi-controller-sa`.
 - Kubernetes uses a default `gp3` StorageClass backed by `ebs.csi.aws.com`.
-- PostgreSQL runs in-cluster with EBS-backed persistence.
+- AWS PostgreSQL persistence now uses Terraform-managed RDS. The local and GHCR overlays still keep the in-cluster PostgreSQL path for local testing.
 - Backend and frontend deploy to AWS from GHCR images through the `k8s/overlays/aws` Kustomize overlay.
+- The AWS overlay deletes the base PostgreSQL StatefulSet and patches backend datasource config to the RDS endpoint.
 - AWS deployments use immutable Git SHA image tags rendered by `scripts/deploy_aws_release.sh`; local GHCR testing can still use `k8s/overlays/ghcr` and `latest`.
 - Terraform creates the AWS Load Balancer Controller IAM policy and IRSA role.
 - Terraform exports the controller role ARN, VPC ID, and public subnet IDs needed during controller and ALB setup.
 - Local and GHCR overlays keep NodePort services for kind/browser testing, but the shared base and AWS overlay are ClusterIP-only. EKS browser traffic flows through one ALB origin.
 - The dashboard loads in a browser and fetches backend data with relative `/api` calls when the frontend is built with an empty `VITE_API_BASE_URL`.
+- The manual `Deploy AWS` GitHub Actions workflow validates a Git SHA, verifies GHCR images, assumes the Terraform-created OIDC role, deploys the selected release, and runs the HTTPS smoke test.
 
 ---
 
@@ -32,8 +34,14 @@ Completed outcomes:
 
 ```text
 terraform/
+├── bootstrap/remote-state/
+│   ├── main.tf
+│   ├── variables.tf
+│   └── outputs.tf
 ├── environments/
 │   └── dev/
+│       ├── backend.tf
+│       ├── github-actions-deploy.tf
 │       ├── main.tf
 │       ├── variables.tf
 │       ├── outputs.tf
@@ -43,11 +51,15 @@ terraform/
     │   ├── main.tf
     │   ├── variables.tf
     │   └── outputs.tf
-    └── eks/
+    ├── eks/
+    │   ├── main.tf
+    │   ├── variables.tf
+    │   ├── outputs.tf
+    │   └── aws-load-balancer-controller-policy.json
+    └── rds/
         ├── main.tf
         ├── variables.tf
-        ├── outputs.tf
-        └── aws-load-balancer-controller-policy.json
+        └── outputs.tf
 ```
 
 Important dev values:
@@ -79,6 +91,9 @@ Terraform creates:
 - EBS CSI IAM role and policy attachment.
 - `aws-ebs-csi-driver` EKS addon.
 - AWS Load Balancer Controller IAM policy and IRSA role for `system:serviceaccount:kube-system:aws-load-balancer-controller`.
+- RDS PostgreSQL instance, subnet group, security group, and Secrets Manager managed master password.
+- GitHub Actions OIDC provider, deploy role, and EKS access entry for manual deployments.
+- S3 remote-state bucket and DynamoDB lock table from the bootstrap stack.
 
 ---
 
@@ -119,6 +134,14 @@ repo
 ---
 
 ## Provision AWS Infrastructure
+
+Bootstrap remote state once before using the dev backend if the state bucket/table do not exist yet:
+
+```bash
+cd terraform/bootstrap/remote-state
+terraform init
+terraform apply
+```
 
 From the repo root:
 
@@ -175,19 +198,20 @@ RELEASE_SHA="$(git rev-parse HEAD)"
 ./scripts/deploy_aws_release.sh "$RELEASE_SHA"
 ```
 
+The script reads Terraform RDS outputs unless RDS environment variables are provided, fetches the RDS password from AWS Secrets Manager, syncs `minirtos-postgres-secret`, renders the AWS overlay with the selected SHA and RDS endpoint, applies the manifest, restarts the backend, and waits for rollouts.
+
 Check status:
 
 ```bash
 kubectl get pods -n minirtos
 kubectl get svc -n minirtos
-kubectl get pvc -n minirtos
+kubectl get ingress -n minirtos
 kubectl get nodes -o wide
 ```
 
 Expected pods:
 
 ```text
-minirtos-postgres-0        1/1 Running
 minirtos-backend-...       1/1 Running
 minirtos-frontend-...      1/1 Running
 ```
@@ -195,7 +219,6 @@ minirtos-frontend-...      1/1 Running
 Expected AWS services:
 
 ```text
-minirtos-postgres            ClusterIP   5432
 minirtos-backend             ClusterIP   8081
 minirtos-frontend            ClusterIP   80
 ```

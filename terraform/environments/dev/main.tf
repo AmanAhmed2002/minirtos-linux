@@ -10,6 +10,10 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.0"
+    }
   }
 }
 
@@ -29,6 +33,9 @@ module "eks" {
   vpc_id             = module.vpc.vpc_id
   subnet_ids         = module.vpc.public_subnet_ids
   node_instance_type = "t3.small"
+  node_desired_count = var.eks_node_desired_count
+  node_min_count     = var.eks_node_min_count
+  node_max_count     = var.eks_node_max_count
   kubernetes_version = var.kubernetes_version
 }
 
@@ -55,4 +62,25 @@ module "rds" {
     Environment = "dev"
     ManagedBy   = "Terraform"
   }
+}
+
+module "cost_controls" {
+  source = "../../modules/cost-controls"
+
+  project_name = var.project_name
+  environment  = "dev"
+  aws_region   = var.aws_region
+
+  eks_cluster_name = module.eks.cluster_name
+  eks_cluster_arn  = module.eks.cluster_arn
+
+  default_node_desired_count = var.eks_node_desired_count
+  default_node_min_count     = var.eks_node_min_count
+  default_node_max_count     = var.eks_node_max_count
+
+  rds_instance_identifier = module.rds.instance_identifier
+  rds_instance_arn        = module.rds.instance_arn
+
+  cost_alert_start_usd     = var.cost_alert_start_usd
+  cost_alert_increment_usd = var.cost_alert_increment_usd
 }

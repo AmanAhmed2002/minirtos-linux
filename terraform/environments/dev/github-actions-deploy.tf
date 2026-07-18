@@ -87,6 +87,19 @@ data "aws_iam_policy_document" "github_actions_deploy_permissions" {
       module.rds.master_user_secret_arn
     ]
   }
+
+  statement {
+    sid    = "InvokeCostControl"
+    effect = "Allow"
+
+    actions = [
+      "lambda:InvokeFunction"
+    ]
+
+    resources = [
+      module.cost_controls.lambda_function_arn
+    ]
+  }
 }
 
 resource "aws_iam_policy" "github_actions_deploy" {

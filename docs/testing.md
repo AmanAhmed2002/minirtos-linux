@@ -1,13 +1,13 @@
 # MiniRTOS-Linux / MiniRTOS Playground Testing Guide
 
-**Updated:** June 17, 2026
-**Current Phase:** Phase 39 — HTTPS, custom domain, and production deployment polish
+**Updated:** June 26, 2026
+**Current Phase:** Phase 41 — Learning platform expansion and AWS deployment automation
 
 ---
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP and frontend Docker integration. Phase 29 added educational modules and CSS-based frontend visualizers. Phase 30 hardened Docker Compose and Dockerfiles for backend, dev frontend, and production frontend workflows. Phase 31 added frontend automated tests with Vitest and React Testing Library. Phase 32 added Amplitude event tracking with a safe `isAnalyticsEnabled` guard. Phase 33 added local Kubernetes manifests and `kind` host port mappings. Phase 35 added Kustomize overlays. Phase 36 added Terraform-managed EKS, EBS-backed PostgreSQL storage, AWS Load Balancer Controller IAM wiring, and ALB-oriented smoke testing. Phase 38 updated the EKS target to `1.34`, moved NodePorts into local/GHCR overlays only, added AWS SHA-tag deployment, and simplified the smoke test to lightweight production health checks. Phase 39 verified the AWS deployment over HTTPS at `https://app.minirtos.biz`.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React/TypeScript dashboard MVP and frontend Docker integration. Phase 29 added educational modules and CSS-based frontend visualizers. Phase 30 hardened Docker Compose and Dockerfiles for backend, dev frontend, and production frontend workflows. Phase 31 added frontend automated tests with Vitest and React Testing Library. Phase 32 added Amplitude event tracking with a safe `isAnalyticsEnabled` guard. Phase 33 added local Kubernetes manifests and `kind` host port mappings. Phase 35 added Kustomize overlays. Phase 36 added Terraform-managed EKS, EBS-backed PostgreSQL storage, AWS Load Balancer Controller IAM wiring, and ALB-oriented smoke testing. Phase 38 updated the EKS target to `1.34`, moved NodePorts into local/GHCR overlays only, added AWS SHA-tag deployment, and simplified the smoke test to lightweight production health checks. Phase 39 verified the AWS deployment over HTTPS at `https://app.minirtos.biz`. Phase 40 added manual GitHub Actions AWS deployment through OIDC, S3/DynamoDB remote Terraform state, and RDS PostgreSQL for AWS persistence. Phase 41 expanded the frontend into routed learning pages and added runtime log retrieval through `GET /api/runs/{runId}/logs`.
 
 Verified Phase 27 behavior:
 
@@ -15,6 +15,7 @@ Verified Phase 27 behavior:
 - `GET /api/runs` returns HTTP 200 with persisted run summaries.
 - `GET /api/runs/{runId}` returns HTTP 200 with one persisted run.
 - `GET /api/runs/{runId}/analysis` returns HTTP 200 with parsed persisted analysis.
+- `GET /api/runs/{runId}/logs` returns HTTP 200 with saved runtime log path and content.
 - `queue_overflow` returns `status=COMPLETED`, `runtimeHealth=WARNING`, and `errorMessage=null`.
 - The PostgreSQL `@Lob` issue was fixed by storing `rawReport` as normal `TEXT`.
 
@@ -40,6 +41,7 @@ Verified Phase 29 behavior:
 - Task runtime timeline displays parsed task metric data.
 - Fault/health explanation panel displays student-friendly runtime health and root-cause explanations.
 - Raw analyzer report still expands correctly.
+The frontend API layer can retrieve saved runtime log content for a completed run.
 - User confirmed everything works and committed/pushed the phase.
 
 Verified Phase 30 behavior:
@@ -172,6 +174,7 @@ Inspect persisted analysis:
 
 ```bash
 curl -i http://localhost:8081/api/runs/<runId>/analysis
+curl -i http://localhost:8081/api/runs/<runId>/logs
 ```
 
 Expected:
@@ -220,6 +223,7 @@ Manual frontend checks:
 
 ```text
 Open http://localhost:5173
+Home, Learn, Lesson Detail, Simulator, Runs, Analysis, and Glossary routes render.
 Scenario dropdown loads scenarios from backend.
 Guided Learning panel appears.
 Guided Learning panel changes when selecting a different scenario.
@@ -682,15 +686,15 @@ ghcr overlay: NodePort services are present for local GHCR-image testing
 aws overlay: no NodePort services; ClusterIP services plus ALB Ingress only
 ```
 
-For the AWS HTTPS deployment, run the lightweight smoke check after `scripts/deploy_aws_release.sh`, ALB reconciliation, DNS propagation, and ACM validation are complete:
+For the AWS HTTPS deployment, run the lightweight smoke check after `scripts/deploy_aws_release.sh` or the manual `Deploy AWS` GitHub Actions workflow, ALB reconciliation, DNS propagation, and ACM validation are complete:
 
 ```bash
 ./scripts/k8s_smoke_test.sh "https://app.minirtos.biz"
 ```
 
-The smoke script checks frontend root, `/api/health`, and `/api/runs`. It is a deployment-health helper, not a full integration test. Final AWS verification should still include the browser flow: dashboard load, scenario execution, run history, and analysis loading through the HTTPS custom-domain origin.
+The smoke script retries and checks frontend root, `/api/health`, and `/api/runs`. It is a deployment-health helper, not a full integration test. Final AWS verification should still include the browser flow: dashboard load, scenario execution, run history, and analysis loading through the HTTPS custom-domain origin.
 
-Phase 39 HTTPS checks:
+Phase 39+ HTTPS checks:
 
 ```bash
 nslookup app.minirtos.biz
@@ -727,13 +731,16 @@ Passing tests prove:
 - Spring Boot health and scenario APIs work.
 - Backend orchestration can run the simulator and analyzer successfully.
 - PostgreSQL can store and return run metadata and parsed analysis summaries.
+- The backend can return saved runtime log content for persisted runs.
 - Frontend TypeScript compiles.
 - Frontend production build succeeds.
 - Frontend can consume backend APIs when backend, CORS, routing, and `VITE_API_BASE_URL` are configured correctly.
+- Routed frontend pages share scenario/run/analysis state through the data provider.
 - Phase 29 educational and visualizer components render using existing API data.
 - Phase 30 dev and production Docker frontend workflows both work.
 - Phase 31 frontend component tests pass (Vitest + React Testing Library, 16 tests).
 - Phase 32 Amplitude analytics are a complete no-op in tests and dev without an API key.
+- Phase 40 AWS deployment automation validates image SHA input and GHCR image existence before applying manifests.
 
 ---
 
@@ -749,7 +756,7 @@ Current tests do not fully prove:
 - End-to-end local Kubernetes deployment from these manifests has not been re-run in this documentation pass.
 - Full async job execution under concurrent users.
 - Production-grade database migrations beyond the initial schema.
-- Full production cloud readiness; the AWS smoke test is intentionally lightweight and does not replace browser scenario/run/analysis verification.
+- Full production cloud readiness; the AWS smoke test is intentionally lightweight and does not replace browser scenario/run/analysis/log verification.
 
 ---
 
@@ -766,5 +773,5 @@ Future GitHub Actions improvements:
 - Add ML-training smoke test.
 - Add backend orchestration smoke test with a short-duration test config.
 - Add frontend Node setup, `npm ci`, `npm run typecheck`, and `npm run build`.
-- Add frontend tests once Vitest/React Testing Library are introduced.
+- Expand frontend tests for the routed pages, lesson catalog, glossary, and run-log retrieval.
 - Add analytics unit tests: verify no-op behavior without key, and correct event payloads with key.

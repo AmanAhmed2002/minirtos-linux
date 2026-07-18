@@ -366,6 +366,7 @@ Frontend call:
 
 ```text
 GET /api/runs/{runId}/analysis
+GET /api/runs/{runId}/logs
 ```
 
 Displayed fields:

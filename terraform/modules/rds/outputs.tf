@@ -27,3 +27,13 @@ output "master_user_secret_arn" {
   description = "Secrets Manager ARN for the RDS-managed master password."
   value       = aws_db_instance.postgres.master_user_secret[0].secret_arn
 }
+
+output "instance_identifier" {
+  description = "RDS DB instance identifier used by start/stop automation."
+  value       = aws_db_instance.postgres.identifier
+}
+
+output "instance_arn" {
+  description = "RDS DB instance ARN used by start/stop automation."
+  value       = aws_db_instance.postgres.arn
+}

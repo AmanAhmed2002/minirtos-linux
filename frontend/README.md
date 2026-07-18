@@ -1,15 +1,15 @@
 # MiniRTOS Playground Frontend
 
-React + TypeScript dashboard for MiniRTOS Playground.
+React + TypeScript learning application for MiniRTOS Playground.
 
-**Updated:** June 17, 2026
-**Current Phase:** Phase 39 — HTTPS, custom domain, and production deployment polish
+**Updated:** June 26, 2026
+**Current Phase:** Phase 41 — Routed learning platform and AWS deployment automation
 
 ---
 
 ## Current Phase
 
-Phase 28 added the React Dashboard MVP. Phase 29 expanded it into a more student-friendly learning dashboard by adding guided scenario education and CSS-based visualizations. Phase 30 added separate dev and production Docker frontend workflows. Phase 31 added frontend automated tests with Vitest and React Testing Library. Phase 32 added Amplitude event tracking with a safe `isAnalyticsEnabled` guard. Phase 33 added a local Kubernetes deployment path using frontend and backend NodePorts. Phase 36 added EKS deployment support where the frontend can use relative `/api` calls behind one ALB origin. Phase 38 kept that frontend behavior and hardened AWS deployment by using immutable Git SHA image tags instead of `latest`. Phase 39 verified the same-origin frontend over HTTPS at `https://app.minirtos.biz`.
+Phase 28 added the React Dashboard MVP. Phase 29 expanded it into a more student-friendly learning dashboard by adding guided scenario education and CSS-based visualizations. Phase 30 added separate dev and production Docker frontend workflows. Phase 31 added frontend automated tests with Vitest and React Testing Library. Phase 32 added Amplitude event tracking with a safe `isAnalyticsEnabled` guard. Phase 33 added a local Kubernetes deployment path using frontend and backend NodePorts. Phase 36 added EKS deployment support where the frontend can use relative `/api` calls behind one ALB origin. Phase 38 kept that frontend behavior and hardened AWS deployment by using immutable Git SHA image tags instead of `latest`. Phase 39 verified the same-origin frontend over HTTPS at `https://app.minirtos.biz`. Phase 40 added the manual GitHub Actions AWS deployment path and RDS-backed AWS persistence. Phase 41 refactored the frontend into a React Router application with Home, Learn, Lesson Detail, Simulator, Runs, Analysis, and Glossary pages backed by shared `MiniRtosDataProvider` state.
 
 The frontend can now run in four supported modes:
 
@@ -35,14 +35,18 @@ EKS frontend:
 
 ## Features
 
+- Route between Home, Learn, Lesson Detail, Simulator, Runs, Analysis, and Glossary pages.
+- Keep scenarios, runs, selected run, and analysis in shared `MiniRtosDataProvider` state across routes.
 - Fetch scenarios from the Spring Boot backend.
 - Select a scenario.
 - Trigger a backend-orchestrated MiniRTOS simulation run.
 - Display latest run status and runtime health.
 - Display persisted PostgreSQL-backed run history.
 - Load parsed analyzer summaries for completed runs.
+- Retrieve saved runtime log content through `GET /api/runs/{runId}/logs`.
 - Show task metrics, message drops, root causes, and raw analyzer output.
 - Show guided learning modules for the selected scenario.
+- Provide a beginner lesson catalog, lesson detail pages, glossary entries, and tooltip definitions.
 - Explain concepts such as periodic tasks, bounded queues, priority scheduling, EDF scheduling, queue pressure, CPU spikes, task crashes, slow tasks, dropped messages, and watchdog escalation.
 - Display a queue pressure visualizer using analyzer message summary data.
 - Display a task runtime timeline using analyzer task metrics.
@@ -280,7 +284,7 @@ If the frontend image was built with http://localhost:8081 instead of http://loc
 
 ---
 
-## Phase 28 Files
+## Phase 28/41 Files
 
 ```text
 frontend/package.json
@@ -290,6 +294,18 @@ frontend/README.md
 frontend/src/types/api.ts
 frontend/src/api/minirtosApi.ts
 frontend/src/components/DashboardHeader.tsx
+frontend/src/components/AppNav.tsx
+frontend/src/context/MiniRtosDataContext.tsx
+frontend/src/context/miniRtosData.ts
+frontend/src/pages/HomePage.tsx
+frontend/src/pages/LearnPage.tsx
+frontend/src/pages/LessonDetailPage.tsx
+frontend/src/pages/SimulatorPage.tsx
+frontend/src/pages/RunsPage.tsx
+frontend/src/pages/AnalysisPage.tsx
+frontend/src/pages/GlossaryPage.tsx
+frontend/src/data/lessonCatalog.ts
+frontend/src/data/glossary.ts
 frontend/src/components/ScenarioSelector.tsx
 frontend/src/components/RunResultCard.tsx
 frontend/src/components/RunHistory.tsx
@@ -302,7 +318,7 @@ frontend/src/main.tsx
 
 ---
 
-## Phase 29 Files
+## Phase 29/41 Learning Files
 
 New files:
 
@@ -312,6 +328,11 @@ frontend/src/components/LearningModulePanel.tsx
 frontend/src/components/QueuePressureChart.tsx
 frontend/src/components/TaskTimeline.tsx
 frontend/src/components/FaultExplanationPanel.tsx
+frontend/src/components/LessonCard.tsx
+frontend/src/components/ScenarioConceptCard.tsx
+frontend/src/components/TooltipTerm.tsx
+frontend/src/components/BeginnerSummary.tsx
+frontend/src/components/AnalysisExplanationPanel.tsx
 ```
 
 Updated files:
@@ -424,9 +445,13 @@ backend/src/main/java/com/minirtos/playground/config/CorsConfig.java
 
 | Component | Purpose |
 |---|---|
-| `DashboardHeader` | Displays the dashboard title and project/phase context. |
+| `AppNav` | Provides primary navigation across Home, Learn, Simulator, Runs, Analysis, and Glossary. |
+| `DashboardHeader` | Displays dashboard context where used by simulator-oriented views. |
 | `ScenarioSelector` | Lists backend scenarios and triggers selected run creation. |
 | `LearningModulePanel` | Shows guided educational content based on selected scenario. |
+| `LessonCard` | Presents each lesson module and its scenario action on the Learn page. |
+| `TooltipTerm` | Shows glossary-backed term definitions inline. |
+| `AnalysisExplanationPanel` | Adds beginner-readable interpretation before the detailed analyzer panel. |
 | `RunResultCard` | Displays the latest run status, health, and paths. |
 | `RunHistory` | Displays persisted PostgreSQL-backed run history. |
 | `AnalysisPanel` | Displays parsed analyzer output and composes the Phase 29 visualizers. |
@@ -445,9 +470,10 @@ GET  /api/scenarios
 POST /api/runs
 GET  /api/runs
 GET  /api/runs/{runId}/analysis
+GET  /api/runs/{runId}/logs
 ```
 
-Phases 29-33 did not require new backend endpoints.
+Phase 41 added the run-log endpoint; the routed pages otherwise continue to use the existing scenario, run, and analysis APIs.
 
 ---
 
@@ -456,6 +482,7 @@ Phases 29-33 did not require new backend endpoints.
 Expected after running the backend and either frontend mode:
 
 ```text
+Home, Learn, Simulator, Runs, Analysis, and Glossary routes render.
 Scenario dropdown loads.
 Guided Learning panel changes when scenario selection changes.
 Run selected scenario button works.
@@ -466,6 +493,7 @@ Queue pressure visualizer appears when messageSummary exists.
 Task runtime timeline appears when taskMetrics exists.
 Fault/health explanation panel appears when analysis loads.
 Raw analyzer report can still be expanded.
+A completed run's runtime log can be requested through the frontend API layer.
 ```
 
 Recommended scenario for verification:
@@ -628,7 +656,7 @@ http://localhost:8081
 ## Next Frontend Work
 
 ```text
-Phase 34 — TBD
+Phase 42 — Progress tracking, richer lesson checks, and production operations polish
 ```
 
 Completed recent frontend phases:
@@ -651,4 +679,10 @@ Phase 33 — Local Kubernetes Deployment
   frontend NodePort at localhost:30080
   backend NodePort at localhost:30081
   production frontend image must be rebuilt for the Kubernetes API URL
+
+Phase 41 — Routed Learning Platform
+  React Router routes for Home, Learn, Lesson Detail, Simulator, Runs,
+  Analysis, and Glossary; shared MiniRtosDataProvider state; lesson
+  catalog; glossary; tooltip definitions; beginner analysis explanations
+  and run-log API support
 ```
