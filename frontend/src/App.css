@@ -1309,11 +1309,95 @@ td {
 .simulator-page,
 .runs-page,
 .analysis-page,
+.looker-page,
 .learn-page,
 .glossary-page {
   display: flex;
   flex-direction: column;
   gap: 22px;
+}
+
+/* ============================================================
+   Looker Studio page
+   ============================================================ */
+.looker-page__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.looker-page__external-link {
+  flex: 0 0 auto;
+  margin-bottom: 4px;
+}
+
+.looker-report {
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 28px;
+  background: rgba(15, 23, 42, 0.72);
+  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.34);
+}
+
+.looker-report__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.looker-report__toolbar h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+}
+
+.looker-report__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #bbf7d0;
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.looker-report__status span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #4ade80;
+  box-shadow: 0 0 14px rgba(74, 222, 128, 0.7);
+}
+
+.looker-report__frame-wrap {
+  position: relative;
+  min-height: 760px;
+  background: #f8fafc;
+}
+
+.looker-report__frame {
+  display: block;
+  width: 100%;
+  min-height: 760px;
+  border: 0;
+  background: #f8fafc;
+}
+
+.looker-report__fallback {
+  margin: 0;
+  padding: 14px 24px 16px;
+  color: #93a4ba;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.looker-report__fallback a {
+  color: #7dd3fc;
+  font-weight: 700;
 }
 
 .beginner-notice {
@@ -1614,6 +1698,22 @@ td {
   .lesson-detail__footer a {
     width: 100%;
   }
+
+  .looker-page__header,
+  .looker-report__toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .looker-page__external-link {
+    width: 100%;
+  }
+
+  .looker-report__frame-wrap,
+  .looker-report__frame {
+    min-height: 620px;
+  }
+
 }
 
 /* ---- Lesson deep-dive (advanced, collapsed by default) ---- */

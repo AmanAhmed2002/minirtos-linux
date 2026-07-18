@@ -9,6 +9,7 @@ import { GlossaryPage } from "./pages/GlossaryPage";
 import { SimulatorPage } from "./pages/SimulatorPage";
 import { RunsPage } from "./pages/RunsPage";
 import { AnalysisPage } from "./pages/AnalysisPage";
+import { LookerPage } from "./pages/LookerPage";
 
 /**
  * Layout + routes. Exported separately from the default <App> so tests can
@@ -27,6 +28,7 @@ export function AppRoutes() {
             <Route path="/simulator" element={<SimulatorPage />} />
             <Route path="/runs" element={<RunsPage />} />
             <Route path="/analysis" element={<AnalysisPage />} />
+            <Route path="/looker" element={<LookerPage />} />
             <Route path="/glossary" element={<GlossaryPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

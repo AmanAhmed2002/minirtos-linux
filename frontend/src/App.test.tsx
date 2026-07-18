@@ -135,6 +135,26 @@ describe("App routing", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("embeds the MiniRTOS Looker Studio dashboard", () => {
+    renderAt("/looker");
+
+    expect(
+      screen.getByRole("heading", { name: "Explore MiniRTOS telemetry" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTitle("MiniRTOS Looker Studio analytics dashboard")
+    ).toHaveAttribute(
+      "src",
+      "https://lookerstudio.google.com/embed/reporting/2abc4f30-bfdf-4628-b5b0-4f1482ccb5e4"
+    );
+    expect(
+      screen.getByRole("link", { name: /Open in Looker Studio/i })
+    ).toHaveAttribute(
+      "href",
+      "https://lookerstudio.google.com/reporting/2abc4f30-bfdf-4628-b5b0-4f1482ccb5e4"
+    );
+  });
+
   it("shows a beginner summary tab and a raw logs tab on the Runs page", async () => {
     const user = userEvent.setup();
     renderAt("/runs");
