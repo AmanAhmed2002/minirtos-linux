@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { to: "/simulator", label: "Simulator" },
   { to: "/runs", label: "Runs" },
   { to: "/analysis", label: "Analysis" },
+  { to: "/looker", label: "Looker" },
   { to: "/glossary", label: "Glossary" },
 ];
 
