@@ -1,0 +1,85 @@
+name: Control AWS Environment
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Temporary environment or cost-control action"
+        required: true
+        default: "status"
+        type: choice
+        options:
+          - status
+          - status-sms
+          - check-costs
+          - start
+          - destroy
+      confirm:
+        description: "For START or DESTROY, type the selected action; otherwise type run"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: minirtos-aws-control
+  cancel-in-progress: false
+
+jobs:
+  control:
+    name: ${{ inputs.action }} MiniRTOS AWS
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Validate request
+        env:
+          ACTION: ${{ inputs.action }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [[ "$ACTION" == "start" || "$ACTION" == "destroy" ]]; then
+            if [[ "$CONFIRM" != "$ACTION" ]]; then
+              echo "ERROR: Type $ACTION in the confirmation field."
+              exit 1
+            fi
+          elif [[ "$CONFIRM" != "run" ]]; then
+            echo "ERROR: Type run in the confirmation field."
+            exit 1
+          fi
+
+          if [[ "${GITHUB_REF}" != "refs/heads/main" ]]; then
+            echo "ERROR: AWS control must be run from main."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Invoke cost controller
+        env:
+          ACTION: ${{ inputs.action }}
+          FUNCTION_NAME: ${{ vars.COST_CONTROL_LAMBDA_NAME }}
+        run: |
+          if [[ -z "$FUNCTION_NAME" ]]; then
+            echo "ERROR: Set the COST_CONTROL_LAMBDA_NAME repository variable from the Terraform output."
+            exit 1
+          fi
+
+          aws lambda invoke \
+            --function-name "$FUNCTION_NAME" \
+            --cli-binary-format raw-in-base64-out \
+            --payload "$(jq -nc --arg action "$ACTION" '{action: $action, source: "github-actions"}')" \
+            /tmp/cost-control-response.json \
+            >/tmp/cost-control-metadata.json
+
+          jq . /tmp/cost-control-response.json
+
+          FUNCTION_ERROR="$(jq -r '.FunctionError // empty' /tmp/cost-control-metadata.json)"
+          if [[ -n "$FUNCTION_ERROR" ]]; then
+            echo "ERROR: Lambda returned $FUNCTION_ERROR."
+            exit 1
+          fi

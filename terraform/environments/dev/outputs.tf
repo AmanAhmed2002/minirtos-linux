@@ -68,3 +68,23 @@ output "rds_master_user_secret_arn" {
   description = "Secrets Manager ARN for the RDS master password."
   value       = module.rds.master_user_secret_arn
 }
+
+output "cost_control_lambda_name" {
+  description = "Lambda invoked by scheduled GitHub Actions and two-way SMS commands."
+  value       = module.cost_controls.lambda_function_name
+}
+
+output "cost_control_sms_topic_arn" {
+  description = "SNS topic to select as the AWS End User Messaging two-way SMS destination."
+  value       = module.cost_controls.inbound_sms_topic_arn
+}
+
+output "cost_control_phone_secret_arn" {
+  description = "Secrets Manager secret populated by the SMS setup script with the authorized phone and origination identity."
+  value       = module.cost_controls.phone_configuration_secret_arn
+}
+
+output "cost_control_daily_schedule_arn" {
+  description = "Toronto-time EventBridge Scheduler schedule for daily spend and temporary-shutdown checks."
+  value       = module.cost_controls.daily_schedule_arn
+}

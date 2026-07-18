@@ -1,0 +1,125 @@
+# MiniRTOS Looker Studio Dashboard Plan
+
+## Scope and source data
+
+This dashboard will use `minirtos_looker_telemetry.csv`, a run-level export derived only from the nine existing timestamped JSONL logs under `runs/` and their existing `analysis.txt` results. No new simulations were executed, and no application, container, configuration, or source-code changes were made.
+
+The export contains one row per recorded run. The timestamp is reconstructed from the UTC timestamp encoded in each run directory name. Event metrics are counted directly from `runtime_logs.jsonl`; `status` and `anomaly_score` come from the corresponding analyzer output.
+
+Important interpretation notes:
+
+- The dataset contains nine runs, not synthetic rows.
+- Available scenarios are `normal`, `queue_overflow`, `deadline_scheduler`, `priority_scheduler`, `cpu_spike`, and `task_crash`.
+- Existing timestamped runs do not cover `slow_task`, `dropped_messages`, or `watchdog_slow_task`, even though curated logs for those scenarios exist under `logs/`. They are excluded because those files do not provide a trustworthy wall-clock run timestamp.
+- The runtime uses `WARNING` and `UNSTABLE`; it does not emit the proposed `Healthy`, `Warning`, and `Failed` labels.
+- There is no telemetry field that can honestly be called `confidence_score`. The CSV uses the analyzer's `anomaly_score` instead.
+- Even the recorded `normal` run is classified `WARNING` because it contains 339 queue-full message drops. The dashboard must display this result as recorded rather than relabeling it healthy.
+- `warning_count` and `error_count` count telemetry events by severity; they are not a count of analyzer recommendations.
+- `runtime_ms` is observed log duration, not wall-clock backend request latency.
+
+## Import into Google Sheets
+
+1. Create a Google Sheet named **MiniRTOS Operational Data**.
+2. Import `minirtos_looker_telemetry.csv` into a worksheet named **Runs**.
+3. Keep the first row as headers.
+4. Format `run_timestamp_utc` as Date time.
+5. Treat `run_id`, `scenario`, `scheduler_mode`, and `status` as text dimensions.
+6. Treat all count fields and `runtime_ms` as numeric metrics.
+7. Treat `anomaly_score` as a decimal number. Do not rename it confidence score.
+
+If Google Sheets does not parse the nanosecond timestamps automatically, create a second column named `run_timestamp` with this formula in row 2 and fill it down:
+
+```text
+=VALUE(SUBSTITUTE(LEFT(A2,19),"T"," "))
+```
+
+Use `run_timestamp` as the Looker Studio date dimension. The source timestamps are UTC.
+
+## Connect Looker Studio
+
+1. Create a blank Looker Studio report.
+2. Connect the **MiniRTOS Operational Data** Google Sheet and select the **Runs** worksheet.
+3. Confirm field types before adding charts.
+4. Set the report title to **MiniRTOS Operational Health Dashboard**.
+
+## Dashboard components
+
+Add four scorecards:
+
+1. **Total Runs** — Record Count.
+2. **Unstable Runs** — Record Count filtered to `status = UNSTABLE`.
+3. **Total Warning Events** — Sum of `warning_count`.
+4. **Total Dropped Messages** — Sum of `dropped_messages`.
+
+Add these charts:
+
+### Scenario comparison bar chart
+
+- Dimension: `scenario`
+- Metric: Sum of `warning_count`
+- Optional second metric: Sum of `dropped_messages`
+- Purpose: compare event pressure across the recorded scenarios
+
+Because `queue_overflow` has four recorded runs while other scenarios have one, summed values reflect both severity and run frequency. For a scenario-normalized comparison, use Average rather than Sum.
+
+### Runtime time series
+
+- Date dimension: `run_timestamp_utc` or the parsed `run_timestamp`
+- Metric: Average of `runtime_ms`
+- Breakdown dimension: `scenario`
+- Purpose: compare observed runtime duration across recorded runs
+
+All simulations are configured for about 30 seconds, so this chart will show small differences. A second time series using `anomaly_score` may be more visually informative.
+
+### Detailed results table
+
+Include:
+
+- `run_id`
+- `run_timestamp_utc`
+- `scenario`
+- `scheduler_mode`
+- `status`
+- `warning_count`
+- `error_count`
+- `dropped_messages`
+- `runtime_ms`
+- `deadline_misses`
+- `fault_injections`
+- `task_failures`
+- `task_skips`
+- `anomaly_score`
+
+## Interactions
+
+Add dropdown controls for:
+
+- `scenario`
+- `status`
+- `scheduler_mode`
+
+Add a date-range control using the parsed timestamp field. With only nine historical runs, the date control is mainly a workflow demonstration rather than a deep trend-analysis feature.
+
+## Validation targets
+
+Before sharing the report, clear all filters and verify these totals against the CSV:
+
+- Total runs: **9**
+- Unstable runs: **2**
+- Warning events: **5,559**
+- Error events: **2**
+- Dropped messages: **5,266**
+- Deadline misses: **193**
+- Fault injections: **98**
+- Task failures: **1**
+- Task skips: **99**
+
+Also verify that filtering to `cpu_spike` shows 193 deadline misses, 97 fault injections, and an anomaly score of 1.00; filtering to `task_crash` shows 1 task failure, 99 task skips, 2 error events, and an anomaly score of 1.00.
+
+## Embed later, without changing the application now
+
+Once the standalone dashboard is correct, use Looker Studio's **Embed report** workflow and its generated embed URL. Embedding into MiniRTOS is deliberately outside this data-preparation task and should be handled as a separate application change.
+
+## Truthful project description
+
+> Converted existing MiniRTOS JSONL telemetry and analyzer results into a run-level CSV, then built a Looker Studio operational dashboard with KPI scorecards, scenario and status filters, runtime trends, anomaly scores, and detailed fault metrics.

@@ -355,7 +355,8 @@ POST /api/runs with scenarioId=queue_overflow
 -> runtimeHealth=WARNING
 -> errorMessage=null
 -> GET /api/runs returns the persisted run
--> GET /api/runs/{runId}/analysis returns queueFullDrops and faultInjectedDrops
+-> GET /api/runs/{runId}/analysis
+GET /api/runs/{runId}/logs returns queueFullDrops and faultInjectedDrops
 ```
 
 Frontend interpretation:

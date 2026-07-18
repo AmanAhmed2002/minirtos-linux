@@ -270,7 +270,7 @@ docker/Dockerfile.frontend
 ## 10. Next Phase
 
 ```text
-Phase 34 — TBD
+Phase 40/41 follow-up — AWS RDS overlay, GitHub Actions deployment, and routed learning platform are documented in `docs/phase40-aws-automation-rds-update-notes.md`.
 ```
 
 Natural follow-up areas:

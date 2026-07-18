@@ -2,14 +2,14 @@
 
 Java Spring Boot backend for the MiniRTOS Playground educational platform.
 
-**Updated:** June 17, 2026
-**Current Phase:** Phase 39 — HTTPS, custom domain, and production deployment polish
+**Updated:** June 26, 2026
+**Current Phase:** Phase 41 — Learning platform expansion and AWS deployment automation
 
 ---
 
 ## Current Status
 
-MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React Dashboard MVP and required local CORS support for browser API calls. Phase 29 added frontend educational modules and visualizers without requiring backend API changes. Phase 30 hardened the Docker backend/frontend workflow. Phase 31 added frontend automated tests. Phase 32 added frontend Amplitude tracking without backend API changes. Phase 33 added local Kubernetes manifests and a Kubernetes frontend origin for browser access. Phase 36 added EKS deployment support with AWS Load Balancer Controller IAM wiring and same-origin ALB routing. Phase 38 kept backend behavior unchanged while hardening the AWS overlay to ClusterIP-only services and immutable Git SHA image deployment. Phase 39 kept backend behavior unchanged while exposing the backend through the ALB HTTPS `/api` path at `https://app.minirtos.biz/api`.
+MiniRTOS-Linux Phases 1-23 are complete. Phase 24 defined the full-stack educational platform roadmap. Phase 25 completed the Java Spring Boot backend scaffold. Phase 26 completed the Run Orchestration API. Phase 27 completed PostgreSQL/Flyway run persistence. Phase 28 added the React Dashboard MVP and required local CORS support for browser API calls. Phase 29 added frontend educational modules and visualizers without requiring backend API changes. Phase 30 hardened the Docker backend/frontend workflow. Phase 31 added frontend automated tests. Phase 32 added frontend Amplitude tracking without backend API changes. Phase 33 added local Kubernetes manifests and a Kubernetes frontend origin for browser access. Phase 36 added EKS deployment support with AWS Load Balancer Controller IAM wiring and same-origin ALB routing. Phase 38 kept backend behavior unchanged while hardening the AWS overlay to ClusterIP-only services and immutable Git SHA image deployment. Phase 39 kept backend behavior unchanged while exposing the backend through the ALB HTTPS `/api` path at `https://app.minirtos.biz/api`. Phase 40 moved the AWS database path to Terraform-managed RDS PostgreSQL and added GitHub Actions OIDC deployment. Phase 41 added `GET /api/runs/{runId}/logs` so the learning UI can retrieve the persisted runtime log for a completed run.
 
 The backend can now:
 
@@ -19,6 +19,7 @@ The backend can now:
 - Run trusted C++ runtime scenarios through HTTP.
 - Run the Python analyzer after each simulation.
 - Save `runtime_logs.jsonl` and `analysis.txt` under `runs/<runId>/`.
+- Return saved runtime log content through `GET /api/runs/{runId}/logs`.
 - Parse analyzer text into structured JSON.
 - Persist run metadata and parsed analysis summaries in PostgreSQL.
 - Return run history after backend restarts.
@@ -26,6 +27,7 @@ The backend can now:
 - Serve APIs consumed by the production Nginx frontend running at `http://localhost:3000`.
 - Serve APIs consumed by the local Kubernetes frontend NodePort running at `http://localhost:30080`.
 - Serve APIs through the EKS ALB `/api` path when frontend and backend share the `https://app.minirtos.biz` origin.
+- Use RDS PostgreSQL in AWS while keeping Docker/local Kubernetes on the project PostgreSQL service.
 - Provide the persisted analysis data used by Phase 29 learning and visualizer components.
 - Expose actuator liveness and readiness probe paths for Kubernetes.
 
@@ -38,6 +40,7 @@ Verified behavior:
 - `GET /api/runs` returns HTTP 200 with persisted runs.
 - `GET /api/runs/{runId}` returns HTTP 200 with one persisted run.
 - `GET /api/runs/{runId}/analysis` returns HTTP 200 with parsed persisted analysis.
+- `GET /api/runs/{runId}/logs` returns HTTP 200 with the persisted runtime log path and content.
 - A successful `queue_overflow` run returned `status=COMPLETED`, `runtimeHealth=WARNING`, and `errorMessage=null`.
 - `WARNING` is expected for `queue_overflow` because the scenario intentionally creates bounded queue pressure and dropped messages.
 - Phase 29 frontend visualizers work using existing `messageSummary`, `taskMetrics`, `runtimeHealth`, `scenarioId`, and `rootCauses` fields.
@@ -48,7 +51,7 @@ Important implementation notes:
 
 - Backend uses Java 17.
 - Backend runs on port `8081` because Nginx uses `8080` locally.
-- PostgreSQL persistence uses Spring Data JPA and Flyway migrations.
+- PostgreSQL persistence uses Spring Data JPA and Flyway migrations. Local development uses Docker Compose PostgreSQL; AWS uses Terraform-managed RDS PostgreSQL.
 - `rawReport` should be stored as PostgreSQL `TEXT` without `@Lob`.
 - The backend accepts only known scenario IDs and never accepts arbitrary user-provided config paths.
 - Local React frontend calls require CORS for both dev and production origins.
@@ -248,6 +251,7 @@ Inspect one persisted run:
 ```bash
 curl http://localhost:8081/api/runs/<runId>
 curl http://localhost:8081/api/runs/<runId>/analysis
+curl http://localhost:8081/api/runs/<runId>/logs
 ```
 
 ---
@@ -377,6 +381,7 @@ GET  /api/scenarios
 POST /api/runs
 GET  /api/runs
 GET  /api/runs/{runId}/analysis
+GET  /api/runs/{runId}/logs
 ```
 
 Phase 29 frontend components use existing response fields:
@@ -394,7 +399,7 @@ AnalysisResponse.rootCauses
 AnalysisResponse.rawReport
 ```
 
-No backend endpoint change was required for Phases 29-33.
+Phase 41 added the run-log endpoint for the routed analysis experience; the earlier Phase 29-33 learning components still use existing analysis fields.
 
 ---
 
@@ -460,6 +465,10 @@ Returns one persisted run summary.
 ### `GET /api/runs/{runId}/analysis`
 
 Returns parsed analyzer JSON plus the raw analyzer report from persisted data.
+
+### `GET /api/runs/{runId}/logs`
+
+Returns the saved runtime log path and log content for the selected run.
 
 ---
 
@@ -618,5 +627,5 @@ Do not accept arbitrary config paths, runtime paths, analyzer paths, or shell co
 ## Next Phase
 
 ```text
-Phase 34 — TBD
+Phase 42 — Production operations polish, externalized secrets, and cost guardrails
 ```
