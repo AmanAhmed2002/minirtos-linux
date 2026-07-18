@@ -1,6 +1,14 @@
 const REPORT_ID = "2abc4f30-bfdf-4628-b5b0-4f1482ccb5e4";
-const REPORT_URL = `https://lookerstudio.google.com/reporting/${REPORT_ID}`;
-const EMBED_URL = `https://lookerstudio.google.com/embed/reporting/${REPORT_ID}`;
+const REPORT_PAGE_ID = "a103F";
+const REPORT_URL = `https://datastudio.google.com/reporting/${REPORT_ID}/page/${REPORT_PAGE_ID}`;
+const EMBED_URL = `https://datastudio.google.com/embed/reporting/${REPORT_ID}/page/${REPORT_PAGE_ID}`;
+const EMBED_SANDBOX = [
+  "allow-storage-access-by-user-activation",
+  "allow-scripts",
+  "allow-same-origin",
+  "allow-popups",
+  "allow-popups-to-escape-sandbox",
+].join(" ");
 
 export function LookerPage() {
   return (
@@ -43,6 +51,7 @@ export function LookerPage() {
             title="MiniRTOS Looker Studio analytics dashboard"
             loading="lazy"
             referrerPolicy="strict-origin-when-cross-origin"
+            sandbox={EMBED_SANDBOX}
             allowFullScreen
           />
         </div>

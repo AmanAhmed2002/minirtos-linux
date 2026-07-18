@@ -145,13 +145,19 @@ describe("App routing", () => {
       screen.getByTitle("MiniRTOS Looker Studio analytics dashboard")
     ).toHaveAttribute(
       "src",
-      "https://lookerstudio.google.com/embed/reporting/2abc4f30-bfdf-4628-b5b0-4f1482ccb5e4"
+      "https://datastudio.google.com/embed/reporting/2abc4f30-bfdf-4628-b5b0-4f1482ccb5e4/page/a103F"
+    );
+    expect(
+      screen.getByTitle("MiniRTOS Looker Studio analytics dashboard")
+    ).toHaveAttribute(
+      "sandbox",
+      "allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
     );
     expect(
       screen.getByRole("link", { name: /Open in Looker Studio/i })
     ).toHaveAttribute(
       "href",
-      "https://lookerstudio.google.com/reporting/2abc4f30-bfdf-4628-b5b0-4f1482ccb5e4"
+      "https://datastudio.google.com/reporting/2abc4f30-bfdf-4628-b5b0-4f1482ccb5e4/page/a103F"
     );
   });
 
