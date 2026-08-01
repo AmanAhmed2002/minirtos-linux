@@ -83,4 +83,5 @@ module "cost_controls" {
 
   cost_alert_start_usd     = var.cost_alert_start_usd
   cost_alert_increment_usd = var.cost_alert_increment_usd
+  cost_alert_max_usd       = var.cost_alert_max_usd
 }

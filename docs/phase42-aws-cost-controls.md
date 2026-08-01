@@ -19,7 +19,7 @@ Each daily invocation:
 
 1. Reconciles the last requested environment state.
 2. Reads actual month-to-date account spend from AWS Cost Explorer.
-3. Sends an SMS at $50, then at every additional $25 threshold: $75, $100, $125, and so on.
+3. Sends an SMS at $20, $30, $40, and $50. The $50 message is the final spend alert for the month.
 4. Records the last alerted threshold in Systems Manager Parameter Store so the same threshold is not sent again.
 
 Cost Explorer data is not real-time, so an alert is sent on the first daily check whose available month-to-date value has crossed a threshold.

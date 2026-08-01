@@ -18,8 +18,9 @@ ENVIRONMENT = {
     "DEFAULT_NODE_DESIRED_COUNT": "2",
     "DEFAULT_NODE_MIN_COUNT": "1",
     "DEFAULT_NODE_MAX_COUNT": "2",
-    "COST_ALERT_START_USD": "50",
-    "COST_ALERT_INCREMENT_USD": "25",
+    "COST_ALERT_START_USD": "20",
+    "COST_ALERT_INCREMENT_USD": "10",
+    "COST_ALERT_MAX_USD": "50",
     "LOCAL_TIME_ZONE": "America/Toronto",
 }
 
@@ -146,7 +147,7 @@ class CostControlHandlerTest(unittest.TestCase):
         self.assertEqual(result["requested_state"], "stopped")
         self.assertEqual(result["rds_status"], "stopped")
 
-    def test_cost_alerts_repeat_every_25_dollars_after_50(self):
+    def test_cost_alerts_run_from_20_through_50_only(self):
         with patch.object(
             self.handler, "_month_to_date_cost", return_value=self.handler.Decimal("101")
         ), patch.object(
@@ -154,15 +155,34 @@ class CostControlHandlerTest(unittest.TestCase):
         ), patch.object(
             self.handler, "_put_json_parameter"
         ) as put_state, patch.object(
-            self.handler, "send_sms", side_effect=["m1", "m2", "m3"]
+            self.handler, "send_sms", side_effect=["m1", "m2", "m3", "m4"]
         ) as send:
             result = self.handler.check_costs(date(2026, 7, 18))
 
-        self.assertEqual(result["alerted_thresholds"], ["50", "75", "100"])
-        self.assertEqual(send.call_count, 3)
+        self.assertEqual(result["alerted_thresholds"], ["20", "30", "40", "50"])
+        self.assertEqual(send.call_count, 4)
         saved = put_state.call_args.args[1]
         self.assertEqual(saved["month"], "2026-07")
-        self.assertEqual(saved["last_alert_threshold"], "100")
+        self.assertEqual(saved["last_alert_threshold"], "50")
+
+    def test_new_thresholds_replace_legacy_unalerted_sentinel(self):
+        legacy_state = {
+            "month": "2026-08",
+            "last_alert_threshold": "25",
+        }
+        with patch.object(
+            self.handler, "_month_to_date_cost", return_value=self.handler.Decimal("20")
+        ), patch.object(
+            self.handler, "_get_json_parameter", return_value=legacy_state
+        ), patch.object(
+            self.handler, "_put_json_parameter"
+        ), patch.object(
+            self.handler, "send_sms", return_value="m1"
+        ) as send:
+            result = self.handler.check_costs(date(2026, 8, 1))
+
+        self.assertEqual(result["alerted_thresholds"], ["20"])
+        send.assert_called_once()
 
     def test_daily_maintenance_attempts_both_operations(self):
         with patch.object(

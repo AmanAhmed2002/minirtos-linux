@@ -55,7 +55,7 @@ variable "eks_node_max_count" {
 variable "cost_alert_start_usd" {
   description = "Actual month-to-date AWS spend that triggers the first SMS alert."
   type        = number
-  default     = 50
+  default     = 20
 
   validation {
     condition     = var.cost_alert_start_usd > 0
@@ -66,11 +66,22 @@ variable "cost_alert_start_usd" {
 variable "cost_alert_increment_usd" {
   description = "Additional month-to-date spend between repeat SMS alerts."
   type        = number
-  default     = 25
+  default     = 10
 
   validation {
     condition     = var.cost_alert_increment_usd > 0
     error_message = "cost_alert_increment_usd must be greater than zero."
+  }
+}
+
+variable "cost_alert_max_usd" {
+  description = "Final actual month-to-date AWS spend that triggers an SMS alert."
+  type        = number
+  default     = 50
+
+  validation {
+    condition     = var.cost_alert_max_usd > 0
+    error_message = "cost_alert_max_usd must be greater than zero."
   }
 }
 

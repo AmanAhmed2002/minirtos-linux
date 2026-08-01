@@ -214,6 +214,7 @@ resource "aws_lambda_function" "controller" {
       PHONE_CONFIG_SECRET_ARN    = aws_secretsmanager_secret.phone_configuration.arn
       COST_ALERT_START_USD       = tostring(var.cost_alert_start_usd)
       COST_ALERT_INCREMENT_USD   = tostring(var.cost_alert_increment_usd)
+      COST_ALERT_MAX_USD         = tostring(var.cost_alert_max_usd)
       SMS_MAX_PRICE_USD          = "0.50"
       LOCAL_TIME_ZONE            = var.schedule_time_zone
     }

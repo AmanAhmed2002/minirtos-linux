@@ -26,8 +26,9 @@ DEFAULT_CAPACITY = {
     "minSize": int(os.environ["DEFAULT_NODE_MIN_COUNT"]),
     "maxSize": int(os.environ["DEFAULT_NODE_MAX_COUNT"]),
 }
-COST_ALERT_START = Decimal(os.environ.get("COST_ALERT_START_USD", "50"))
-COST_ALERT_INCREMENT = Decimal(os.environ.get("COST_ALERT_INCREMENT_USD", "25"))
+COST_ALERT_START = Decimal(os.environ.get("COST_ALERT_START_USD", "20"))
+COST_ALERT_INCREMENT = Decimal(os.environ.get("COST_ALERT_INCREMENT_USD", "10"))
+COST_ALERT_MAX = Decimal(os.environ.get("COST_ALERT_MAX_USD", "50"))
 SMS_MAX_PRICE = os.environ.get("SMS_MAX_PRICE_USD", "0.50")
 LOCAL_TIME_ZONE = ZoneInfo(os.environ.get("LOCAL_TIME_ZONE", "America/Toronto"))
 
@@ -314,19 +315,29 @@ def check_costs(today=None):
     actual = _month_to_date_cost(today)
     state = _get_json_parameter(COST_STATE_PARAMETER) or {}
 
+    configured_thresholds = []
+    threshold = COST_ALERT_START
+    while threshold <= COST_ALERT_MAX:
+        configured_thresholds.append(threshold)
+        threshold += COST_ALERT_INCREMENT
+
+    initial_threshold = COST_ALERT_START - COST_ALERT_INCREMENT
     if state.get("month") == month:
         last_threshold = Decimal(
-            str(state.get("last_alert_threshold", COST_ALERT_START - COST_ALERT_INCREMENT))
+            str(state.get("last_alert_threshold", initial_threshold))
         )
+        # Reset a sentinel left by an older threshold configuration. This lets a
+        # mid-month rollout start using the new sequence without editing state.
+        if last_threshold not in configured_thresholds:
+            last_threshold = initial_threshold
     else:
-        last_threshold = COST_ALERT_START - COST_ALERT_INCREMENT
+        last_threshold = initial_threshold
 
-    crossed = []
-    threshold = COST_ALERT_START
-    while threshold <= actual:
-        if threshold > last_threshold:
-            crossed.append(threshold)
-        threshold += COST_ALERT_INCREMENT
+    crossed = [
+        threshold
+        for threshold in configured_thresholds
+        if last_threshold < threshold <= actual
+    ]
 
     message_ids = []
     for crossed_threshold in crossed:
