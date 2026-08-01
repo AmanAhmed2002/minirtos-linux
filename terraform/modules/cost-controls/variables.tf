@@ -68,6 +68,16 @@ variable "cost_alert_increment_usd" {
   }
 }
 
+variable "cost_alert_max_usd" {
+  description = "Final month-to-date actual-spend SMS threshold."
+  type        = number
+
+  validation {
+    condition     = var.cost_alert_max_usd > 0
+    error_message = "cost_alert_max_usd must be greater than zero."
+  }
+}
+
 variable "daily_schedule_expression" {
   description = "EventBridge Scheduler cron expression for the daily cost and shutdown-state check."
   type        = string
