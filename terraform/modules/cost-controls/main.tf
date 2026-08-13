@@ -27,6 +27,21 @@ resource "aws_secretsmanager_secret" "phone_configuration" {
   }
 }
 
+# Populated manually with a fine-grained GitHub token so the Lambda can dispatch
+# the teardown/rebuild workflow. Terraform creates the container only; the token
+# value is never stored in state.
+resource "aws_secretsmanager_secret" "github_token" {
+  name                    = "${local.name_prefix}-github-token"
+  description             = "Fine-grained GitHub token with Actions: write, used to dispatch the MiniRTOS teardown/rebuild workflow"
+  recovery_window_in_days = 7
+
+  tags = {
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
+}
+
 resource "aws_sns_topic" "inbound_sms" {
   name = "${local.name_prefix}-inbound-sms"
 
@@ -117,9 +132,12 @@ resource "aws_iam_role_policy_attachment" "controller_logs" {
 
 data "aws_iam_policy_document" "controller" {
   statement {
-    sid       = "ListEksNodeGroups"
-    effect    = "Allow"
-    actions   = ["eks:ListNodegroups"]
+    sid    = "InspectEksCluster"
+    effect = "Allow"
+    actions = [
+      "eks:ListNodegroups",
+      "eks:DescribeCluster"
+    ]
     resources = [var.eks_cluster_arn]
   }
 
@@ -157,10 +175,13 @@ data "aws_iam_policy_document" "controller" {
   }
 
   statement {
-    sid       = "ReadPhoneConfiguration"
-    effect    = "Allow"
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [aws_secretsmanager_secret.phone_configuration.arn]
+    sid     = "ReadPhoneConfiguration"
+    effect  = "Allow"
+    actions = ["secretsmanager:GetSecretValue"]
+    resources = [
+      aws_secretsmanager_secret.phone_configuration.arn,
+      aws_secretsmanager_secret.github_token.arn
+    ]
   }
 
   statement {
@@ -217,6 +238,11 @@ resource "aws_lambda_function" "controller" {
       COST_ALERT_MAX_USD         = tostring(var.cost_alert_max_usd)
       SMS_MAX_PRICE_USD          = "0.50"
       LOCAL_TIME_ZONE            = var.schedule_time_zone
+
+      GITHUB_REPOSITORY       = var.github_repository
+      GITHUB_REF              = var.github_deploy_branch
+      PROVISION_WORKFLOW      = var.provision_workflow
+      GITHUB_TOKEN_SECRET_ARN = aws_secretsmanager_secret.github_token.arn
     }
   }
 

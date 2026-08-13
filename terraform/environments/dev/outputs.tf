@@ -1,16 +1,16 @@
 output "cluster_name" {
   description = "EKS cluster name — use with aws eks update-kubeconfig"
-  value       = module.eks.cluster_name
+  value       = one(module.eks[*].cluster_name)
 }
 
 output "cluster_version" {
   description = "Kubernetes version configured for the EKS cluster"
-  value       = module.eks.cluster_version
+  value       = one(module.eks[*].cluster_version)
 }
 
 output "cluster_endpoint" {
   description = "EKS API endpoint"
-  value       = module.eks.cluster_endpoint
+  value       = one(module.eks[*].cluster_endpoint)
 }
 
 output "aws_region" {
@@ -30,7 +30,7 @@ output "public_subnet_ids" {
 
 output "aws_load_balancer_controller_role_arn" {
   description = "IAM role ARN used by the AWS Load Balancer Controller service account"
-  value       = module.eks.aws_load_balancer_controller_role_arn
+  value       = one(module.eks[*].aws_load_balancer_controller_role_arn)
 }
 
 
@@ -41,32 +41,32 @@ output "github_actions_deploy_role_arn" {
 
 output "rds_endpoint" {
   description = "RDS PostgreSQL endpoint."
-  value       = module.rds.endpoint
+  value       = one(module.rds[*].endpoint)
 }
 
 output "rds_port" {
   description = "RDS PostgreSQL port."
-  value       = module.rds.port
+  value       = one(module.rds[*].port)
 }
 
 output "rds_database_name" {
   description = "RDS database name."
-  value       = module.rds.database_name
+  value       = one(module.rds[*].database_name)
 }
 
 output "rds_username" {
   description = "RDS username."
-  value       = module.rds.username
+  value       = one(module.rds[*].username)
 }
 
 output "rds_security_group_id" {
   description = "RDS security group ID."
-  value       = module.rds.security_group_id
+  value       = one(module.rds[*].security_group_id)
 }
 
 output "rds_master_user_secret_arn" {
   description = "Secrets Manager ARN for the RDS master password."
-  value       = module.rds.master_user_secret_arn
+  value       = one(module.rds[*].master_user_secret_arn)
 }
 
 output "cost_control_lambda_name" {
@@ -87,4 +87,19 @@ output "cost_control_phone_secret_arn" {
 output "cost_control_daily_schedule_arn" {
   description = "Toronto-time EventBridge Scheduler schedule for daily spend and temporary-shutdown checks."
   value       = module.cost_controls.daily_schedule_arn
+}
+
+output "github_actions_provision_role_arn" {
+  description = "IAM role assumed by the rebuild/teardown workflow to run Terraform."
+  value       = aws_iam_role.github_actions_provision.arn
+}
+
+output "environment_enabled" {
+  description = "Whether the billable EKS/RDS environment currently exists."
+  value       = var.environment_enabled
+}
+
+output "cost_control_github_token_secret_arn" {
+  description = "Populate this secret with a fine-grained GitHub token before texting DESTROY or START."
+  value       = module.cost_controls.github_token_secret_arn
 }

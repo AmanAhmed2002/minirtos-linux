@@ -22,3 +22,8 @@ output "daily_schedule_arn" {
   description = "ARN of the Toronto-time daily maintenance schedule."
   value       = aws_scheduler_schedule.daily_maintenance.arn
 }
+
+output "github_token_secret_arn" {
+  description = "Secret that must be populated with a fine-grained GitHub token before DESTROY or START can dispatch the provisioning workflow."
+  value       = aws_secretsmanager_secret.github_token.arn
+}

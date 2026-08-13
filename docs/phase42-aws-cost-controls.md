@@ -24,17 +24,80 @@ Each daily invocation:
 
 Cost Explorer data is not real-time, so an alert is sent on the first daily check whose available month-to-date value has crossed a threshold.
 
-## Temporary environment controls
+## Environment controls
 
 The accepted commands are:
 
-- `DESTROY` or `STOP`: set every EKS managed node group's desired/minimum capacity to zero and temporarily stop RDS.
-- `START` or `RESUME`: start RDS and restore EKS to the Terraform-configured full capacity, currently desired 2, minimum 1, maximum 2.
-- `STATUS`: return the worker capacity and RDS state by SMS.
+- `DESTROY` or `STOP`: destroy the entire billable environment.
+- `START` or `RESUME`: rebuild it and redeploy the application.
+- `STATUS`: report by SMS whether the cluster and database exist.
 
-`DESTROY` does not call Terraform destroy and has no permission to delete EKS, RDS, VPC, storage, or any other infrastructure. The requested stopped state is saved in Parameter Store. The daily reconciliation is important because AWS automatically restarts an RDS instance after seven consecutive stopped days.
+### Why DESTROY is a full teardown
 
-Scaling EKS workers to zero and stopping RDS does not reduce the AWS bill to literal zero. The EKS control plane, load balancer, RDS storage/backups, phone-number lease, and other retained resources can still incur charges.
+The original implementation only scaled worker node groups to zero and stopped
+RDS. That removed the worker EC2 charge and nothing else. Measured on a full day
+with the environment "shut down", the account still billed **$3.19/day**:
+
+| Item | $/day | Removed by scaling workers to zero? |
+| --- | --- | --- |
+| EKS control plane | 2.30 | No — flat $0.10/hr while the cluster exists |
+| Application Load Balancer | 0.52 | No — created by the in-cluster controller |
+| Public IPv4 addresses | 0.23 | No — attached to the load balancer |
+| RDS storage and backups | 0.07 | No — storage bills while stopped |
+| Phone lease, Secrets Manager, Cost Explorer | 0.07 | No |
+
+The EKS control plane alone was about 72% of the bill, and the load balancer and
+its addresses were never tracked by Terraform, so they survived every shutdown.
+Repeat `DESTROY` texts then returned success without changing anything, which
+made the environment look like it kept restarting itself.
+
+`DESTROY` now deletes the EKS cluster, node group, RDS instance, load balancer,
+target groups, public IPv4 addresses, and unattached EBS volumes. It keeps the
+VPC (free, no NAT gateway), the cost-control Lambda, the SMS wiring, and a final
+RDS snapshot. Residual spend is roughly **$2/month**.
+
+`START` restores the newest snapshot, so run history survives a teardown.
+
+### How the commands execute
+
+Terraform needs roughly 20 minutes and Lambda hard-caps at 15, so the Lambda does
+not run Terraform. It records the requested state in Parameter Store and
+dispatches the `provision-aws.yml` workflow through the GitHub API. The workflow
+runs Terraform, redeploys the app, and texts the result.
+
+The daily reconciliation still matters: AWS force-starts a stopped RDS instance
+after seven days, and a failed workflow can leave the environment half-built. If
+the requested state is `stopped` but any billable resource exists, the reconciler
+re-dispatches the teardown and sends an SMS.
+
+### One-time setup for DESTROY and START
+
+1. Create a fine-grained GitHub personal access token scoped to this repository
+   with **Actions: read and write**.
+2. Store it in the Terraform-created secret:
+
+   ```bash
+   aws secretsmanager put-secret-value \
+     --secret-id "$(terraform -chdir=terraform/environments/dev output -raw cost_control_github_token_secret_arn)" \
+     --secret-string 'ghp_your_token_here' \
+     --region us-east-1
+   ```
+
+3. Set the repository variable `AWS_GITHUB_ACTIONS_PROVISION_ROLE_ARN` to
+   `terraform output -raw github_actions_provision_role_arn`.
+4. `provision-aws.yml` must exist on the default branch, because
+   `workflow_dispatch` only dispatches workflows from there.
+
+The provisioning role holds `AdministratorAccess` because Terraform creates EKS,
+RDS, VPC, and IAM resources. It is separate from the deploy role and is still
+restricted by OIDC to the deploy branch of this repository.
+
+### Custom domain caveat
+
+The load balancer is created by the AWS Load Balancer Controller with a
+generated name, so every rebuild produces a **new** hostname. The workflow texts
+the new hostname; point the `app.minirtos.biz` CNAME at it after a `START`. The
+ACM certificate is free and is kept across teardowns.
 
 ## Terraform deployment
 
@@ -58,7 +121,9 @@ terraform output -raw cost_control_daily_schedule_arn
 
 Set the GitHub repository variable `COST_CONTROL_LAMBDA_NAME` to the first output. The existing GitHub OIDC deploy role is extended with permission to invoke only this Lambda.
 
-The **Control AWS Environment** workflow then provides manual `status`, `status-sms`, `check-costs`, `start`, and `destroy` actions. State-changing actions require their action name as confirmation.
+The **Control AWS Environment** workflow then provides manual `status`, `status-sms`, `check-costs`, `start`, and `destroy` actions. State-changing actions require their action name as confirmation. `start` and `destroy` dispatch **Provision AWS Environment**, which is where the Terraform output appears.
+
+`environment_enabled` has no default, so every `plan` and `apply` must state it. Use `-var environment_enabled=false` to change anything while the environment is torn down, and `true` only when you intend to rebuild it.
 
 ## AWS-native two-way SMS setup
 

@@ -70,8 +70,18 @@ data "aws_iam_policy_document" "github_actions_deploy_permissions" {
     ]
 
     resources = [
-      module.eks.cluster_arn
+      local.eks_cluster_arn
     ]
+  }
+
+  # The deploy and hourly-sync workflows resolve the RDS endpoint and managed
+  # secret ARN at run time, because both change when the environment is torn
+  # down and rebuilt.
+  statement {
+    sid       = "AllowDescribeRdsInstances"
+    effect    = "Allow"
+    actions   = ["rds:DescribeDBInstances"]
+    resources = ["*"]
   }
 
   statement {
@@ -83,8 +93,10 @@ data "aws_iam_policy_document" "github_actions_deploy_permissions" {
       "secretsmanager:GetSecretValue"
     ]
 
+    # The RDS-managed secret is recreated with a new random suffix every time the
+    # environment is rebuilt, so this cannot be pinned to a single ARN.
     resources = [
-      module.rds.master_user_secret_arn
+      "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:rds!db-*"
     ]
   }
 
@@ -119,13 +131,17 @@ resource "aws_iam_role_policy_attachment" "github_actions_deploy" {
 }
 
 resource "aws_eks_access_entry" "github_actions_deploy" {
-  cluster_name  = module.eks.cluster_name
+  count = local.enabled
+
+  cluster_name  = module.eks[0].cluster_name
   principal_arn = aws_iam_role.github_actions_deploy.arn
   type          = "STANDARD"
 }
 
 resource "aws_eks_access_policy_association" "github_actions_deploy_cluster_admin" {
-  cluster_name  = module.eks.cluster_name
+  count = local.enabled
+
+  cluster_name  = module.eks[0].cluster_name
   principal_arn = aws_iam_role.github_actions_deploy.arn
 
   policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
@@ -137,4 +153,22 @@ resource "aws_eks_access_policy_association" "github_actions_deploy_cluster_admi
   depends_on = [
     aws_eks_access_entry.github_actions_deploy
   ]
+}
+
+# Terraform itself creates EKS, RDS, VPC and IAM resources, which the narrowly
+# scoped deploy role above cannot do. The rebuild workflow assumes this separate
+# role instead. It is still restricted to the deploy branch of one repository.
+resource "aws_iam_role" "github_actions_provision" {
+  name               = "${var.project_name}-github-actions-provision"
+  assume_role_policy = data.aws_iam_policy_document.github_actions_deploy_trust.json
+
+  tags = {
+    Project = var.project_name
+    Managed = "terraform"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "github_actions_provision" {
+  role       = aws_iam_role.github_actions_provision.name
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
 }

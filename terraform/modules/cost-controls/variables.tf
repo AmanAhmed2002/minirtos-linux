@@ -89,3 +89,20 @@ variable "schedule_time_zone" {
   type        = string
   default     = "America/Toronto"
 }
+
+variable "github_repository" {
+  description = "Repository in owner/repo format whose workflow performs full teardown and rebuild."
+  type        = string
+}
+
+variable "github_deploy_branch" {
+  description = "Branch the provisioning workflow is dispatched against."
+  type        = string
+  default     = "main"
+}
+
+variable "provision_workflow" {
+  description = "Workflow file dispatched to run terraform for DESTROY and START."
+  type        = string
+  default     = "provision-aws.yml"
+}

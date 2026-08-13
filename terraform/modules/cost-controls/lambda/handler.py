@@ -3,6 +3,8 @@ import json
 import logging
 import os
 import re
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
@@ -32,6 +34,13 @@ COST_ALERT_MAX = Decimal(os.environ.get("COST_ALERT_MAX_USD", "50"))
 SMS_MAX_PRICE = os.environ.get("SMS_MAX_PRICE_USD", "0.50")
 LOCAL_TIME_ZONE = ZoneInfo(os.environ.get("LOCAL_TIME_ZONE", "America/Toronto"))
 
+# A full teardown and rebuild runs terraform, which takes roughly 20 minutes and
+# cannot fit in a Lambda. The Lambda only dispatches the workflow that does it.
+GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY", "")
+GITHUB_REF = os.environ.get("GITHUB_REF", "main")
+PROVISION_WORKFLOW = os.environ.get("PROVISION_WORKFLOW", "provision-aws.yml")
+GITHUB_TOKEN_SECRET_ARN = os.environ.get("GITHUB_TOKEN_SECRET_ARN", "")
+
 EKS = boto3.client("eks", region_name=REGION)
 RDS = boto3.client("rds", region_name=REGION)
 SSM = boto3.client("ssm", region_name=REGION)
@@ -59,6 +68,21 @@ def _put_json_parameter(name, value):
     )
 
 
+def _is_missing(error, *codes):
+    code = error.response.get("Error", {}).get("Code")
+    return code in codes
+
+
+def cluster_exists():
+    try:
+        EKS.describe_cluster(name=CLUSTER_NAME)
+    except ClientError as error:
+        if _is_missing(error, "ResourceNotFoundException"):
+            return False
+        raise
+    return True
+
+
 def _list_node_groups():
     names = []
     token = None
@@ -66,7 +90,12 @@ def _list_node_groups():
         request = {"clusterName": CLUSTER_NAME}
         if token:
             request["nextToken"] = token
-        response = EKS.list_nodegroups(**request)
+        try:
+            response = EKS.list_nodegroups(**request)
+        except ClientError as error:
+            if _is_missing(error, "ResourceNotFoundException"):
+                return names
+            raise
         names.extend(response.get("nodegroups", []))
         token = response.get("nextToken")
         if not token:
@@ -91,17 +120,25 @@ def _node_group_states():
 
 
 def _rds_status():
-    response = RDS.describe_db_instances(
-        DBInstanceIdentifier=RDS_INSTANCE_IDENTIFIER,
-    )
+    """Current DB status, or "absent" when the instance has been torn down."""
+    try:
+        response = RDS.describe_db_instances(
+            DBInstanceIdentifier=RDS_INSTANCE_IDENTIFIER,
+        )
+    except ClientError as error:
+        if _is_missing(error, "DBInstanceNotFound", "DBInstanceNotFoundFault"):
+            return "absent"
+        raise
     return response["DBInstances"][0]["DBInstanceStatus"]
 
 
 def power_status():
     requested = _get_json_parameter(POWER_STATE_PARAMETER) or {}
+    exists = cluster_exists()
     return {
         "cluster": CLUSTER_NAME,
-        "node_groups": _node_group_states(),
+        "cluster_exists": exists,
+        "node_groups": _node_group_states() if exists else {},
         "requested_state": requested.get("desired_state", "running"),
         "rds_instance": RDS_INSTANCE_IDENTIFIER,
         "rds_status": _rds_status(),
@@ -118,102 +155,151 @@ def _configured_power_state(node_group_names, desired_state):
     }
 
 
-def stop_environment():
-    current = _node_group_states()
+def _github_token():
+    if not GITHUB_TOKEN_SECRET_ARN:
+        raise ValueError(
+            "GITHUB_TOKEN_SECRET_ARN is not configured, so the provisioning "
+            "workflow cannot be dispatched."
+        )
+    secret = SECRETS.get_secret_value(SecretId=GITHUB_TOKEN_SECRET_ARN)["SecretString"]
+    # Accept either a bare token or a JSON object holding one, so populating the
+    # secret by hand is hard to get wrong.
+    try:
+        parsed = json.loads(secret)
+    except json.JSONDecodeError:
+        return secret.strip()
+    if isinstance(parsed, dict):
+        for key in ("token", "github_token", "value"):
+            if parsed.get(key):
+                return str(parsed[key]).strip()
+        raise ValueError("GitHub token secret JSON must contain a token field")
+    return str(parsed).strip()
 
-    # Record the requested state before making API calls so the daily reconciler
-    # can finish a partial shutdown and re-stop RDS after its seven-day restart.
+
+def dispatch_provision_workflow(action):
+    """Ask GitHub Actions to run terraform for a full teardown or rebuild."""
+    if not GITHUB_REPOSITORY:
+        raise ValueError("GITHUB_REPOSITORY is not configured")
+
+    url = (
+        f"https://api.github.com/repos/{GITHUB_REPOSITORY}"
+        f"/actions/workflows/{PROVISION_WORKFLOW}/dispatches"
+    )
+    body = json.dumps(
+        {
+            "ref": GITHUB_REF,
+            "inputs": {"action": action, "confirm": action},
+        }
+    ).encode()
+
+    request = urllib.request.Request(url, data=body, method="POST")
+    request.add_header("Authorization", f"Bearer {_github_token()}")
+    request.add_header("Accept", "application/vnd.github+json")
+    request.add_header("X-GitHub-Api-Version", "2022-11-28")
+    request.add_header("Content-Type", "application/json")
+    request.add_header("User-Agent", "minirtos-cost-control")
+
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            status = response.status
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode("utf-8", "replace")[:400]
+        raise RuntimeError(
+            f"GitHub workflow dispatch failed with {error.code}: {detail}"
+        ) from error
+
+    LOGGER.info("Dispatched %s workflow for action %s", PROVISION_WORKFLOW, action)
+    return {"workflow": PROVISION_WORKFLOW, "ref": GITHUB_REF, "status": status}
+
+
+def stop_environment():
+    """Tear the billable environment down completely.
+
+    Scaling workers to zero was never enough: the EKS control plane, the load
+    balancer, and its public IPv4 addresses kept billing regardless. The
+    provisioning workflow destroys all of it and keeps a final RDS snapshot.
+    """
     _put_json_parameter(
         POWER_STATE_PARAMETER,
-        _configured_power_state(current.keys(), "stopped"),
+        _configured_power_state(_list_node_groups(), "stopped"),
     )
 
-    node_updates = {}
-    for name, state in current.items():
-        if state["desiredSize"] == 0 and state["minSize"] == 0:
-            node_updates[name] = "already-stopped"
-            continue
-        response = EKS.update_nodegroup_config(
-            clusterName=CLUSTER_NAME,
-            nodegroupName=name,
-            scalingConfig={
-                "desiredSize": 0,
-                "minSize": 0,
-                "maxSize": state["maxSize"],
-            },
-        )
-        node_updates[name] = response["update"]["id"]
-
-    database_status = _rds_status()
-    if database_status == "available":
-        RDS.stop_db_instance(DBInstanceIdentifier=RDS_INSTANCE_IDENTIFIER)
-        database_action = "stop-requested"
-    elif database_status in {"stopped", "stopping"}:
-        database_action = "already-stopped"
-    else:
-        database_action = f"not-stopped-while-{database_status}"
+    dispatch = dispatch_provision_workflow("destroy")
 
     return {
         "ok": True,
-        "action": "stop",
-        "temporary": True,
+        "action": "destroy",
         "requested_state": "stopped",
-        "node_group_updates": node_updates,
-        "rds_action": database_action,
+        "mode": "full-teardown",
+        "dispatch": dispatch,
     }
 
 
 def start_environment():
-    current = _node_group_states()
-
-    # START always restores the Terraform-configured full capacity (2/1/2 by
-    # default), even if capacity happened to be lower before DESTROY.
+    """Rebuild the environment from scratch, restoring the newest DB snapshot."""
     _put_json_parameter(
         POWER_STATE_PARAMETER,
-        _configured_power_state(current.keys(), "running"),
+        _configured_power_state(_list_node_groups(), "running"),
     )
 
-    database_status = _rds_status()
-    if database_status == "stopped":
-        RDS.start_db_instance(DBInstanceIdentifier=RDS_INSTANCE_IDENTIFIER)
-        database_action = "start-requested"
-    elif database_status in {"available", "starting"}:
-        database_action = "already-started"
-    else:
-        database_action = f"not-started-while-{database_status}"
-
-    node_updates = {}
-    for name, state in current.items():
-        capacity = dict(DEFAULT_CAPACITY)
-        if all(state[key] == capacity[key] for key in capacity):
-            node_updates[name] = "already-restored"
-            continue
-        response = EKS.update_nodegroup_config(
-            clusterName=CLUSTER_NAME,
-            nodegroupName=name,
-            scalingConfig=capacity,
-        )
-        node_updates[name] = response["update"]["id"]
+    dispatch = dispatch_provision_workflow("start")
 
     return {
         "ok": True,
         "action": "start",
         "requested_state": "running",
+        "mode": "full-rebuild",
         "restored_capacity": dict(DEFAULT_CAPACITY),
-        "node_group_updates": node_updates,
-        "rds_action": database_action,
+        "dispatch": dispatch,
     }
 
 
 def reconcile_requested_state():
+    """Re-assert a requested teardown if anything billable came back.
+
+    RDS force-starts itself after seven stopped days and a failed workflow can
+    leave the cluster half-built, so a stopped environment that still has
+    infrastructure is torn down again.
+    """
     state = _get_json_parameter(POWER_STATE_PARAMETER) or {}
-    if state.get("desired_state") == "stopped":
-        return stop_environment()
+    requested = state.get("desired_state", "running")
+
+    if requested != "stopped":
+        return {
+            "ok": True,
+            "action": "reconcile",
+            "requested_state": requested,
+            "result": "no-shutdown-requested",
+        }
+
+    database_status = _rds_status()
+    leftovers = cluster_exists() or database_status != "absent"
+    if not leftovers:
+        return {
+            "ok": True,
+            "action": "reconcile",
+            "requested_state": "stopped",
+            "result": "already-torn-down",
+        }
+
+    LOGGER.warning(
+        "Environment is meant to be torn down but cluster_exists=%s rds_status=%s; "
+        "re-dispatching teardown",
+        cluster_exists(),
+        database_status,
+    )
+    dispatch = dispatch_provision_workflow("destroy")
+    send_sms(
+        "MiniRTOS found billable infrastructure that should be torn down "
+        "(likely the RDS seven-day auto-restart). Teardown restarted."
+    )
     return {
         "ok": True,
         "action": "reconcile",
-        "requested_state": state.get("desired_state", "running"),
-        "result": "no-shutdown-requested",
+        "requested_state": "stopped",
+        "result": "teardown-redispatched",
+        "rds_status": database_status,
+        "dispatch": dispatch,
     }
 
 
@@ -251,13 +337,24 @@ def send_sms(message):
 
 
 def _status_message(status):
+    if not status["cluster_exists"] and status["rds_status"] == "absent":
+        return (
+            "MiniRTOS is fully torn down. No EKS cluster, no database, no load "
+            f"balancer. Requested state: {status['requested_state']}. "
+            "Reply START to rebuild (~20 min)."
+        )
+
     node_parts = []
     for name, state in status["node_groups"].items():
         node_parts.append(
             f"{name} desired={state['desiredSize']} min={state['minSize']} max={state['maxSize']}"
         )
     nodes = "; ".join(node_parts) or "no managed node groups"
-    return f"MiniRTOS: {nodes}; RDS={status['rds_status']}. Commands: DESTROY, START, STATUS."
+    cluster = "present" if status["cluster_exists"] else "absent"
+    return (
+        f"MiniRTOS: cluster={cluster}; {nodes}; RDS={status['rds_status']}; "
+        f"requested={status['requested_state']}. Commands: DESTROY, START, STATUS."
+    )
 
 
 def handle_inbound_sms(payload):
@@ -273,15 +370,61 @@ def handle_inbound_sms(payload):
 
     command = payload.get("messageBody", "").strip().lower()
     if command in {"destroy", "stop"}:
-        result = stop_environment()
+        status = power_status()
+        if not status["cluster_exists"] and status["rds_status"] == "absent":
+            # Silently succeeding here is what made repeat DESTROY texts look
+            # like the environment kept coming back.
+            _put_json_parameter(
+                POWER_STATE_PARAMETER,
+                _configured_power_state([], "stopped"),
+            )
+            send_sms(
+                "MiniRTOS is already fully torn down; nothing to destroy. "
+                "Remaining spend is the leased phone number and Secrets Manager, "
+                "about $2/month. Reply START to rebuild."
+            )
+            return {"ok": True, "action": "destroy", "result": "already-torn-down"}
+
+        try:
+            result = stop_environment()
+        except Exception as error:
+            LOGGER.exception("Teardown dispatch failed")
+            send_sms(
+                "MiniRTOS teardown could NOT be started: "
+                f"{type(error).__name__}. Nothing was changed and the "
+                "environment is still billing. Check the cost-control Lambda logs."
+            )
+            return {"ok": False, "action": "destroy", "error": str(error)}
+
         send_sms(
-            "MiniRTOS temporary shutdown requested: EKS workers are scaling to zero and RDS is stopping. Reply START to restore."
+            "MiniRTOS full teardown started: EKS cluster, workers, load balancer, "
+            "public IPs and RDS are being destroyed. A final database snapshot is "
+            "kept. Takes about 15 min; you will get a confirmation. Reply START to rebuild."
         )
         return result
     if command in {"start", "resume"}:
-        result = start_environment()
+        status = power_status()
+        if status["cluster_exists"] and status["rds_status"] not in {"absent", "stopped"}:
+            send_sms(
+                f"MiniRTOS is already running (RDS={status['rds_status']}). "
+                "Reply STATUS for detail."
+            )
+            return {"ok": True, "action": "start", "result": "already-running"}
+
+        try:
+            result = start_environment()
+        except Exception as error:
+            LOGGER.exception("Rebuild dispatch failed")
+            send_sms(
+                "MiniRTOS rebuild could NOT be started: "
+                f"{type(error).__name__}. Check the cost-control Lambda logs."
+            )
+            return {"ok": False, "action": "start", "error": str(error)}
+
         send_sms(
-            "MiniRTOS restart requested: RDS and the saved EKS worker capacity are restoring. Startup takes several minutes."
+            "MiniRTOS rebuild started: creating the EKS cluster, workers and "
+            "database from the latest snapshot, then deploying the app. Takes "
+            "about 20 min. You will get the new app URL when it finishes."
         )
         return result
     if command == "status":
@@ -289,7 +432,10 @@ def handle_inbound_sms(payload):
         send_sms(_status_message(status))
         return {"ok": True, "action": "status", **status}
 
-    send_sms("Unknown command. Reply DESTROY, START, or STATUS.")
+    send_sms(
+        "Unknown command. Reply DESTROY to tear everything down, START to "
+        "rebuild it, or STATUS to check."
+    )
     return {"ok": False, "ignored": "unknown-command"}
 
 
@@ -431,6 +577,16 @@ def lambda_handler(event, _context):
         }
     if action in {"check-costs", "check_costs"}:
         return check_costs()
+    if action == "notify":
+        # Used by the provisioning workflow to report teardown/rebuild results.
+        message = str(event.get("message", "")).strip()
+        if not message:
+            raise ValueError("notify requires a message")
+        return {
+            "ok": True,
+            "action": "notify",
+            "message_id": send_sms(message[:1400]),
+        }
     if action in {"reconcile", "reconcile-state"}:
         return reconcile_requested_state()
     if action in {"daily-maintenance", "daily_maintenance"}:

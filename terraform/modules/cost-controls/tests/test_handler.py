@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import os
 import sys
 import types
@@ -22,6 +23,10 @@ ENVIRONMENT = {
     "COST_ALERT_INCREMENT_USD": "10",
     "COST_ALERT_MAX_USD": "50",
     "LOCAL_TIME_ZONE": "America/Toronto",
+    "GITHUB_REPOSITORY": "AmanAhmed2002/minirtos-linux",
+    "GITHUB_REF": "main",
+    "PROVISION_WORKFLOW": "provision-aws.yml",
+    "GITHUB_TOKEN_SECRET_ARN": "arn:aws:secretsmanager:us-east-1:123456789012:secret:gh",
 }
 
 
@@ -70,82 +75,115 @@ class CostControlHandlerTest(unittest.TestCase):
         for client in self.clients.values():
             client.reset_mock()
 
-    def test_start_restores_configured_full_capacity(self):
-        current = {
-            "minirtos-nodes": {
-                "status": "ACTIVE",
-                "desiredSize": 0,
-                "minSize": 0,
-                "maxSize": 2,
-            }
-        }
-        self.handler.EKS.update_nodegroup_config.return_value = {
-            "update": {"id": "update-1"}
-        }
-
+    def test_start_dispatches_a_full_rebuild(self):
         with patch.object(
-            self.handler, "_node_group_states", return_value=current
-        ), patch.object(
-            self.handler, "_rds_status", return_value="stopped"
+            self.handler, "_list_node_groups", return_value=[]
         ), patch.object(
             self.handler, "_put_json_parameter"
-        ) as put_state:
+        ) as put_state, patch.object(
+            self.handler, "dispatch_provision_workflow", return_value={"status": 204}
+        ) as dispatch:
             result = self.handler.start_environment()
 
-        self.handler.EKS.update_nodegroup_config.assert_called_once_with(
-            clusterName="minirtos-eks",
-            nodegroupName="minirtos-nodes",
-            scalingConfig={"desiredSize": 2, "minSize": 1, "maxSize": 2},
-        )
-        self.handler.RDS.start_db_instance.assert_called_once()
-        self.assertEqual(result["restored_capacity"], self.handler.DEFAULT_CAPACITY)
+        dispatch.assert_called_once_with("start")
+        self.assertEqual(result["mode"], "full-rebuild")
         self.assertEqual(put_state.call_args.args[1]["desired_state"], "running")
 
-    def test_destroy_scales_workers_to_zero_and_temporarily_stops_rds(self):
-        current = {
-            "minirtos-nodes": {
-                "status": "ACTIVE",
-                "desiredSize": 2,
-                "minSize": 1,
-                "maxSize": 2,
-            }
-        }
-        self.handler.EKS.update_nodegroup_config.return_value = {
-            "update": {"id": "update-2"}
-        }
-
+    def test_destroy_dispatches_a_full_teardown(self):
+        """Scaling workers to zero left the control plane and ALB billing."""
         with patch.object(
-            self.handler, "_node_group_states", return_value=current
-        ), patch.object(
-            self.handler, "_rds_status", return_value="available"
+            self.handler, "_list_node_groups", return_value=["minirtos-nodes"]
         ), patch.object(
             self.handler, "_put_json_parameter"
-        ) as put_state:
+        ) as put_state, patch.object(
+            self.handler, "dispatch_provision_workflow", return_value={"status": 204}
+        ) as dispatch:
             result = self.handler.stop_environment()
 
-        self.handler.EKS.update_nodegroup_config.assert_called_once_with(
-            clusterName="minirtos-eks",
-            nodegroupName="minirtos-nodes",
-            scalingConfig={"desiredSize": 0, "minSize": 0, "maxSize": 2},
-        )
-        self.handler.RDS.stop_db_instance.assert_called_once()
-        self.assertTrue(result["temporary"])
+        dispatch.assert_called_once_with("destroy")
+        self.assertEqual(result["mode"], "full-teardown")
         self.assertEqual(put_state.call_args.args[1]["desired_state"], "stopped")
+        # The teardown must not fall back to merely resizing the node group.
+        self.handler.EKS.update_nodegroup_config.assert_not_called()
 
-    def test_status_reports_requested_state(self):
+    def test_repeat_destroy_reports_already_torn_down_instead_of_succeeding_silently(self):
+        payload = {"originationNumber": "+14165550123", "messageBody": "DESTROY"}
+        with patch.object(
+            self.handler,
+            "_phone_configuration",
+            return_value={
+                "authorized_phone_number": "+14165550123",
+                "origination_identity": "phone-1",
+            },
+        ), patch.object(
+            self.handler,
+            "power_status",
+            return_value={"cluster_exists": False, "rds_status": "absent"},
+        ), patch.object(
+            self.handler, "_put_json_parameter"
+        ), patch.object(
+            self.handler, "dispatch_provision_workflow"
+        ) as dispatch, patch.object(
+            self.handler, "send_sms", return_value="m1"
+        ) as send:
+            result = self.handler.handle_inbound_sms(payload)
+
+        self.assertEqual(result["result"], "already-torn-down")
+        dispatch.assert_not_called()
+        self.assertIn("already fully torn down", send.call_args.args[0])
+
+    def test_status_reports_a_torn_down_environment(self):
         with patch.object(
             self.handler,
             "_get_json_parameter",
             return_value={"desired_state": "stopped"},
         ), patch.object(
-            self.handler, "_node_group_states", return_value={}
+            self.handler, "cluster_exists", return_value=False
         ), patch.object(
-            self.handler, "_rds_status", return_value="stopped"
+            self.handler, "_rds_status", return_value="absent"
         ):
             result = self.handler.power_status()
 
         self.assertEqual(result["requested_state"], "stopped")
-        self.assertEqual(result["rds_status"], "stopped")
+        self.assertFalse(result["cluster_exists"])
+        self.assertIn("fully torn down", self.handler._status_message(result))
+
+    def test_reconcile_is_quiet_once_everything_is_gone(self):
+        with patch.object(
+            self.handler,
+            "_get_json_parameter",
+            return_value={"desired_state": "stopped"},
+        ), patch.object(
+            self.handler, "cluster_exists", return_value=False
+        ), patch.object(
+            self.handler, "_rds_status", return_value="absent"
+        ), patch.object(
+            self.handler, "dispatch_provision_workflow"
+        ) as dispatch:
+            result = self.handler.reconcile_requested_state()
+
+        self.assertEqual(result["result"], "already-torn-down")
+        dispatch.assert_not_called()
+
+    def test_reconcile_redispatches_teardown_after_the_rds_seven_day_restart(self):
+        """RDS force-starts itself after seven stopped days."""
+        with patch.object(
+            self.handler,
+            "_get_json_parameter",
+            return_value={"desired_state": "stopped"},
+        ), patch.object(
+            self.handler, "cluster_exists", return_value=False
+        ), patch.object(
+            self.handler, "_rds_status", return_value="available"
+        ), patch.object(
+            self.handler, "dispatch_provision_workflow", return_value={"status": 204}
+        ) as dispatch, patch.object(
+            self.handler, "send_sms", return_value="m1"
+        ):
+            result = self.handler.reconcile_requested_state()
+
+        self.assertEqual(result["result"], "teardown-redispatched")
+        dispatch.assert_called_once_with("destroy")
 
     def test_cost_alerts_run_from_20_through_50_only(self):
         with patch.object(
@@ -183,6 +221,51 @@ class CostControlHandlerTest(unittest.TestCase):
 
         self.assertEqual(result["alerted_thresholds"], ["20"])
         send.assert_called_once()
+
+    def test_dispatch_posts_the_action_to_the_github_workflow(self):
+        captured = {}
+
+        class FakeResponse:
+            status = 204
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+        def fake_urlopen(request, timeout=None):
+            captured["url"] = request.full_url
+            captured["body"] = json.loads(request.data.decode())
+            captured["auth"] = request.get_header("Authorization")
+            return FakeResponse()
+
+        with patch.object(
+            self.handler, "_github_token", return_value="ghp_example"
+        ), patch.object(self.handler.urllib.request, "urlopen", fake_urlopen):
+            result = self.handler.dispatch_provision_workflow("destroy")
+
+        self.assertEqual(result["status"], 204)
+        self.assertIn(
+            "/repos/AmanAhmed2002/minirtos-linux/actions/workflows/"
+            "provision-aws.yml/dispatches",
+            captured["url"],
+        )
+        self.assertEqual(captured["body"]["ref"], "main")
+        self.assertEqual(captured["body"]["inputs"]["action"], "destroy")
+        self.assertEqual(captured["body"]["inputs"]["confirm"], "destroy")
+        self.assertEqual(captured["auth"], "Bearer ghp_example")
+
+    def test_github_token_accepts_a_bare_string_or_json(self):
+        self.handler.SECRETS.get_secret_value.return_value = {
+            "SecretString": "ghp_bare"
+        }
+        self.assertEqual(self.handler._github_token(), "ghp_bare")
+
+        self.handler.SECRETS.get_secret_value.return_value = {
+            "SecretString": json.dumps({"token": "ghp_json"})
+        }
+        self.assertEqual(self.handler._github_token(), "ghp_json")
 
     def test_daily_maintenance_attempts_both_operations(self):
         with patch.object(

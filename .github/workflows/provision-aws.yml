@@ -1,0 +1,351 @@
+name: Provision AWS Environment
+
+# Full teardown and rebuild of the billable MiniRTOS environment.
+#
+# Texting DESTROY or START to the cost-control number dispatches this workflow;
+# the Lambda only fires the dispatch because terraform needs roughly 20 minutes
+# and Lambda hard-caps at 15.
+#
+# DESTROY removes the EKS control plane, workers, load balancer, public IPv4
+# addresses and the database, keeping a final snapshot. Scaling workers to zero
+# was never enough: the control plane alone was about 72% of the monthly bill.
+#
+# START rebuilds everything and restores the newest snapshot.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "start rebuilds the environment, destroy tears it down"
+        required: true
+        default: "start"
+        type: choice
+        options:
+          - start
+          - destroy
+      confirm:
+        description: "Type the selected action to confirm"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+
+# Shares the deploy group so the hourly RDS secret sync cannot run mid-rebuild.
+concurrency:
+  group: minirtos-aws-deploy
+  cancel-in-progress: false
+
+env:
+  TF_DIR: terraform/environments/dev
+  TF_IN_AUTOMATION: "true"
+
+jobs:
+  provision:
+    name: ${{ inputs.action }} MiniRTOS AWS environment
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Validate request
+        env:
+          ACTION: ${{ inputs.action }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [[ "$CONFIRM" != "$ACTION" ]]; then
+            echo "ERROR: Type $ACTION in the confirmation field."
+            exit 1
+          fi
+          if [[ "${GITHUB_REF}" != "refs/heads/${{ vars.AWS_DEPLOY_BRANCH || 'main' }}" ]]; then
+            echo "ERROR: Provisioning must run from the deploy branch."
+            echo "Current ref: ${GITHUB_REF}"
+            exit 1
+          fi
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_PROVISION_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.6.6"
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init -input=false
+
+      - name: Read current environment state
+        id: current
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          ENABLED="$(terraform output -raw environment_enabled 2>/dev/null || echo unknown)"
+          echo "enabled=$ENABLED" >> "$GITHUB_OUTPUT"
+          echo "Environment currently enabled: $ENABLED"
+
+      # ---------------------------------------------------------------- destroy
+
+      - name: Install kubectl
+        if: inputs.action == 'destroy'
+        uses: azure/setup-kubectl@v4
+        with:
+          version: "v1.34.0"
+
+      - name: Remove the Ingress so the controller deletes its load balancer
+        if: inputs.action == 'destroy' && steps.current.outputs.enabled == 'true'
+        continue-on-error: true
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          CLUSTER: ${{ vars.EKS_CLUSTER_NAME }}
+        run: |
+          # Letting the AWS Load Balancer Controller delete the ALB is cleaner
+          # than orphaning it, because it also removes target groups and the
+          # public IPv4 addresses attached to the load balancer's interfaces.
+          if aws eks describe-cluster --name "$CLUSTER" --region "$AWS_REGION" >/dev/null 2>&1; then
+            aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER"
+            kubectl delete ingress minirtos-ingress -n minirtos --ignore-not-found --timeout=180s
+            echo "Waiting for the controller to finish deleting the load balancer..."
+            for _ in $(seq 1 30); do
+              COUNT="$(aws elbv2 describe-load-balancers --region "$AWS_REGION" \
+                --query "length(LoadBalancers[?starts_with(LoadBalancerName, 'k8s-minirtos')])" \
+                --output text 2>/dev/null || echo 0)"
+              [[ "$COUNT" == "0" ]] && break
+              sleep 10
+            done
+          else
+            echo "Cluster is already gone; skipping Ingress cleanup."
+          fi
+
+      # The destroy value must be written into state while the resource still
+      # exists in configuration. Once environment_enabled is false the module has
+      # count 0, so terraform destroys using state values and any -var for the
+      # snapshot name would be ignored.
+      - name: Record a unique final snapshot name
+        if: inputs.action == 'destroy' && steps.current.outputs.enabled == 'true'
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          SNAPSHOT="minirtos-dev-postgres-final-$(date -u +%Y%m%d-%H%M%S)"
+          echo "Final snapshot will be: $SNAPSHOT"
+          terraform apply -input=false -auto-approve \
+            -var "environment_enabled=true" \
+            -var "rds_deletion_protection=false" \
+            -var "rds_final_snapshot_identifier=$SNAPSHOT"
+
+      - name: Terraform destroy the billable environment
+        if: inputs.action == 'destroy'
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          terraform apply -input=false -auto-approve \
+            -var "environment_enabled=false"
+
+      - name: Sweep leftover billable resources
+        if: inputs.action == 'destroy'
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          # Load balancers, their public IPs, and PVC volumes are created by
+          # in-cluster controllers, so Terraform never tracked them. They are the
+          # exact resources that kept billing after previous shutdowns.
+          for LB in $(aws elbv2 describe-load-balancers --region "$AWS_REGION" \
+              --query "LoadBalancers[?starts_with(LoadBalancerName, 'k8s-minirtos')].LoadBalancerArn" \
+              --output text); do
+            echo "Deleting leftover load balancer $LB"
+            aws elbv2 delete-load-balancer --region "$AWS_REGION" --load-balancer-arn "$LB"
+          done
+
+          for TG in $(aws elbv2 describe-target-groups --region "$AWS_REGION" \
+              --query "TargetGroups[?starts_with(TargetGroupName, 'k8s-minirtos')].TargetGroupArn" \
+              --output text); do
+            echo "Deleting leftover target group $TG"
+            aws elbv2 delete-target-group --region "$AWS_REGION" --target-group-arn "$TG" || true
+          done
+
+          for ALLOC in $(aws ec2 describe-addresses --region "$AWS_REGION" \
+              --query "Addresses[?AssociationId==null].AllocationId" --output text); do
+            echo "Releasing unassociated Elastic IP $ALLOC"
+            aws ec2 release-address --region "$AWS_REGION" --allocation-id "$ALLOC" || true
+          done
+
+          for VOL in $(aws ec2 describe-volumes --region "$AWS_REGION" \
+              --filters "Name=status,Values=available" \
+              --query "Volumes[].VolumeId" --output text); do
+            echo "Deleting unattached volume $VOL"
+            aws ec2 delete-volume --region "$AWS_REGION" --volume-id "$VOL" || true
+          done
+
+      # ------------------------------------------------------------------ start
+
+      - name: Resolve the snapshot to restore
+        id: snapshot
+        if: inputs.action == 'start'
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          # Newest manual snapshot of the torn-down instance, so run history
+          # survives a teardown. Empty means a fresh database and Flyway rebuilds
+          # the schema.
+          SNAPSHOT="$(aws rds describe-db-snapshots --region "$AWS_REGION" \
+            --db-instance-identifier minirtos-dev-postgres \
+            --snapshot-type manual \
+            --query 'sort_by(DBSnapshots[?Status==`available`], &SnapshotCreateTime)[-1].DBSnapshotIdentifier' \
+            --output text 2>/dev/null || echo None)"
+          if [[ "$SNAPSHOT" == "None" || -z "$SNAPSHOT" ]]; then
+            echo "No snapshot found; creating an empty database."
+            SNAPSHOT=""
+          fi
+          echo "restore_from=$SNAPSHOT" >> "$GITHUB_OUTPUT"
+          echo "Restoring from: ${SNAPSHOT:-<fresh database>}"
+
+      - name: Terraform apply the environment
+        if: inputs.action == 'start'
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          terraform apply -input=false -auto-approve \
+            -var "environment_enabled=true" \
+            -var "rds_restore_snapshot_identifier=${{ steps.snapshot.outputs.restore_from }}"
+
+      - name: Install kubectl and helm
+        if: inputs.action == 'start'
+        run: |
+          curl -sSLo /usr/local/bin/kubectl \
+            "https://dl.k8s.io/release/v1.34.0/bin/linux/amd64/kubectl"
+          chmod +x /usr/local/bin/kubectl
+          curl -sSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Update kubeconfig
+        if: inputs.action == 'start'
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          aws eks update-kubeconfig \
+            --region "${{ vars.AWS_REGION }}" \
+            --name "$(terraform output -raw cluster_name)"
+
+      - name: Install the AWS Load Balancer Controller
+        if: inputs.action == 'start'
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          # Recreated on every rebuild because it lives in the cluster, not in
+          # Terraform. Without it the Ingress never produces an ALB.
+          CLUSTER="$(terraform output -raw cluster_name)"
+          VPC_ID="$(terraform output -raw vpc_id)"
+          ROLE_ARN="$(terraform output -raw aws_load_balancer_controller_role_arn)"
+
+          helm repo add eks https://aws.github.io/eks-charts
+          helm repo update
+          helm upgrade --install aws-load-balancer-controller \
+            eks/aws-load-balancer-controller \
+            --namespace kube-system \
+            --set clusterName="$CLUSTER" \
+            --set region="${{ vars.AWS_REGION }}" \
+            --set vpcId="$VPC_ID" \
+            --set serviceAccount.create=true \
+            --set serviceAccount.name=aws-load-balancer-controller \
+            --set-string "serviceAccount.annotations.eks\.amazonaws\.com/role-arn=$ROLE_ARN" \
+            --wait --timeout 10m
+
+      - name: Log in to GitHub Container Registry
+        if: inputs.action == 'start'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io \
+            -u "${{ github.actor }}" --password-stdin
+
+      - name: Resolve the image to deploy
+        id: image
+        if: inputs.action == 'start'
+        run: |
+          SHA="$(git rev-parse HEAD)"
+          NS="ghcr.io/${GITHUB_REPOSITORY,,}"
+          if ! docker manifest inspect "$NS/backend:$SHA" >/dev/null 2>&1; then
+            echo "ERROR: no backend image for $SHA in GHCR."
+            echo "Push to the deploy branch so CI builds images, then retry START."
+            exit 1
+          fi
+          if ! docker manifest inspect "$NS/frontend:$SHA" >/dev/null 2>&1; then
+            echo "ERROR: no frontend image for $SHA in GHCR."
+            exit 1
+          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Deploying image SHA $SHA"
+
+      - name: Deploy the application
+        if: inputs.action == 'start'
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          # RDS endpoint and secret ARN change on every rebuild, so these are
+          # deliberately not passed from repository variables. The script reads
+          # them from Terraform outputs when unset.
+          chmod +x scripts/deploy_aws_release.sh
+          ./scripts/deploy_aws_release.sh "${{ steps.image.outputs.sha }}"
+
+      - name: Wait for the load balancer to be provisioned
+        id: endpoint
+        if: inputs.action == 'start'
+        run: |
+          HOSTNAME=""
+          for _ in $(seq 1 40); do
+            HOSTNAME="$(kubectl get ingress minirtos-ingress -n minirtos \
+              -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)"
+            [[ -n "$HOSTNAME" ]] && break
+            sleep 15
+          done
+          echo "alb_hostname=$HOSTNAME" >> "$GITHUB_OUTPUT"
+          echo "ALB hostname: ${HOSTNAME:-<not ready>}"
+
+      - name: Smoke test the app
+        id: smoke
+        if: inputs.action == 'start'
+        continue-on-error: true
+        run: |
+          # Non-fatal: the DNS record for the custom domain still points at the
+          # previous load balancer until it is updated by hand.
+          chmod +x scripts/k8s_smoke_test.sh
+          ./scripts/k8s_smoke_test.sh "${{ vars.APP_URL }}"
+
+      # ----------------------------------------------------------------- notify
+
+      - name: Text the result
+        if: always()
+        env:
+          FUNCTION_NAME: ${{ vars.COST_CONTROL_LAMBDA_NAME }}
+          ACTION: ${{ inputs.action }}
+          JOB_STATUS: ${{ job.status }}
+          ALB_HOSTNAME: ${{ steps.endpoint.outputs.alb_hostname }}
+          SMOKE: ${{ steps.smoke.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [[ -z "$FUNCTION_NAME" ]]; then
+            echo "COST_CONTROL_LAMBDA_NAME is not set; skipping SMS."
+            exit 0
+          fi
+
+          if [[ "$JOB_STATUS" != "success" ]]; then
+            MESSAGE="MiniRTOS $ACTION FAILED ($JOB_STATUS). Nothing is guaranteed to be cleaned up. Check the run: $RUN_URL"
+          elif [[ "$ACTION" == "destroy" ]]; then
+            MESSAGE="MiniRTOS teardown complete. EKS cluster, workers, load balancer, public IPs and database are deleted; a final snapshot was kept. Remaining spend is about \$2/month. Reply START to rebuild."
+          else
+            MESSAGE="MiniRTOS is back up. New load balancer: ${ALB_HOSTNAME:-pending}. Point the app.minirtos.biz CNAME at that hostname. Smoke test: $SMOKE."
+          fi
+
+          aws lambda invoke \
+            --function-name "$FUNCTION_NAME" \
+            --cli-binary-format raw-in-base64-out \
+            --payload "$(jq -nc --arg m "$MESSAGE" '{action:"notify", message:$m}')" \
+            /tmp/notify.json >/dev/null
+          jq -r '.message_id // .' /tmp/notify.json || true
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get nodes || true
+          kubectl get pods -n minirtos -o wide || true
+          kubectl get ingress -n minirtos || true
+          kubectl get events -n minirtos --sort-by=.lastTimestamp | tail -40 || true
