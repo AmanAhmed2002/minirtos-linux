@@ -46,9 +46,9 @@ resource "aws_eks_cluster" "main" {
     security_group_ids = [aws_security_group.eks_cluster.id]
   }
 
-  lifecycle {
-    prevent_destroy = true
-  }
+  # No prevent_destroy: the cost-control DESTROY/START commands tear this
+  # cluster down and rebuild it on demand, which is the whole point of the
+  # environment_enabled toggle in the dev environment.
 
   depends_on = [
     aws_iam_role_policy_attachment.eks_cluster_policy

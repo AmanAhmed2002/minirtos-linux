@@ -68,6 +68,16 @@ variable "cost_alert_increment_usd" {
   }
 }
 
+variable "cost_alert_max_usd" {
+  description = "Final month-to-date actual-spend SMS threshold."
+  type        = number
+
+  validation {
+    condition     = var.cost_alert_max_usd > 0
+    error_message = "cost_alert_max_usd must be greater than zero."
+  }
+}
+
 variable "daily_schedule_expression" {
   description = "EventBridge Scheduler cron expression for the daily cost and shutdown-state check."
   type        = string
@@ -78,4 +88,21 @@ variable "schedule_time_zone" {
   description = "IANA time zone used by EventBridge Scheduler and month-boundary calculations."
   type        = string
   default     = "America/Toronto"
+}
+
+variable "github_repository" {
+  description = "Repository in owner/repo format whose workflow performs full teardown and rebuild."
+  type        = string
+}
+
+variable "github_deploy_branch" {
+  description = "Branch the provisioning workflow is dispatched against."
+  type        = string
+  default     = "main"
+}
+
+variable "provision_workflow" {
+  description = "Workflow file dispatched to run terraform for DESTROY and START."
+  type        = string
+  default     = "provision-aws.yml"
 }

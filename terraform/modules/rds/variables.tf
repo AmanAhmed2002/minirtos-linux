@@ -59,6 +59,24 @@ variable "backup_retention_period" {
   default     = 0
 }
 
+variable "deletion_protection" {
+  description = "Blocks accidental deletion. The cost-control teardown sets this to false so the environment can be destroyed and rebuilt on demand."
+  type        = bool
+  default     = false
+}
+
+variable "final_snapshot_identifier" {
+  description = "Name of the snapshot taken when the instance is destroyed. Must be unique per teardown; the teardown workflow passes a timestamped value."
+  type        = string
+  default     = ""
+}
+
+variable "snapshot_identifier" {
+  description = "DB snapshot to restore from when the instance is created. Empty creates an empty database and lets Flyway build the schema. START passes the final snapshot taken by the previous DESTROY so run history survives a teardown."
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Tags to apply to RDS resources."
   type        = map(string)

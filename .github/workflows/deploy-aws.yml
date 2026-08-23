@@ -122,11 +122,30 @@ jobs:
       - name: Deploy selected image SHA
         env:
           AWS_REGION: ${{ vars.AWS_REGION }}
-          RDS_ENDPOINT: ${{ vars.RDS_ENDPOINT }}
           RDS_DATABASE_NAME: ${{ vars.RDS_DATABASE_NAME }}
           RDS_USERNAME: ${{ vars.RDS_USERNAME }}
-          RDS_SECRET_ARN: ${{ vars.RDS_SECRET_ARN }}
         run: |
+          # Endpoint and secret ARN are resolved live rather than from
+          # repository variables. Tearing the environment down and rebuilding it
+          # creates a new managed secret with a new random suffix, which would
+          # make a stored ARN deploy the wrong password.
+          RDS_ENDPOINT="$(aws rds describe-db-instances \
+            --db-instance-identifier minirtos-dev-postgres \
+            --region "$AWS_REGION" \
+            --query 'DBInstances[0].Endpoint.Address' --output text)"
+          RDS_SECRET_ARN="$(aws rds describe-db-instances \
+            --db-instance-identifier minirtos-dev-postgres \
+            --region "$AWS_REGION" \
+            --query 'DBInstances[0].MasterUserSecret.SecretArn' --output text)"
+
+          for value in "$RDS_ENDPOINT" "$RDS_SECRET_ARN"; do
+            if [[ -z "$value" || "$value" == "None" ]]; then
+              echo "ERROR: could not resolve RDS connection details."
+              exit 1
+            fi
+          done
+          export RDS_ENDPOINT RDS_SECRET_ARN
+
           chmod +x scripts/deploy_aws_release.sh
           ./scripts/deploy_aws_release.sh "${{ inputs.image_sha }}"
 
